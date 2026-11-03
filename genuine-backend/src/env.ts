@@ -24,6 +24,7 @@ const envSchema = z.object({
     .default('30d'),
   API_PORT: z.coerce.number().default(3002),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  FRONTEND_URL: z.string().default('http://localhost:3000'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug', 'verbose']).default('info'),
   ALLOW_NEGATIVE_STOCK: z
     .string()

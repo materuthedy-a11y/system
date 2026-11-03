@@ -100,7 +100,7 @@ export class SalesService {
   ): Promise<SalesInvoiceResponseDto> {
     this.exclusiveDiscount(dto.discountAmount, dto.discountPercentage);
     const customer = await this.prisma.customer.findFirst({
-      where: { id: dto.customerId, businessId, isActive: true },
+      where: { id: dto.customerId, businessId, isActive: true, status: 'ACTIVE' },
     });
     if (!customer) throw new NotFoundException('Active customer not found');
     const location = await this.prisma.location.findFirst({
@@ -322,7 +322,7 @@ export class SalesService {
       const customerId = dto.customerId || before.customerId;
       const locationId = dto.locationId || before.locationId;
       const customer = await tx.customer.findFirst({
-        where: { id: customerId, businessId, isActive: true },
+        where: { id: customerId, businessId, isActive: true, status: 'ACTIVE' },
       });
       if (!customer) throw new NotFoundException('Active customer not found');
       if (!(await tx.location.findFirst({ where: { id: locationId, businessId, isActive: true } })))
@@ -490,7 +490,7 @@ export class SalesService {
       if (!invoice.items.length)
         throw new BadRequestException('Invoice must have at least one item');
       const customer = await tx.customer.findFirst({
-        where: { id: invoice.customerId, businessId, isActive: true },
+        where: { id: invoice.customerId, businessId, isActive: true, status: 'ACTIVE' },
       });
       if (!customer) throw new BadRequestException('Customer is inactive or unavailable');
       if (!['COD', 'PREPAID'].includes(invoice.paymentTerms)) {

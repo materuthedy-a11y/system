@@ -106,4 +106,8 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsEnum(['ACTIVE', 'SUSPENDED', 'BLACKLISTED', 'ARCHIVED'])
+  status?: string;
 }

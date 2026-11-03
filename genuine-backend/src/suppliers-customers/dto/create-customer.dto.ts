@@ -99,4 +99,8 @@ export class CreateCustomerDto {
 
   @IsBoolean()
   isActive: boolean;
+
+  @IsOptional()
+  @IsEnum(['ACTIVE', 'SUSPENDED', 'BLACKLISTED', 'ARCHIVED'])
+  status?: string;
 }

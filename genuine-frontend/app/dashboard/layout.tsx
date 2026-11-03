@@ -267,7 +267,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: 'Products', href: '/dashboard/products', icon: Package, active: pathname.startsWith('/dashboard/products') },
     { label: 'Inventory', href: '#', icon: Warehouse, active: false, comingSoon: true },
     { label: 'Purchases', href: '/dashboard/purchases', icon: Truck, active: pathname.startsWith('/dashboard/purchases') },
-    { label: 'Customers', href: '#', icon: UsersRound, active: false, comingSoon: true },
+    { label: 'Customers', href: user.permissions.includes('customers.view') ? '/dashboard/customers' : '#', icon: UsersRound, active: pathname.startsWith('/dashboard/customers'), comingSoon: !user.permissions.includes('customers.view') },
     { label: 'Suppliers', href: '#', icon: UserRound, active: false, comingSoon: true },
     { label: 'Payments & Finance', href: '#', icon: CircleDollarSign, active: false, comingSoon: true },
     { label: 'Expenses', href: '#', icon: Receipt, active: false, comingSoon: true },

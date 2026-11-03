@@ -39,6 +39,7 @@ export class CustomerResponseDto {
   outstandingBalance: number; // openingBalance + totalSales - totalPaid - totalReturned
   creditUtilization: number; // percentage
   isActive: boolean;
+  status: string;
   lastSaleDate?: Date;
   createdAt: Date;
   updatedAt: Date;

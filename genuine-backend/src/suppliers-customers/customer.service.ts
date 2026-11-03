@@ -53,58 +53,42 @@ export class CustomerService {
       throw new ConflictException('Customer name or code already exists');
     }
 
-    // 3. Create customer
-    const customer = await this.prisma.customer.create({
-      data: {
-        id: uuid(),
-        businessId,
-        name: dto.name,
-        customerCode,
-        customerType: dto.customerType,
-        description: dto.description,
-        email: dto.email,
-        phone: dto.phone,
-        secondaryPhone: dto.secondaryPhone,
-        taxId: dto.taxId,
-        creditLimit: dto.creditLimit || 0,
-        paymentTerms: dto.paymentTerms,
-        openingBalance: dto.openingBalance || 0,
-        isActive: dto.isActive !== undefined ? dto.isActive : true,
-      },
-    });
-
-    // 4. Create contacts
-    if (dto.contacts && dto.contacts.length > 0) {
-      for (let i = 0; i < dto.contacts.length; i++) {
-        const contact = dto.contacts[i];
-        await this.prisma.customerContact.create({
+    // Keep the parent, optional relations, and audit trail in one transaction.
+    let customer: { id: string };
+    try {
+      customer = await this.prisma.$transaction(async (tx) => {
+        const status = dto.status || (dto.isActive ? 'ACTIVE' : 'SUSPENDED');
+        const created = await tx.customer.create({
           data: {
-            id: uuid(),
-            customerId: customer.id,
-            firstName: contact.firstName,
-            lastName: contact.lastName,
-            email: contact.email,
-            phone: contact.phone,
-            position: contact.position,
-            isPrimary: i === 0,
+            id: uuid(), businessId, name: dto.name.trim(), customerCode,
+            customerType: dto.customerType, description: dto.description?.trim() || null,
+            email: dto.email.trim().toLowerCase(), phone: dto.phone.trim(),
+            secondaryPhone: dto.secondaryPhone?.trim() || null, taxId: dto.taxId?.trim() || null,
+            creditLimit: dto.creditLimit, paymentTerms: dto.paymentTerms,
+            openingBalance: dto.openingBalance, isActive: status === 'ACTIVE', status,
+            ...(dto.contacts?.length ? { contacts: { create: dto.contacts.map((contact, index) => ({
+              firstName: contact.firstName.trim(), lastName: contact.lastName.trim(),
+              email: contact.email.trim().toLowerCase(), phone: contact.phone.trim(),
+              position: contact.position?.trim() || null, isPrimary: index === 0,
+            })) } } : {}),
+            ...(dto.address ? { address: { create: {
+              street: dto.address.street.trim(), city: dto.address.city.trim(),
+              region: dto.address.region.trim(), postalCode: dto.address.postalCode.trim(),
+              country: dto.address.country?.trim() || null,
+            } } } : {}),
           },
+          select: { id: true },
         });
-      }
-    }
-
-    // 5. Create address
-    if (dto.address) {
-      await this.prisma.customerAddress.create({
-        data: {
-          id: uuid(),
-          customerId: customer.id,
-          street: dto.address.street,
-          city: dto.address.city,
-          region: dto.address.region,
-          postalCode: dto.address.postalCode,
-          country: dto.address.country,
-        },
+        await tx.auditLog.create({ data: {
+          businessId, userId, action: 'CREATE', entityType: 'CUSTOMER', entityId: created.id,
+          description: `Created customer ${customerCode}`,
+        } });
+        return created;
       });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException('Customer name or code already exists');
+      throw error;
     }
 
     this.logger.log(`[CUSTOMERS] Customer created: ${customer.id} (Code: ${customerCode})`);
@@ -147,8 +131,8 @@ export class CustomerService {
     businessId: string,
     filter: CustomerFilterDto,
   ): Promise<{ data: CustomerResponseDto[]; total: number; page: number; limit: number }> {
-    const page = Number(filter.page) || 1;
-    const limit = Number(filter.limit) || 20;
+    const page = Math.max(1, Math.floor(Number(filter.page) || 1));
+    const limit = Math.min(100, Math.max(1, Math.floor(Number(filter.limit) || 20)));
     const skip = (page - 1) * limit;
 
     // Build filter conditions
@@ -169,9 +153,11 @@ export class CustomerService {
     // Filter by status
     if (filter.status) {
       if (filter.status === 'ACTIVE') {
-        where.isActive = true;
-      } else if (filter.status === 'INACTIVE') {
-        where.isActive = false;
+        where.status = 'ACTIVE';
+      } else if (filter.status === 'INACTIVE' || filter.status === 'SUSPENDED') {
+        where.status = 'SUSPENDED';
+      } else if (filter.status === 'BLACKLISTED' || filter.status === 'ARCHIVED') {
+        where.status = filter.status;
       }
       // OVERDUE will be filtered in memory
     }
@@ -197,6 +183,7 @@ export class CustomerService {
     }
 
     // Query customers
+    const needsMemoryFilterOrSort = filter.status === 'OVERDUE' || filter.sortBy === 'outstanding' || filter.sortBy === 'lastSale';
     const [customers, total] = await Promise.all([
       this.prisma.customer.findMany({
         where,
@@ -205,8 +192,7 @@ export class CustomerService {
           address: true,
         },
         orderBy,
-        skip,
-        take: limit,
+        ...(needsMemoryFilterOrSort ? {} : { skip, take: limit }),
       }),
       this.prisma.customer.count({ where }),
     ]);
@@ -233,6 +219,7 @@ export class CustomerService {
           totalSales: item.totalSales,
           totalPaid: item.totalPaid,
           totalReturned: item.totalReturned,
+          lastSaleDate: item.lastSaleDate,
         },
       ),
     );
@@ -250,9 +237,17 @@ export class CustomerService {
       });
     }
 
+    if (filter.sortBy === 'lastSale') {
+      const direction = filter.sortOrder === 'asc' ? 1 : -1;
+      results.sort((a, b) => direction * ((a.lastSaleDate?.getTime() || 0) - (b.lastSaleDate?.getTime() || 0)));
+    }
+
+    const resultTotal = needsMemoryFilterOrSort ? results.length : total;
+    if (needsMemoryFilterOrSort) results = results.slice(skip, skip + limit);
+
     return {
       data: results,
-      total,
+      total: resultTotal,
       page,
       limit,
     };
@@ -285,73 +280,51 @@ export class CustomerService {
       throw new NotFoundException('Customer not found');
     }
 
-    // Update customer
-    await this.prisma.customer.update({
-      where: { id: customerId },
-      data: {
-        ...(dto.name && { name: dto.name }),
-        ...(dto.customerType && { customerType: dto.customerType }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.email && { email: dto.email }),
-        ...(dto.phone && { phone: dto.phone }),
-        ...(dto.secondaryPhone !== undefined && { secondaryPhone: dto.secondaryPhone }),
-        ...(dto.taxId !== undefined && { taxId: dto.taxId }),
-        ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
-        ...(dto.paymentTerms && { paymentTerms: dto.paymentTerms }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      },
-    });
-
-    // Update contacts if provided
-    if (dto.contacts && dto.contacts.length > 0) {
-      await this.prisma.customerContact.deleteMany({
-        where: { customerId },
+    await this.prisma.$transaction(async (tx) => {
+      const status = dto.status ?? (dto.isActive === undefined ? undefined : dto.isActive ? 'ACTIVE' : 'SUSPENDED');
+      await tx.customer.update({
+        where: { id: customerId },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.customerType !== undefined && { customerType: dto.customerType }),
+          ...(dto.description !== undefined && { description: dto.description?.trim() || null }),
+          ...(dto.email !== undefined && { email: dto.email.trim().toLowerCase() }),
+          ...(dto.phone !== undefined && { phone: dto.phone.trim() }),
+          ...(dto.secondaryPhone !== undefined && { secondaryPhone: dto.secondaryPhone?.trim() || null }),
+          ...(dto.taxId !== undefined && { taxId: dto.taxId?.trim() || null }),
+          ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
+          ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+          ...(status !== undefined && { status, isActive: status === 'ACTIVE' }),
+        },
       });
 
-      for (let i = 0; i < dto.contacts.length; i++) {
-        const contact = dto.contacts[i];
-        await this.prisma.customerContact.create({
-          data: {
-            id: uuid(),
-            customerId,
-            firstName: contact.firstName || customer.contacts[0]?.firstName || '',
-            lastName: contact.lastName || customer.contacts[0]?.lastName || '',
-            email: contact.email || customer.contacts[0]?.email || '',
-            phone: contact.phone || customer.contacts[0]?.phone || '',
-            position: contact.position,
-            isPrimary: i === 0,
-          },
-        });
+      if (dto.contacts !== undefined) {
+        await tx.customerContact.deleteMany({ where: { customerId } });
+        if (dto.contacts.length) await tx.customerContact.createMany({ data: dto.contacts.map((contact, index) => ({
+          id: uuid(), customerId, firstName: contact.firstName?.trim() || '',
+          lastName: contact.lastName?.trim() || '', email: contact.email?.trim().toLowerCase() || '',
+          phone: contact.phone?.trim() || '', position: contact.position?.trim() || null,
+          isPrimary: index === 0,
+        })) });
       }
-    }
 
-    // Update address if provided
-    if (dto.address) {
-      if (customer.address) {
-        await this.prisma.customerAddress.update({
-          where: { id: customer.address.id },
-          data: {
-            ...(dto.address.street && { street: dto.address.street }),
-            ...(dto.address.city && { city: dto.address.city }),
-            ...(dto.address.region && { region: dto.address.region }),
-            ...(dto.address.postalCode && { postalCode: dto.address.postalCode }),
-            ...(dto.address.country !== undefined && { country: dto.address.country }),
-          },
-        });
-      } else {
-        await this.prisma.customerAddress.create({
-          data: {
-            id: uuid(),
-            customerId,
-            street: dto.address.street,
-            city: dto.address.city,
-            region: dto.address.region,
-            postalCode: dto.address.postalCode,
-            country: dto.address.country,
-          },
+      if (dto.address === null) await tx.customerAddress.deleteMany({ where: { customerId } });
+      else if (dto.address) {
+        const addressData = {
+          street: dto.address.street?.trim() || '', city: dto.address.city?.trim() || '',
+          region: dto.address.region?.trim() || '', postalCode: dto.address.postalCode?.trim() || '',
+          country: dto.address.country?.trim() || null,
+        };
+        await tx.customerAddress.upsert({
+          where: { customerId }, create: { id: uuid(), customerId, ...addressData }, update: addressData,
         });
       }
-    }
+      await tx.auditLog.create({ data: {
+        businessId, userId, action: 'UPDATE', entityType: 'CUSTOMER', entityId: customerId,
+        description: `Updated customer ${customer.customerCode}`,
+      } });
+    });
 
     this.logger.log(`[CUSTOMERS] Customer updated: ${customerId}`);
 
@@ -532,6 +505,41 @@ export class CustomerService {
     };
   }
 
+  async getCustomerActivities(businessId: string, customerId: string, limit = 30) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, businessId }, select: { id: true },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+    const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
+    return this.prisma.customerActivity.findMany({
+      where: { businessId, customerId }, orderBy: { createdAt: 'desc' }, take: safeLimit,
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+    });
+  }
+
+  async addCustomerActivity(
+    businessId: string,
+    customerId: string,
+    userId: string,
+    dto: { type: string; description: string; reference?: string },
+  ) {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, businessId }, select: { id: true },
+    });
+    if (!customer) throw new NotFoundException('Customer not found');
+    return this.prisma.$transaction(async (tx) => {
+      const activity = await tx.customerActivity.create({ data: {
+        id: uuid(), businessId, customerId, userId, type: dto.type,
+        description: dto.description.trim(), reference: dto.reference?.trim() || null,
+      } });
+      await tx.auditLog.create({ data: {
+        businessId, userId, action: 'CREATE', entityType: 'CUSTOMER_ACTIVITY', entityId: activity.id,
+        description: `Added ${dto.type.toLowerCase()} activity to customer ${customerId}`,
+      } });
+      return activity;
+    });
+  }
+
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
@@ -561,7 +569,7 @@ export class CustomerService {
    * Calculate total sales to customer
    */
   private async _calculateCustomerFinancials(businessId: string, customerId: string) {
-    const [sales, payments, returns] = await Promise.all([
+    const [sales, payments, returns, lastSale] = await Promise.all([
       this.prisma.salesInvoice.aggregate({
         where: {
           businessId,
@@ -582,15 +590,23 @@ export class CustomerService {
         where: {
           businessId,
           status: { in: ['RECEIVED', 'COMPLETED'] },
-          OR: [{ customerId }, { customerId: null, invoice: { customerId } }],
+          OR: [
+            { customerId, businessId },
+            { customerId: null, invoice: { businessId, customerId } },
+          ],
         },
         _sum: { totalAmount: true },
+      }),
+      this.prisma.salesInvoice.aggregate({
+        where: { businessId, customerId, status: { in: ['ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE'] } },
+        _max: { issuedDate: true },
       }),
     ]);
     return {
       totalSales: sales._sum.totalAmount || 0,
       totalPaid: payments._sum.amount || 0,
       totalReturned: returns._sum.totalAmount || 0,
+      lastSaleDate: lastSale._max.issuedDate || undefined,
     };
   }
 
@@ -601,7 +617,7 @@ export class CustomerService {
     customer: any,
     contacts: any[],
     address: any,
-    financials?: { totalSales: number; totalPaid: number; totalReturned: number },
+    financials?: { totalSales: number; totalPaid: number; totalReturned: number; lastSaleDate?: Date },
   ): CustomerResponseDto {
     const totalSales = financials?.totalSales || 0;
     const totalPaid = financials?.totalPaid || 0;
@@ -650,6 +666,8 @@ export class CustomerService {
       outstandingBalance,
       creditUtilization: Math.round(creditUtilization * 100) / 100,
       isActive: customer.isActive,
+      status: customer.status || (customer.isActive ? 'ACTIVE' : 'SUSPENDED'),
+      lastSaleDate: financials?.lastSaleDate,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt,
     };

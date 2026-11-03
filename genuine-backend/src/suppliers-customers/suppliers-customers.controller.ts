@@ -28,6 +28,7 @@ import {
   UpdateCustomerDto,
   CustomerResponseDto,
   CustomerFilterDto,
+  CreateCustomerActivityDto,
 } from './dto';
 
 @ApiTags('Suppliers & Customers')
@@ -250,5 +251,30 @@ export class SupplierCustomerController {
       dateFrom,
       dateTo,
     );
+  }
+
+  @Get('customers/:id/activities')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('customers.view')
+  @ApiOperation({ summary: 'Get customer activity history' })
+  async getCustomerActivities(
+    @Business() businessId: string,
+    @Param('id') customerId: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.customerService.getCustomerActivities(businessId, customerId, Number(limit) || 30);
+  }
+
+  @Post('customers/:id/activities')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('customers.edit')
+  @ApiOperation({ summary: 'Record a customer interaction' })
+  async addCustomerActivity(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') customerId: string,
+    @Body() dto: CreateCustomerActivityDto,
+  ) {
+    return this.customerService.addCustomerActivity(businessId, customerId, userId, dto);
   }
 }

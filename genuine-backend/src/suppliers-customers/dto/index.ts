@@ -6,3 +6,4 @@ export * from './supplier-response.dto';
 export * from './customer-response.dto';
 export * from './supplier-customer-filter.dto';
 export * from './statement.dto';
+export * from './customer-activity.dto';

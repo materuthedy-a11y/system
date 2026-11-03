@@ -47,7 +47,7 @@ export class CustomerFilterDto {
   paymentTerms?: string;
 
   @IsOptional()
-  @IsEnum(['ACTIVE', 'INACTIVE', 'OVERDUE'])
+  @IsEnum(['ACTIVE', 'INACTIVE', 'SUSPENDED', 'BLACKLISTED', 'ARCHIVED', 'OVERDUE'])
   status?: string;
 
   @IsOptional()

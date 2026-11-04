@@ -23,6 +23,7 @@ import {
 } from '@/lib/api/products';
 import { useAuthStore } from '@/store/authStore';
 import { ProductPhoto } from '@/components/products/ProductImages';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const panel = 'min-w-0 rounded-2xl border border-[#e6e9e1] bg-white p-4 shadow-sm sm:p-6';
 const statusStyles: Record<Product['status'], string> = {
@@ -269,9 +270,7 @@ export default function ProductDetailPage() {
               ))}
             </div>
           ) : (
-            <p className="mt-4 text-sm text-[#73766f]">
-              No active location balances were returned.
-            </p>
+            <div className="mt-4"><EmptyState compact title="No active location balances were returned." /></div>
           )}
           <div className="mt-5 border-t border-[#eef0eb] pt-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#343832]">
@@ -333,9 +332,7 @@ export default function ProductDetailPage() {
             ))}
           </div>
         ) : (
-          <p className="mt-3 text-sm text-[#73766f]">
-            No inventory movements have been recorded for this product.
-          </p>
+          <div className="mt-3"><EmptyState compact title="No inventory movements have been recorded for this product." /></div>
         )}
       </section>
       <div className="flex items-center gap-2 text-xs text-[#858880]">

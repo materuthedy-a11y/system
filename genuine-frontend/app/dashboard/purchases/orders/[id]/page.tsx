@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { clearPurchaseRetryKey, purchaseRetryKey } from '@/lib/purchaseIdempotency';
 import {
   purchasesAPI,
@@ -1269,7 +1270,7 @@ export default function PurchaseOrderDetailPage() {
                 ) : null}
               </div>
             ))}
-            {!grns.length && <p className="text-sm text-[#73766f]">No receipts yet.</p>}
+            {!grns.length && <EmptyState compact title="No receipts yet." />}
           </div>
         </section>
         <div className="space-y-5">
@@ -1516,7 +1517,7 @@ export default function PurchaseOrderDetailPage() {
                 )}
               </div>
             ))}
-            {!returns.length && <p className="text-sm text-[#73766f]">No returns recorded.</p>}
+            {!returns.length && <EmptyState compact title="No returns recorded." />}
           </section>
         </div>
       </div>

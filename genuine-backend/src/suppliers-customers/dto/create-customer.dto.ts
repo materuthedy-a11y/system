@@ -8,6 +8,7 @@ import {
   Min,
   ValidateNested,
   IsBoolean,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -103,4 +104,9 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsEnum(['ACTIVE', 'SUSPENDED', 'BLACKLISTED', 'ARCHIVED'])
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180_000)
+  photo?: string | null;
 }

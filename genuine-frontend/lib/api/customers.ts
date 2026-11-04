@@ -33,6 +33,7 @@ export interface Customer {
   email: string;
   phone: string;
   secondaryPhone?: string | null;
+  photoId?: string | null;
   address?: CustomerAddress | null;
   contacts: CustomerContact[];
   taxId?: string | null;
@@ -46,6 +47,7 @@ export interface Customer {
   creditUtilization: number;
   isActive: boolean;
   status: CustomerStatus;
+  lastSaleDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -64,6 +66,8 @@ export interface CustomerInput {
   openingBalance: number;
   isActive: boolean;
   status?: CustomerStatus;
+  /** Compressed WebP data URL, null removes an existing photo, undefined leaves it unchanged. */
+  photo?: string | null;
   contacts?: Array<Omit<CustomerContact, 'id' | 'isPrimary'> & { isPrimary?: boolean }>;
   address?: Omit<CustomerAddress, 'id'> | null;
 }
@@ -129,6 +133,9 @@ export const customersAPI = {
   },
   async get(id: string) {
     return unwrap<Customer>(await apiClient.get(`${root}/${encodeURIComponent(id)}`));
+  },
+  async getPhoto(id: string) {
+    return (await apiClient.get(`${root}/${encodeURIComponent(id)}/photo`, { responseType: 'blob' })).data as Blob;
   },
   async create(input: CustomerInput) {
     return unwrap<Customer>(await apiClient.post(root, input));

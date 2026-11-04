@@ -27,9 +27,9 @@ export function AuthLeftPanel() {
       <div className="absolute -right-24 -top-16 z-0 h-[25rem] w-[25rem] rounded-full border border-[#d8f04b]/20" aria-hidden="true" />
       <div className="absolute -bottom-56 -left-40 z-0 h-[34rem] w-[34rem] rounded-full bg-[#d8f04b]/[0.07] blur-3xl" aria-hidden="true" />
 
-      <Link href="/login" className="relative z-10 flex w-fit items-center gap-3" aria-label="Genuine home">
+      <Link href="/login" className="relative z-10 flex w-fit items-center gap-3" aria-label="Mizania home">
         <Image
-          src="/GGENUINE_FULL_BRAND_PACKAGE/logos/svg/logo-horizontal-white.svg"
+          src="/MIZANIA_BRAND_PACKAGE/logos/svg/wordmark-dark.svg"
           alt=""
           aria-hidden="true"
           width={900}
@@ -45,7 +45,7 @@ export function AuthLeftPanel() {
         <p className="mt-6 max-w-md text-base leading-7 text-white/75">Sales, stock, purchasing and finance, connected in one thoughtful workspace.</p>
         <AuthPhotoStoryCard onStoryImageChange={updateBackgroundImage} />
       </div>
-      <p className="relative z-10 text-xs tracking-wide text-white/60">© 2026 Genuine Business Suite</p>
+      <p className="relative z-10 text-xs tracking-wide text-white/60">© 2026 Mizania Business Suite</p>
       <style jsx>{`
         .auth-left-story-background {
           animation: auth-left-story-arrive 560ms ease both;

@@ -1,6 +1,6 @@
-# 🚀 Genuine Liquor Store — Distribution & Business Management System
+# 🚀 Mizania Business Suite
 
-Generic, flexible, configurable distribution system for liquor business management.
+Flexible business system for keeping records and tracking sales, customers, stock, purchasing, and finances. Each company name remains its own workspace inside Mizania.
 
 ## Quick Start
 

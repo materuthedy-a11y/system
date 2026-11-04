@@ -10,8 +10,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
 import { Business } from '../common/decorators/business.decorator';
@@ -178,6 +180,23 @@ export class SupplierCustomerController {
     @Param('id') customerId: string,
   ): Promise<CustomerResponseDto> {
     return this.customerService.getCustomerById(businessId, customerId);
+  }
+
+  @Get('customers/:id/photo')
+  @RequirePermission('customers.view')
+  @ApiOperation({ summary: 'Get a customer photo within the authenticated business' })
+  async getCustomerPhoto(
+    @Business() businessId: string,
+    @Param('id') customerId: string,
+    @Res() response: Response,
+  ) {
+    const photo = await this.customerService.getCustomerPhoto(businessId, customerId);
+    response.set({
+      'Content-Type': photo.contentType,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-store, max-age=0',
+    });
+    return response.send(Buffer.from(photo.data));
   }
 
   /**

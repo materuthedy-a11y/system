@@ -6,6 +6,7 @@ import { salesAPI, type InvoiceStatus, type SalesInvoiceFilters } from '@/lib/ap
 import { getApiError } from '@/lib/api';
 import { useSalesStore } from '@/store/salesStore';
 import { SalesHeading, SalesNotice, StatusBadge, dateLabel, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const statuses: InvoiceStatus[] = ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
 const inputClass = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
@@ -78,7 +79,7 @@ export default function SalesInvoicesPage() {
         <thead className="bg-[#f7f8f5] text-xs uppercase tracking-wide text-[#73786e]"><tr><th className="px-4 py-3">Invoice</th><th className="px-4 py-3">Customer</th><th className="px-4 py-3">Date</th><th className="px-4 py-3">Due</th><th className="px-4 py-3">Total</th><th className="px-4 py-3">Balance</th><th className="px-4 py-3">Status</th></tr></thead>
         <tbody className="divide-y divide-[#eef0eb]">
           {isLoading && invoices.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-[#747a68]">Loading invoices…</td></tr> : null}
-          {!isLoading && invoices.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-[#747a68]">No invoices match these filters.</td></tr> : null}
+          {!isLoading && invoices.length === 0 ? <tr><td colSpan={7} className="px-4 py-5"><EmptyState compact title="No invoices match these filters." description="Try another search or clear a filter." /></td></tr> : null}
           {invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-[#fbfcf9]"><td className="px-4 py-3 font-semibold"><Link className="text-[#40580b] underline-offset-4 hover:underline" href={`/dashboard/sales/invoices/${encodeURIComponent(invoice.id)}`}>{invoice.invoiceNumber}</Link></td><td className="px-4 py-3">{invoice.customerName}</td><td className="px-4 py-3">{dateLabel(invoice.invoiceDate)}</td><td className="px-4 py-3">{dateLabel(invoice.dueDate)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.totalAmount, invoice.currency)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.balance, invoice.currency)}</td><td className="px-4 py-3"><StatusBadge status={invoice.status} /></td></tr>)}
         </tbody>
       </table></div>

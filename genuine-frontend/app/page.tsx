@@ -15,5 +15,5 @@ export default function HomePage() {
     return () => window.clearTimeout(splashTimer);
   }, [router]);
 
-  return <AuthLoadingOverlay message="G Genuine — Trust, Build, Grow" />;
+  return <AuthLoadingOverlay message="Mizania — Rekodi, fuatilia, endelea" />;
 }

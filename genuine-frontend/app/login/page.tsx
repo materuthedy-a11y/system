@@ -70,7 +70,7 @@ export default function LoginPage() {
         >
           Sign in <span aria-hidden="true">→</span>
         </button>
-        <p className="pt-1 text-center text-sm text-white/75">New to Genuine? <Link href="/register" className="font-semibold text-white underline-offset-4 hover:underline">Create an account</Link></p>
+        <p className="pt-1 text-center text-sm text-white/75">New to Mizania? <Link href="/register" className="font-semibold text-white underline-offset-4 hover:underline">Create an account</Link></p>
       </form>
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-white/70"><LockKeyhole size={14} /> Your sign-in is encrypted and protected.</div>
     </AuthFrame>

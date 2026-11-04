@@ -1,8 +1,8 @@
 {
   "name": "genuine-backend",
   "version": "1.0.0",
-  "description": "Genuine Liquor Store - Generic Distribution & Business Management System Backend",
-  "author": "Genuine Liquor Store Team",
+  "description": "Mizania Business Suite - Business records and operations API",
+  "author": "Mizania Team",
   "license": "MIT",
   "main": "dist/main.js",
   "scripts": {

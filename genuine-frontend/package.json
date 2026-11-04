@@ -1,7 +1,7 @@
 {
   "name": "genuine-frontend",
   "version": "1.0.0",
-  "description": "Genuine Liquor Store - Generic Distribution & Business Management System Frontend",
+  "description": "Mizania Business Suite - Business records and operations frontend",
   "private": true,
   "scripts": {
     "dev": "next dev",

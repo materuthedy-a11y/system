@@ -1,7 +1,7 @@
 # Phase 30 — PWA: audit and sequential acceptance checklist
 
 **Phase status:** IMPLEMENTATION IN PROGRESS; ACCEPTANCE TESTING NOT STARTED. All test boxes are intentionally unchecked.
-**Scope:** installability, app shell/offline behavior, offline data and mutation policy, synchronization, updates, notifications, security, accessibility, and browser/device compatibility for Genuine Business Suite.
+**Scope:** installability, app shell/offline behavior, offline data and mutation policy, synchronization, updates, notifications, security, accessibility, and browser/device compatibility for Mizania Business Suite.
 **Checkpoint:** Phase 20 is paused at **6.1**. Finish this Phase 30 checklist only when the user switches back to it; then resume Phase 20 at 6.1 without skipping any item.
 
 ## Test discipline — do not skip steps
@@ -17,9 +17,9 @@
 
 Initial repository audit was code review only, not test evidence. The implementation checkpoint below records the files changed after that audit.
 
-- `app/manifest.ts` already defines Genuine branding, standalone display, root scope, and three existing PNG icon files. It does not define shortcuts, screenshots, share target, or explicit categories. Confirm all referenced icon paths and actual image dimensions when tested.
-- `app/layout.tsx` links `/manifest.webmanifest`, uses the Genuine `ThemeProvider`, and sets site metadata. The PWA client is now mounted globally; verify the UX and registration in acceptance testing.
-- `public/` contains Genuine icons and Apple touch icon. A scoped Genuine `sw.js` and `/offline` fallback have now been added. The proposed DISTRO paths and shortcuts were not copied.
+- `app/manifest.ts` defines Mizania branding, standalone display, root scope, app shortcuts, and PNG icon files. Confirm all referenced icon paths and actual image dimensions when tested.
+- `app/layout.tsx` links `/manifest.webmanifest`, uses the theme provider, and sets Mizania site metadata. The PWA client is mounted globally; verify the UX and registration in acceptance testing.
+- `public/MIZANIA_BRAND_PACKAGE/` contains Mizania logos and PWA icons. The app-shell `sw.js` and `/offline` fallback are scoped to the local app shell. The proposed DISTRO paths were not copied.
 - `next.config.js` now applies `private, no-store` to `/api/:path*` and sets revalidation/scope headers for `/sw.js`; confirm deployed headers in acceptance testing.
 - `package.json` is Next 14 / React 18 and has no PWA or IndexedDB library dependency. The pasted example's Next 15 / React 19 versions are not this repository's versions; do not copy them without compatibility review.
 - `lib/api.ts` uses bearer tokens stored in `localStorage`, attaches them to API requests, and refreshes them on 401. Any offline queue/cache must not persist bearer/refresh tokens or replay a request after logout, account change, business switch, or permission/session change.
@@ -30,9 +30,9 @@ Initial repository audit was code review only, not test evidence. The implementa
 
 ### Implementation checkpoint — 2026-10-07
 
-- [x] Added Genuine manifest metadata, valid in-app route shortcuts, light/sand launch colors, and Apple web-app metadata.
+- [x] Added Mizania manifest metadata, valid in-app route shortcuts, light/sand launch colors, and Apple web-app metadata.
 - [x] Added a same-origin app-shell service worker with version-prefixed cache cleanup, static public asset caching, safe offline navigation fallback, API/auth exclusions, and user-confirmed worker activation.
-- [x] Added `/offline`, install prompt handling (including iOS Add to Home Screen guidance), online/offline status, and an update-ready prompt using the Genuine light/dark theme.
+- [x] Added `/offline`, install prompt handling (including iOS Add to Home Screen guidance), online/offline status, and an update-ready prompt using the Mizania light/dark theme.
 - [x] Changed `/api/*` response headers to private/no-store and added service-worker scope/revalidation headers.
 - [x] Added a narrow IndexedDB queue for explicitly saved Purchase Order DRAFTs, scoped to the creator and workspace, with existing server idempotency keys, manual foreground sync, permission checks, review/discard controls, and no persisted authorization headers.
 - [ ] Authenticated offline business-data cache, service-worker Background Sync, push subscription/delivery, and Periodic Sync remain unimplemented; these need additional privacy and API contracts. Current offline reads use the offline fallback rather than cached tenant data.
@@ -53,14 +53,14 @@ Initial repository audit was code review only, not test evidence. The implementa
 
 ## 2. Manifest, brand assets, launch, and deep links
 
-- [ ] 2.1 Verify `/manifest.webmanifest` returns valid manifest JSON with correct Genuine name, short name, description, start URL, scope, display mode, and theme/background colors matching the approved light/sand and dark themes.
+- [ ] 2.1 Verify `/manifest.webmanifest` returns valid manifest JSON with correct Mizania name, short name, description, start URL, scope, display mode, and theme/background colors matching the approved light/sand and dark themes.
 - [ ] 2.2 Verify every icon URL returns an image with its declared dimensions and MIME type; confirm regular, maskable, and Apple touch icons render without clipping or unsafe-area cropping.
 - [ ] 2.3 Confirm icon `purpose` values, contrast, safe-zone artwork, and screenshots (if supplied) meet each target browser's requirements.
 - [ ] 2.4 Verify manifest paths resolve under the deployed app base path and do not point to DISTRO sample files or missing files.
-- [ ] 2.5 If shortcuts are included, verify each target uses a real Genuine route, respects authentication, retains no unintended query parameters, and works from an installed app.
+- [ ] 2.5 If shortcuts are included, verify each target uses a real Mizania route, respects authentication, retains no unintended query parameters, and works from an installed app.
 - [ ] 2.6 If share target is included, verify its action route exists, validates text/URL/files, enforces file type/size limits, requires correct auth, and safely handles unauthenticated/offline submissions.
 - [ ] 2.7 Verify root/start URL redirects to the appropriate login or authenticated dashboard without caching a user-specific redirect as a public response.
-- [ ] 2.8 Verify the installed app opens in standalone mode on supported desktop and mobile platforms, uses correct app title/icon/theme, and preserves Genuine light/dark preference.
+- [ ] 2.8 Verify the installed app opens in standalone mode on supported desktop and mobile platforms, uses correct Mizania app title/icon/theme, and preserves the light/dark preference.
 - [ ] 2.9 Verify login, session expiry, deep-link restore, browser back, and sign-out flows from both browser and standalone app.
 
 ## 3. Service worker registration, lifecycle, scope, and cache safety
@@ -89,7 +89,7 @@ Initial repository audit was code review only, not test evidence. The implementa
 - [ ] 4.7 Verify sensitive API paths, authentication endpoints, profile/avatar, notifications, financial figures, and tenant-specific data follow their individually approved cache policy.
 - [ ] 4.8 Verify refreshing while offline does not replace valid cached content with an error page or silently cache an error response.
 - [ ] 4.9 Verify reconnect refreshes approved data, updates freshness labels, and displays failure/retry when the server remains unavailable.
-- [ ] 4.10 Verify the offline fallback route and its online retry/navigation links are real, keyboard accessible, and consistent with Genuine theme/branding.
+- [ ] 4.10 Verify the offline fallback route and its online retry/navigation links are real, keyboard accessible, and consistent with Mizania theme/branding.
 
 ## 5. IndexedDB schema, migrations, quota, and data lifecycle
 
@@ -128,7 +128,7 @@ Initial repository audit was code review only, not test evidence. The implementa
 - [ ] 7.3 Verify accepted/dismissed outcomes, delayed prompt behavior, and persisted dismissal policy across reload, browser restart, account change, and app update.
 - [ ] 7.4 Verify iOS/iPadOS manual Add to Home Screen guidance when no install prompt API exists; do not show a dead Install button.
 - [ ] 7.5 Verify already-installed/standalone users do not see install prompts; detect display mode correctly on each platform.
-- [ ] 7.6 Verify install prompt is accessible by keyboard/screen reader, has visible focus, can be dismissed, and matches Genuine light/dark theme and responsive layout.
+- [ ] 7.6 Verify install prompt is accessible by keyboard/screen reader, has visible focus, can be dismissed, and matches Mizania light/dark theme and responsive layout.
 - [ ] 7.7 Verify installation while unauthenticated and post-install launch both honor the existing auth/session flow without caching another user's login state.
 
 ## 8. App update lifecycle and safe activation
@@ -152,14 +152,14 @@ Initial repository audit was code review only, not test evidence. The implementa
 - [ ] 9.6 Verify notification action buttons and deep links respect authentication, workspace scope, and current permissions; expired sessions go through the standard login route.
 - [ ] 9.7 Verify Background Sync for notification refresh does not expose private notification details to an unauthenticated or wrong-user worker context.
 - [ ] 9.8 Verify periodic sync is feature-detected, permission-gated where required, user-configurable, rate-limited, and has foreground fallback when unsupported.
-- [ ] 9.9 Verify background data refresh uses actual Genuine endpoint paths/response envelopes and labels update timestamps; no sample DISTRO endpoints remain.
+- [ ] 9.9 Verify background data refresh uses actual API endpoint paths/response envelopes and labels update timestamps; no sample DISTRO endpoints remain.
 - [ ] 9.10 Verify push/periodic fetch failures do not show false success or silently discard required state; logs remain free of payload secrets.
 
 ## 10. UI, themes, accessibility, and user feedback
 
 - [ ] 10.1 Verify offline banner/indicator appears promptly on loss and clears on recovery, with accurate queued count and last-sync time.
 - [ ] 10.2 Verify every action that is unavailable offline is disabled or explains why; do not imply an action succeeded merely because it entered a queue.
-- [ ] 10.3 Verify all PWA prompts, toasts, indicators, dialogs, offline pages, and sync errors match the existing Genuine visual system in light/sand and dark modes.
+- [ ] 10.3 Verify all PWA prompts, toasts, indicators, dialogs, offline pages, and sync errors match the Mizania visual system in light/sand and dark modes.
 - [ ] 10.4 Verify dark-mode text contrast, focus states, status colors, glass/overlay opacity, and button backgrounds remain readable; light-mode theme remains intact.
 - [ ] 10.5 Verify mobile layout, safe-area insets, portrait/landscape, tablet/desktop widths, zoom, reduced motion, and fixed header/sidebar interactions.
 - [ ] 10.6 Verify keyboard-only navigation, screen-reader names/status announcements, focus restoration, dialog escape/dismissal, and no focus trap after sync/update prompts.

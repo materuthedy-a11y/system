@@ -32,10 +32,10 @@ export function AuthFrame({
         </video>
         <div className="absolute inset-0 -z-10 bg-[#101810]/45" aria-hidden="true" />
 
-        <Link href="/login" aria-label="Genuine home" className="mx-auto flex w-full max-w-sm items-center md:hidden">
+        <Link href="/login" aria-label="Mizania home" className="mx-auto flex w-full max-w-sm items-center md:hidden">
           <Image
-            src="/GGENUINE_FULL_BRAND_PACKAGE/logos/svg/logo-horizontal-white.svg"
-            alt="G Genuine — Trust, Build, Grow"
+            src="/MIZANIA_BRAND_PACKAGE/logos/svg/wordmark-dark.svg"
+            alt="Mizania — Rekodi, fuatilia, endelea"
             width={900}
             height={220}
             priority
@@ -49,7 +49,7 @@ export function AuthFrame({
           <div className="mt-8">{children}</div>
         </div>
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3 border-t border-white/25 pt-4 text-[10px] text-white/75 sm:pt-5 sm:text-[11px]">
-          <span>© 2026 Genuine</span>
+          <span>© 2026 Mizania</span>
           <span>Secure business access</span>
         </div>
       </section>

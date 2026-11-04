@@ -1,14 +1,15 @@
-/* Genuine app shell worker. Business/API responses and mutations are never cached or replayed. */
-const CACHE_PREFIX = 'genuine-shell-';
-const CACHE_NAME = `${CACHE_PREFIX}v3`;
+/* Mizania app shell worker. Business/API responses and mutations are never cached or replayed. */
+const CACHE_PREFIX = 'mizania-shell-';
+const LEGACY_CACHE_PREFIXES = ['genuine-shell-'];
+const CACHE_NAME = `${CACHE_PREFIX}v1`;
 const OFFLINE_URL = '/offline';
 const PRECACHE_URLS = [
   OFFLINE_URL,
   '/manifest.webmanifest',
-  '/GGENUINE_FULL_BRAND_PACKAGE/logos/png/g-genuine-app-icon-192x192.png',
-  '/GGENUINE_FULL_BRAND_PACKAGE/pwa/g-genuine-maskable-192x192.png',
-  '/GGENUINE_FULL_BRAND_PACKAGE/pwa/g-genuine-maskable-512x512.png',
-  '/GGENUINE_FULL_BRAND_PACKAGE/pwa/apple-touch-icon-180x180.png',
+  '/MIZANIA_BRAND_PACKAGE/logos/png/mizania-app-icon-192x192.png',
+  '/MIZANIA_BRAND_PACKAGE/pwa/mizania-maskable-192x192.png',
+  '/MIZANIA_BRAND_PACKAGE/pwa/mizania-maskable-512x512.png',
+  '/MIZANIA_BRAND_PACKAGE/pwa/apple-touch-icon-180x180.png',
 ];
 
 self.addEventListener('install', (event) => {
@@ -19,7 +20,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
     await Promise.all(names
-      .filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE_NAME)
+      .filter((name) => (name.startsWith(CACHE_PREFIX) || LEGACY_CACHE_PREFIXES.some((prefix) => name.startsWith(prefix))) && name !== CACHE_NAME)
       .map((name) => caches.delete(name)));
     await self.clients.claim();
   })());
@@ -57,7 +58,7 @@ self.addEventListener('fetch', (event) => {
 
   // Cache only same-origin immutable Next build assets and the explicit public PWA assets.
   const isNextAsset = url.pathname.startsWith('/_next/static/');
-  const isPwaAsset = url.pathname.startsWith('/GGENUINE_FULL_BRAND_PACKAGE/') || url.pathname === '/manifest.webmanifest';
+  const isPwaAsset = url.pathname.startsWith('/MIZANIA_BRAND_PACKAGE/') || url.pathname === '/manifest.webmanifest';
   if (!isNextAsset && !isPwaAsset) return;
 
   event.respondWith((async () => {

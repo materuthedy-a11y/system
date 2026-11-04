@@ -52,8 +52,8 @@ export function AuthLoadingOverlay({ message }: { message: string }) {
           </svg>
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#101b2e] shadow-lg shadow-black/20">
             <Image
-              src="/GGENUINE_FULL_BRAND_PACKAGE/logos/png/g-genuine-symbol-128x128.png"
-              alt="G Genuine"
+              src="/MIZANIA_BRAND_PACKAGE/logos/png/mizania-app-icon-128x128.png"
+              alt="Mizania"
               width={32}
               height={32}
               className="h-8 w-8 object-contain"

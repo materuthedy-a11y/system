@@ -29,6 +29,7 @@ import {
 } from '@/lib/api/products';
 import { notify } from '@/components/ui/AppToaster';
 import { ProductPhoto } from '@/components/products/ProductImages';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const emptyPermissions: string[] = [];
 const statusLabels: Record<ProductStatus, string> = {
@@ -555,29 +556,12 @@ export default function ProductsPage() {
             </span>
           </div>
         ) : products.length === 0 ? (
-          <div className="px-5 py-16 text-center">
-            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#f0f7c9] text-[#617500]">
-              <Package size={21} />
-            </span>
-            <h2 className="mt-4 text-lg font-bold text-[#292d27]">
-              {search || categoryId || status
-                ? 'No matching products'
-                : 'Your catalog is ready for its first product'}
-            </h2>
-            <p className="mx-auto mt-1 max-w-md text-sm text-[#73766f]">
-              {search || categoryId || status
-                ? 'Try another search or clear one of the filters.'
-                : 'Create a product with its real price, base unit and stock thresholds.'}
-            </p>
-            {canCreate && !search && !categoryId && !status ? (
-              <Link
-                href="/dashboard/products/new"
-                className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-bold text-white"
-              >
-                <Plus size={16} />
-                Add product
-              </Link>
-            ) : null}
+          <div className="p-5 sm:p-8">
+            <EmptyState
+              title={search || categoryId || status ? 'No matching products' : 'Your catalog is ready for its first product'}
+              description={search || categoryId || status ? 'Try another search or clear one of the filters.' : 'Create a product with its real price, base unit and stock thresholds.'}
+              action={canCreate && !search && !categoryId && !status ? <Link href="/dashboard/products/new" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#008f65] px-4 text-sm font-bold text-white transition hover:bg-[#007653] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"><Plus size={16} />Add product</Link> : undefined}
+            />
           </div>
         ) : (
           <>

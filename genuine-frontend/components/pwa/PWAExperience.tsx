@@ -199,20 +199,20 @@ export function PWAExperience() {
       })}</ul> : null}
       {!user?.permissions.includes('purchases.create') ? <p className="mt-2 text-xs text-[#a63832]">This signed-in account cannot create purchase orders. Switch to an authorized account in the matching workspace to sync.</p> : null}
     </section> : null}
-    {showInstall ? <div role="region" aria-label="Install Genuine" className="fixed bottom-3 left-3 z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-center gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:bottom-5 sm:left-5">
+    {showInstall ? <div role="region" aria-label="Install Mizania" className="fixed bottom-3 left-3 z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-center gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:bottom-5 sm:left-5">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#f0f7c9] text-[#596b05] dark:bg-[#28301c] dark:text-[#d8f04b]"><Download size={18} /></span>
-      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Install Genuine</p><p className="mt-0.5 text-xs text-[#73766f] dark:text-[#aab2a6]">Open your workspace from your home screen.</p></div>
+      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Install Mizania</p><p className="mt-0.5 text-xs text-[#73766f] dark:text-[#aab2a6]">Open your workspace from your home screen.</p></div>
       <button type="button" onClick={() => void install()} className="min-h-9 rounded-lg bg-[#20211f] px-3 text-xs font-semibold text-white hover:bg-[#353832] dark:bg-[#d8f04b] dark:text-[#20211f]">Install</button>
       <button type="button" aria-label="Dismiss install prompt" onClick={dismissInstall} className="rounded-lg p-2 text-[#73766f] hover:bg-black/5 dark:hover:bg-white/10"><X size={16} /></button>
     </div> : null}
-    {showIosHelp ? <div role="region" aria-label="Add Genuine to Home Screen" className="fixed bottom-3 left-3 z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-start gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:bottom-5 sm:left-5">
+    {showIosHelp ? <div role="region" aria-label="Add Mizania to Home Screen" className="fixed bottom-3 left-3 z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-start gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:bottom-5 sm:left-5">
       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#f0f7c9] text-[#596b05] dark:bg-[#28301c] dark:text-[#d8f04b]"><Download size={18} /></span>
-      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Add Genuine to Home Screen</p><p className="mt-0.5 text-xs leading-5 text-[#73766f] dark:text-[#aab2a6]">Open the browser Share menu, then choose “Add to Home Screen”.</p></div>
+      <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Add Mizania to Home Screen</p><p className="mt-0.5 text-xs leading-5 text-[#73766f] dark:text-[#aab2a6]">Open the browser Share menu, then choose “Add to Home Screen”.</p></div>
       <button type="button" aria-label="Dismiss install instructions" onClick={dismissInstall} className="rounded-lg p-2 text-[#73766f] hover:bg-black/5 dark:hover:bg-white/10"><X size={16} /></button>
     </div> : null}
     {waitingWorker ? <div role="status" aria-live="polite" className="fixed right-3 top-[78px] z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-center gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:right-5">
       <RefreshCw size={18} className="shrink-0 text-[#70820f] dark:text-[#d8f04b]" />
-      <p className="flex-1 text-xs leading-5">A Genuine update is ready.</p>
+      <p className="flex-1 text-xs leading-5">A Mizania update is ready.</p>
       <button type="button" onClick={updateApp} disabled={isUpdating} className="min-h-9 rounded-lg bg-[#20211f] px-3 text-xs font-semibold text-white hover:bg-[#353832] disabled:opacity-60 dark:bg-[#d8f04b] dark:text-[#20211f]">{isUpdating ? 'Updating…' : 'Update'}</button>
     </div> : null}
   </>;

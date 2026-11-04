@@ -51,8 +51,8 @@ async function bootstrap() {
 
   // Swagger Documentation
   const config = new DocumentBuilder()
-    .setTitle('Genuine Liquor Store API')
-    .setDescription('Distribution & Business Management System API')
+    .setTitle('Mizania Business Suite API')
+    .setDescription('Business records, sales, inventory, purchasing, and finance API')
     .setVersion('1.0.0')
     .addBearerAuth(
       {

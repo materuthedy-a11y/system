@@ -37,6 +37,7 @@ export class CustomerService {
     dto: CreateCustomerDto,
   ): Promise<CustomerResponseDto> {
     this.logger.log(`[CUSTOMERS] Creating customer: ${dto.name}`);
+    const photo = this.decodeCustomerPhoto(dto.photo);
 
     // 1. Generate customer code
     const customerCode = dto.customerCode || (await this._generateCustomerCode(businessId));
@@ -79,6 +80,11 @@ export class CustomerService {
           },
           select: { id: true },
         });
+        if (photo) {
+          await tx.customerPhoto.create({
+            data: { id: uuid(), businessId, customerId: created.id, data: photo, contentType: 'image/webp' },
+          });
+        }
         await tx.auditLog.create({ data: {
           businessId, userId, action: 'CREATE', entityType: 'CUSTOMER', entityId: created.id,
           description: `Created customer ${customerCode}`,
@@ -108,6 +114,7 @@ export class CustomerService {
       include: {
         contacts: true,
         address: true,
+        photo: { select: { id: true } },
       },
     });
 
@@ -190,6 +197,7 @@ export class CustomerService {
         include: {
           contacts: true,
           address: true,
+          photo: { select: { id: true } },
         },
         orderBy,
         ...(needsMemoryFilterOrSort ? {} : { skip, take: limit }),
@@ -263,6 +271,7 @@ export class CustomerService {
     dto: UpdateCustomerDto,
   ): Promise<CustomerResponseDto> {
     this.logger.log(`[CUSTOMERS] Updating customer: ${customerId}`);
+    const photo: Buffer | undefined = dto.photo ? this.decodeCustomerPhoto(dto.photo) : undefined;
 
     // Verify customer exists
     const customer = await this.prisma.customer.findFirst({
@@ -273,6 +282,7 @@ export class CustomerService {
       include: {
         contacts: true,
         address: true,
+        photo: { select: { id: true } },
       },
     });
 
@@ -320,6 +330,15 @@ export class CustomerService {
           where: { customerId }, create: { id: uuid(), customerId, ...addressData }, update: addressData,
         });
       }
+      if (dto.photo === null) {
+        await tx.customerPhoto.deleteMany({ where: { businessId, customerId } });
+      } else if (photo) {
+        await tx.customerPhoto.upsert({
+          where: { customerId },
+          create: { id: uuid(), businessId, customerId, data: photo, contentType: 'image/webp' },
+          update: { id: uuid(), data: photo, contentType: 'image/webp' },
+        });
+      }
       await tx.auditLog.create({ data: {
         businessId, userId, action: 'UPDATE', entityType: 'CUSTOMER', entityId: customerId,
         description: `Updated customer ${customer.customerCode}`,
@@ -329,6 +348,15 @@ export class CustomerService {
     this.logger.log(`[CUSTOMERS] Customer updated: ${customerId}`);
 
     return this.getCustomerById(businessId, customerId);
+  }
+
+  async getCustomerPhoto(businessId: string, customerId: string) {
+    const photo = await this.prisma.customerPhoto.findFirst({
+      where: { businessId, customerId, customer: { businessId } },
+      select: { data: true, contentType: true },
+    });
+    if (!photo) throw new NotFoundException('Customer photo not found');
+    return photo;
   }
 
   /**
@@ -351,12 +379,14 @@ export class CustomerService {
         throw new NotFoundException('Customer not found');
       }
 
-      const invoiceCount = await tx.salesInvoice.count({
-        where: { customerId, businessId },
-      });
+      const [invoiceCount, paymentCount, returnCount] = await Promise.all([
+        tx.salesInvoice.count({ where: { customerId, businessId } }),
+        tx.payment.count({ where: { customerId, businessId } }),
+        tx.salesReturn.count({ where: { businessId, OR: [{ customerId }, { invoice: { customerId } }] } }),
+      ]);
 
-      if (invoiceCount > 0) {
-        throw new BadRequestException('Cannot delete customer with sales invoices');
+      if (invoiceCount || paymentCount || returnCount) {
+        throw new BadRequestException('Cannot delete a customer with sales, payments or returns. Change the customer status instead.');
       }
 
       await tx.customerContact.deleteMany({ where: { customerId } });
@@ -667,9 +697,28 @@ export class CustomerService {
       creditUtilization: Math.round(creditUtilization * 100) / 100,
       isActive: customer.isActive,
       status: customer.status || (customer.isActive ? 'ACTIVE' : 'SUSPENDED'),
+      photoId: customer.photo?.id,
       lastSaleDate: financials?.lastSaleDate,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt,
     };
+  }
+
+  private decodeCustomerPhoto(value?: string | null): Buffer | undefined {
+    if (value === undefined || value === null || value === '') return undefined;
+    const match = /^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+    if (!match) throw new BadRequestException('Customer photo must be a valid WebP image');
+    const data = Buffer.from(match[1], 'base64');
+    if (
+      data.length < 16 ||
+      data.length > 128 * 1024 ||
+      data.toString('ascii', 0, 4) !== 'RIFF' ||
+      data.readUInt32LE(4) !== data.length - 8 ||
+      data.toString('ascii', 8, 12) !== 'WEBP' ||
+      !['VP8 ', 'VP8L', 'VP8X'].includes(data.toString('ascii', 12, 16))
+    ) {
+      throw new BadRequestException('Customer photo is invalid or exceeds 128 KB after compression');
+    }
+    return data;
   }
 }

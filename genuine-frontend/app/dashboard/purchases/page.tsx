@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRight, ClipboardList, Loader2, PackageCheck, Plus, Re
 import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
 import { purchasesAPI, purchaseMoney, type GoodsReceivedNote, type PurchaseOrder, type PurchaseReturn, type PurchaseStatus } from '@/lib/api/purchases';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const statuses: PurchaseStatus[] = ['DRAFT', 'ORDERED', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CLOSED', 'CANCELLED'];
 const chip: Record<string, string> = { DRAFT: 'bg-amber-400 text-amber-950', ORDERED: 'bg-blue-600 text-white', PARTIALLY_RECEIVED: 'bg-amber-500 text-white', FULLY_RECEIVED: 'bg-emerald-600 text-white', ACCEPTED: 'bg-emerald-600 text-white', APPROVED: 'bg-emerald-600 text-white', REJECTED: 'bg-rose-600 text-white', CANCELLED: 'bg-rose-700 text-white', CLOSED: 'bg-slate-600 text-white' };
@@ -94,5 +95,5 @@ export default function PurchasesPage() {
 }
 
 function Metric({label,value}:{label:string;value:number}) { return <div className="rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm"><p className="text-sm text-[#73766f]">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p></div>; }
-function Empty({title,text}:{title:string;text:string}) { return <div className="p-12 text-center"><p className="font-semibold">{title}</p><p className="mt-2 text-sm text-[#73766f]">{text}</p></div>; }
+function Empty({title,text}:{title:string;text:string}) { return <div className="p-4 sm:p-6"><EmptyState compact title={title} description={text} /></div>; }
 function Pagination({page,pages,setPage,shown,total}:{page:number;pages:number;setPage:(n:number)=>void;shown:number;total:number}) { return <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#eceee8] px-4 py-3 text-sm text-[#73766f]"><span>Showing {total?((page-1)*20+1):0}–{(page-1)*20+shown} of {total}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(page-1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Previous</button><span className="px-2 py-1.5">{page} / {pages}</span><button disabled={page>=pages} onClick={()=>setPage(page+1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Next</button></div></div>; }

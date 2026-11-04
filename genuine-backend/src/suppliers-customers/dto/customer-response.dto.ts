@@ -27,6 +27,7 @@ export class CustomerResponseDto {
   email: string;
   phone: string;
   secondaryPhone?: string;
+  photoId?: string;
   address?: CustomerAddressResponseDto;
   contacts: CustomerContactResponseDto[];
   taxId?: string;

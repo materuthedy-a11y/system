@@ -21,7 +21,7 @@ type StorySlide = {
 };
 
 const slides: StorySlide[] = [
-  { title: 'A store built on trust', category: 'Genuine Business Suite', Icon: Store, palette: 'from-[#56613a] via-[#28352b] to-[#171d19]', image: '/images/auth-story/store.webp' },
+  { title: 'A business built on trust', category: 'Mizania Business Suite', Icon: Store, palette: 'from-[#56613a] via-[#28352b] to-[#171d19]', image: '/images/auth-story/store.webp' },
   { title: 'Sales, made clearer', category: 'Sales', Icon: ShoppingCart, palette: 'from-[#82653a] via-[#3c3528] to-[#1b1d18]', image: '/images/auth-story/sales.webp' },
   { title: 'Stock, always in view', category: 'Inventory', Icon: Boxes, palette: 'from-[#446657] via-[#263a32] to-[#171d19]', image: '/images/auth-story/inventory.webp' },
   { title: 'Know your numbers', category: 'Finance', Icon: BarChart3, palette: 'from-[#65543b] via-[#353227] to-[#1a1d19]', image: '/images/auth-story/operations.webp' },
@@ -81,7 +81,7 @@ export function AuthPhotoStoryCard({
 
   return (
     <section
-      aria-label="Genuine Business Suite stories"
+      aria-label="Mizania Business Suite stories"
       className="mt-8 w-full max-w-[587px]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
@@ -126,7 +126,7 @@ export function AuthPhotoStoryCard({
               <p className="mt-1 text-[11px] text-white/65">Sales · Stock · Finance · More</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#d8f04b]">G Genuine</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#d8f04b]">Mizania</p>
               <p className="mt-1 text-[10px] text-white/65">{String(active + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</p>
             </div>
           </div>

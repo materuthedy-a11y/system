@@ -8,7 +8,6 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
-  Inbox,
   Lightbulb,
   LifeBuoy,
   Loader2,
@@ -21,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { getApiError } from '@/lib/api';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   supportAPI,
   type FeedbackCategory,
@@ -233,7 +233,7 @@ export default function HelpFeedbackPage() {
       <header className="flex flex-col gap-4 rounded-3xl border border-amber-200/80 bg-amber-50/80 p-5 shadow-sm shadow-amber-950/[0.03] sm:flex-row sm:items-center sm:justify-between sm:p-7 dark:border-white/[0.06] dark:bg-[#20211f]">
         <div className="flex items-start gap-4">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-200/70 text-amber-900 dark:bg-[#352c1a] dark:text-[#f5cc72]"><LifeBuoy size={22} /></span>
-          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#738900] dark:text-[#d8f04b]">Genuine support</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#20211f] dark:text-[#f0f1ed]">Help & feedback</h1><p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#73766f] dark:text-[#afb5ac]">Start a conversation and get a reply from your business administrator.</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#738900] dark:text-[#d8f04b]">Mizania support</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#20211f] dark:text-[#f0f1ed]">Help & feedback</h1><p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#73766f] dark:text-[#afb5ac]">Start a conversation and get a reply from your business administrator.</p></div>
         </div>
         <button type="button" onClick={() => setNewConversationOpen(true)} className="feedback-primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#343632] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#738900] dark:bg-[#d8f04b] dark:text-white dark:hover:bg-[#e4f77a]"><Plus size={17} />New conversation</button>
       </header>
@@ -289,7 +289,7 @@ export default function HelpFeedbackPage() {
                 </button>
               </li>)}
             </ul>
-          ) : <div className="px-6 py-14 text-center"><span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-[#f3f4ef] text-[#83887d] dark:bg-[#222622] dark:text-[#afb5ac]"><Inbox size={21} /></span><p className="mt-3 text-sm font-semibold text-[#30342e] dark:text-[#e7e9e3]">No conversations yet</p><p className="mt-1 text-xs leading-5 text-[#858880]">Start a conversation and your replies will appear here.</p><button type="button" onClick={() => setNewConversationOpen(true)} className="mt-4 text-xs font-bold text-[#687d00] hover:underline dark:text-[#d8f04b]">Start a conversation</button></div>}
+          ) : <div className="px-5 py-8 sm:px-6 sm:py-10"><EmptyState title="No conversations yet" description="Start a conversation and your replies will appear here." action={<button type="button" onClick={() => setNewConversationOpen(true)} className="inline-flex min-h-10 items-center rounded-lg bg-[#008f65] px-4 text-xs font-bold text-white transition hover:bg-[#007653] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600">Start a conversation</button>} /></div>}
         </aside>
 
         <div className={`flex min-h-0 min-w-0 flex-col ${!selectedId ? 'hidden lg:flex' : ''}`}>

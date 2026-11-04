@@ -12,7 +12,7 @@ export class AppController {
   getHealth() {
     return {
       status: 'ok',
-      message: 'Genuine Liquor Store API is running',
+      message: 'Mizania Business Suite API is running',
       timestamp: new Date().toISOString(),
     };
   }

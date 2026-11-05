@@ -21,8 +21,8 @@ build context:
 | Web | `genuine-frontend/` | `Dockerfile` | `/login` |
 
 On platforms that build from a repository subdirectory, set the service root/build context to the
-directory in the table. The Dockerfiles are standard multi-stage Node builds and do not use a
-Railway-only runtime. Set the public API URL as a **build argument** on the web service because
+directory in the table. The Dockerfiles use Node 22 to support the pinned pnpm 11 toolchain and are
+standard multi-stage builds, not a Railway-only runtime. Set the public API URL as a **build argument** on the web service because
 Next.js embeds public environment values while building the browser bundle.
 
 ## Required API environment

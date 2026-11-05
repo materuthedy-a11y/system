@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { salesAPI, type InvoiceStatus, type SalesInvoiceFilters } from '@/lib/api/sales';
 import { getApiError } from '@/lib/api';
 import { useSalesStore } from '@/store/salesStore';
-import { SalesHeading, SalesNotice, StatusBadge, dateLabel, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
+import { SalesHeading, SalesNotice, StatusBadge, calendarDateLabel, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 const statuses: InvoiceStatus[] = ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
@@ -80,7 +80,7 @@ export default function SalesInvoicesPage() {
         <tbody className="divide-y divide-[#eef0eb]">
           {isLoading && invoices.length === 0 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-[#747a68]">Loading invoices…</td></tr> : null}
           {!isLoading && invoices.length === 0 ? <tr><td colSpan={7} className="px-4 py-5"><EmptyState compact title="No invoices match these filters." description="Try another search or clear a filter." /></td></tr> : null}
-          {invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-[#fbfcf9]"><td className="px-4 py-3 font-semibold"><Link className="text-[#40580b] underline-offset-4 hover:underline" href={`/dashboard/sales/invoices/${encodeURIComponent(invoice.id)}`}>{invoice.invoiceNumber}</Link></td><td className="px-4 py-3">{invoice.customerName}</td><td className="px-4 py-3">{dateLabel(invoice.invoiceDate)}</td><td className="px-4 py-3">{dateLabel(invoice.dueDate)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.totalAmount, invoice.currency)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.balance, invoice.currency)}</td><td className="px-4 py-3"><StatusBadge status={invoice.status} /></td></tr>)}
+          {invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-[#fbfcf9]"><td className="px-4 py-3 font-semibold"><Link className="text-[#40580b] underline-offset-4 hover:underline" href={`/dashboard/sales/invoices/${encodeURIComponent(invoice.id)}`}>{invoice.invoiceNumber}</Link></td><td className="px-4 py-3">{invoice.customerName}</td><td className="px-4 py-3">{calendarDateLabel(invoice.invoiceDate)}</td><td className="px-4 py-3">{calendarDateLabel(invoice.dueDate)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.totalAmount, invoice.currency)}</td><td className="px-4 py-3 tabular-nums">{money(invoice.balance, invoice.currency)}</td><td className="px-4 py-3"><StatusBadge status={invoice.status} /></td></tr>)}
         </tbody>
       </table></div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#eef0eb] px-4 py-3 text-sm text-[#686e63]"><span>Showing {total ? (page - 1) * limit + 1 : 0}–{Math.min(page * limit, total)} of {total}</span><div className="flex items-center gap-2"><button type="button" disabled={page <= 1 || isLoading} onClick={() => changePage(page - 1)} className="min-h-9 rounded-lg border border-[#dfe2d9] px-3 disabled:opacity-40">Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={page >= pages || isLoading} onClick={() => changePage(page + 1)} className="min-h-9 rounded-lg border border-[#dfe2d9] px-3 disabled:opacity-40">Next</button></div></div>

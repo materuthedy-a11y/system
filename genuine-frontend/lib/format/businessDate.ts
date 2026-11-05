@@ -63,6 +63,24 @@ export function formatBusinessDate(value?: string | Date | null) {
   return `${parts.day}/${parts.month}/${parts.year}`;
 }
 
+/**
+ * Format a business calendar date stored as a UTC day boundary. Invoice dates
+ * and due dates are calendar days, not instants; applying the business timezone
+ * to an end-of-day UTC value can incorrectly display the following day.
+ */
+export function formatBusinessCalendarDate(value?: string | Date | null) {
+  if (!value) return '—';
+  const raw = value instanceof Date ? value.toISOString() : value;
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (!match) return formatBusinessDate(value);
+  const settings = readSettings();
+  const [, year, month, day] = match;
+  const format = settings.dateFormat || 'DD/MM/YYYY';
+  if (format === 'MM/DD/YYYY') return `${month}/${day}/${year}`;
+  if (format === 'YYYY-MM-DD') return `${year}-${month}-${day}`;
+  return `${day}/${month}/${year}`;
+}
+
 export function formatBusinessDateTime(value?: string | Date | null) {
   if (!value) return '—';
   const settings = readSettings();

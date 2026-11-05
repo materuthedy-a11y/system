@@ -18,9 +18,9 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [x] Confirm the inline warning replaces the broken-image icon, and workspace/invoice use fallback branding for an unreachable URL; user confirmed green (5 Nov 2026).
 - [x] Restore and save a working logo URL after the invalid-URL fallback check. User confirmed green (5 Nov 2026).
 - [x] Remove the saved logo and save; removal succeeds and the app returns to its fallback branding. User confirmed green (5 Nov 2026).
-- [ ] Cause a profile-save failure and confirm the error appears inline and in a toast.
+- [x] Cause a profile-save failure and confirm the error appears inline and in a toast. User confirms this was already tested green; checkbox had not been recorded (5 Nov 2026).
 - [x] Confirm the saved business logo appears in the workspace/location selector and invoice identity. User confirmed logo is visible (5 Nov 2026).
-- [ ] Confirm missing or invalid logo falls back cleanly to the workspace icon without a broken image.
+- [x] Confirm missing or invalid logo falls back cleanly to the workspace icon without a broken image. User confirms this was already tested green; checkbox had not been recorded (5 Nov 2026).
 - [x] Check required business identity and contact fields remain intact after saving. User showed the saved trading name, email, phone, address and country intact with logo preview (5 Nov 2026).
 
 ## 25.2 General settings and downstream defaults
@@ -31,7 +31,7 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [x] Confirm a new payment form preselects the configured method (Cash, user confirmed 5 Nov 2026).
 - [x] Change invoice prefix to `PH25-INV-`; save and refresh; user confirmed it remained saved (5 Nov 2026).
 - [x] Invoice prefix integration: after fixing doubled separators, a saved draft generated `PH25-INV-202611-00001` (user confirmed, 5 Nov 2026).
-- [ ] Change the purchase-order prefix; create a draft order and confirm its generated number uses that prefix.
+- [x] Change the purchase-order prefix to `PH25-PO-`; saved a draft and confirmed `PH25-PO-202611-00001` (user confirmed, 5 Nov 2026).
 - [ ] Change the GRN prefix; receive a test order and confirm the GRN number uses that prefix.
 - [ ] Change the payment-reference prefix; record a test payment and confirm the generated reference uses that prefix.
 - [ ] Change currency, tax percentage, costing method, financial-year setting and low-stock threshold; save and verify the stored values.
@@ -112,6 +112,13 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [ ] Audit finding: conversion factors are stored for product-unit choices, but no conversion-factor consumer was found in sales, purchase or inventory stock-write services. This is an implementation/integration gap until verified or explicitly constrained to base-unit entry; do not mark unit conversion green from the Settings screen alone.
 - [ ] Verify the Phase 25 migration on a nonempty database preserves existing business values, backfills defaults safely and can be deployed once without duplicate settings.
 - [ ] Verify all settings writes create the expected audit record and failed/forbidden writes leave both settings and related records unchanged.
+
+### Online smoke flow — fresh Mizania workspace (5 Nov 2026)
+
+- [x] Create a draft COD invoice for Asha Mushi at Moshi: 2 × Moshi Cola 500ml at TZS 1,800, 18% tax, total TZS 4,248; confirm invoice and due dates both display 05/11/2026 after the calendar-date display fix.
+- [x] Issue the invoice; confirm status becomes ISSUED and stock changes from 24 to 22 Bottle at Moshi, with a SALE movement of -2.
+- [x] Add Cash payment method when the fresh workspace had no available methods; record TZS 4,248 against the invoice and confirm status PAID, paid total TZS 4,248 and zero balance.
+- [x] Verify the recorded Cash transaction appears in the customer account statement with the correct business/location context: Asha Mushi shows SALE TZS 4,248, PAYMENT TZS 4,248, both dated 05/11/2026, and closing balance TZS 0 (user confirmed, 5 Nov 2026).
 
 ## 25.13 Business-wide totals vs active location
 

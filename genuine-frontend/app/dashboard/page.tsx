@@ -7,7 +7,8 @@ import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessWeekStart } from '@/lib/format/businessDate';
 import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type DashboardMetric, type DashboardTransaction, type ExpenseBreakdownRow, type LowStockRow } from '@/lib/api/dashboard';
 import { getApiError } from '@/lib/api';
-import { CashFlowPanel, DashboardSkeleton, ExpenseBreakdown, InventoryAlerts, MetricCard, RecentActivity, RevenueExpenseChart, SalesTrendChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
+import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
+import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, RecentActivity, RevenueExpenseChart, SalesTrendChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
 
 type PeriodKey = 'week' | 'month' | 'quarter' | 'year';
 const EMPTY_PERMISSIONS: string[] = [];
@@ -178,7 +179,7 @@ export default function DashboardPage() {
     { metric: { ...availableMetrics.inventoryValue, changePercent: null }, tone: 'bg-[#c8a8ee] text-[#513276]', valueColor: 'text-[#7043a3]', href: canViewInventory ? '/dashboard/inventory' : '/dashboard/reports?tab=inventory' },
   ] : [];
 
-  if (isLoading && !executive) return <DashboardSkeleton />;
+  if (isLoading && !executive) return <AuthLoadingOverlay message="Loading your dashboard…" />;
 
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">

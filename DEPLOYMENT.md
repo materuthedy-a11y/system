@@ -1,6 +1,6 @@
-# Deployment guide (Railway, Render, or any Docker host)
+# Deployment guide (Railway Railpack or another Node build host)
 
-**Current state:** platform-independent Dockerfiles and production environment checks are in place.
+**Current state:** platform buildpacks and production environment checks are configured without Dockerfiles.
 No cloud deployment has been created yet because this workspace does not have a production database
 URL, cloud account configuration, or deployed service domains. Track the remaining live steps in
 [`DEPLOYMENT-CHECKLIST.md`](DEPLOYMENT-CHECKLIST.md).
@@ -10,20 +10,24 @@ Mizania supports local development and production from the same code. Local runs
 URL, and the backend requires a real PostgreSQL connection URL; the app does not silently fall
 back to local services in production.
 
-## Services
+## Railway services (Railpack; no Dockerfile)
 
-Deploy two services from this repository, using the matching service directory as the Docker
-build context:
+Deploy two services from this repository and set the matching root directory for each service:
 
-| Service | Build context | Dockerfile | Health check |
-| --- | --- | --- | --- |
-| API | `genuine-backend/` | `Dockerfile` | `/api/v1/health` |
-| Web | `genuine-frontend/` | `Dockerfile` | `/login` |
+| Service | Root directory | Build command | Start command | Health check |
+| --- | --- | --- | --- | --- |
+| API | `/genuine-backend` | `pnpm build` | `pnpm start:prod` | `/api/v1/health` |
+| Web | `/genuine-frontend` | `pnpm build` | `pnpm start -- --hostname 0.0.0.0` | `/login` |
 
-On platforms that build from a repository subdirectory, set the service root/build context to the
-directory in the table. The Dockerfiles use Node 22 to support the pinned pnpm 11 toolchain and are
-standard multi-stage builds, not a Railway-only runtime. Set the public API URL as a **build argument** on the web service because
-Next.js embeds public environment values while building the browser bundle.
+Clear any old Dockerfile override such as `RAILWAY_DOCKERFILE_PATH` from the service. Set the API
+root directory to `/genuine-backend` and web root directory to `/genuine-frontend`; leaving either
+root blank points Railpack at the repository root instead of that service's lockfile.
+
+Railway Railpack detects Node and pnpm from each service directory, reads the committed lockfile
+and `pnpm-workspace.yaml`, installs dependencies, and runs the configured build/start commands.
+Both projects require Node 22.13 or newer for pinned pnpm 11. Set `NEXT_PUBLIC_API_URL` as a
+frontend service variable before building because Next.js embeds it into the browser bundle.
+Railway variables are available during the build.
 
 ## Required API environment
 
@@ -54,7 +58,7 @@ the output):
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-## Required web environment/build argument
+## Required web environment
 
 Set `NEXT_PUBLIC_API_URL` to the API's HTTPS URL plus `/api/v1`, for example:
 
@@ -62,8 +66,7 @@ Set `NEXT_PUBLIC_API_URL` to the API's HTTPS URL plus `/api/v1`, for example:
 https://your-api-host.example/api/v1
 ```
 
-Set it before the web image is built. If you use a Docker CLI build, pass
-`--build-arg NEXT_PUBLIC_API_URL=https://.../api/v1`. It is intentionally public and must not
+Set it as a frontend service variable before the build. It is intentionally public and must not
 contain secrets. The web server binds to `0.0.0.0` and honors the hosting platform's `PORT`.
 
 ## Database and migrations
@@ -75,15 +78,14 @@ commands. Render Postgres works too: use its internal URL only when the API is a
 the same region; otherwise use its external URL and SSL option. Keep credentials URL-encoded if
 they contain reserved characters.
 
-Before the first release, run the committed migrations once as a release/pre-deploy step:
+Set the API service's pre-deploy command to apply committed migrations before the release:
 
 ```sh
 pnpm db:migrate:deploy
 ```
 
-The backend image includes the Prisma CLI and committed migration files for that command. Configure
-the platform's release/pre-deploy command to run it before switching traffic, or run it from a
-one-off container with the production `DATABASE_URL`. Use `prisma migrate deploy` only; do not run
+The API dependencies include Prisma CLI and the repository includes the migration files. Use
+`prisma migrate deploy` only; do not run
 `prisma migrate dev`, `prisma db push`, or the development seed scripts against production.
 The development seed truncates data and is not a production initialization step. Create the first
 production business through the app's registration flow or a reviewed, non-destructive provisioning
@@ -93,9 +95,9 @@ procedure.
 
 1. Create the managed PostgreSQL database and set its URL in the API service.
 2. Set the three independent JWT secrets, `NODE_ENV`, and temporary frontend URLs in the API service.
-3. Build/deploy the API, applying migrations through the platform release/pre-deploy command.
+3. Build/deploy the API, applying migrations through the release/pre-deploy command.
 4. Copy the API HTTPS origin into `CORS_ORIGIN`; set `FRONTEND_URL` to the frontend HTTPS origin.
-5. Set the web build argument `NEXT_PUBLIC_API_URL` to `https://<api-host>/api/v1`, then build/deploy web.
+5. Set the web service variable `NEXT_PUBLIC_API_URL` to `https://<api-host>/api/v1`, then build/deploy web.
 6. Open `/api/v1/health`, `/login`, and complete a real registration/login and database-backed read.
 7. Add custom domains in the host and update `CORS_ORIGIN`, `FRONTEND_URL`, and rebuild web if the
    final API origin changed.

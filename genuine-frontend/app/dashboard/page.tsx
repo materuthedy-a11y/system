@@ -238,7 +238,7 @@ export default function DashboardPage() {
             <p className="mt-4 flex items-center gap-1.5 border-t border-violet-200 pt-4 text-[11px] text-[#62675f] dark:border-violet-900/60 dark:text-[#afb5ac]"><Clock3 size={13} />{definitionsLanguage === 'sw' ? 'Takwimu zimekokotolewa hadi' : 'Figures calculated as of'} {formatBusinessDateTime(executive.asOf)}</p>
           </section>
         </section>
-      </> : !error ? <DashboardSkeleton /> : null}
+      </> : !error ? <AuthLoadingOverlay message="Loading your dashboard…" /> : null}
     </div>
   );
 }

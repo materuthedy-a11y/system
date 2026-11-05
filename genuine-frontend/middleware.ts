@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const publicRoutes = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
-const guestOnlyRoutes = new Set(['/login', '/register']);
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = request.cookies.has('genuine-session');
+  const hasSession = request.cookies.has('__Host-mizania-refresh') || request.cookies.has('mizania-refresh');
 
   if (pathname === '/') {
     return NextResponse.redirect(new URL(hasSession ? '/dashboard' : '/login', request.url));
   }
 
   if (publicRoutes.has(pathname)) {
-    if (hasSession && guestOnlyRoutes.has(pathname)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
     return NextResponse.next();
   }
 

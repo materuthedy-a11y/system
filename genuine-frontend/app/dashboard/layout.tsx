@@ -12,6 +12,7 @@ import { notify } from '@/components/ui/AppToaster';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { RouteTransitionOverlay } from './RouteTransitionOverlay';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
+import { SessionTimeoutGuard } from '@/components/auth/SessionTimeoutGuard';
 import { workspaceAPI, type WorkspaceLocation } from '@/lib/api/workspace';
 import { readSavedLocationId, useWorkspaceStore } from '@/store/workspaceStore';
 import { settingsAPI } from '@/lib/api/settings';
@@ -26,6 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const user = useAuthStore((state) => state.user);
   const initialize = useAuthStore((state) => state.initialize);
   const logout = useAuthStore((state) => state.logout);
+  const expireSession = useAuthStore((state) => state.expireSession);
   const updateUser = useAuthStore((state) => state.updateUser);
   const syncToken = useAuthStore((state) => state.syncToken);
   const { setTheme } = useTheme();
@@ -162,6 +164,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.addEventListener('genuine:token-refreshed', sync);
     return () => window.removeEventListener('genuine:token-refreshed', sync);
   }, [syncToken]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel('mizania-auth');
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'session-ended') {
+        expireSession();
+        router.replace('/login?reason=session-expired');
+      }
+    };
+    return () => channel.close();
+  }, [expireSession, router]);
 
   useEffect(() => {
     let active = true;
@@ -424,6 +438,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </section>
       </div> : null}
       <RouteTransitionOverlay />
+      <SessionTimeoutGuard />
     </div>
   );
 }

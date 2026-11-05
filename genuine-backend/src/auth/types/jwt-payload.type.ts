@@ -3,6 +3,7 @@ export type JwtPayload = {
   email: string;
   businessId: string;
   permissions: string[];
+  sid?: string;
   iat?: number;
   exp?: number;
 };

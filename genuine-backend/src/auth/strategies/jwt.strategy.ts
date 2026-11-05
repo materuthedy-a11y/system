@@ -19,12 +19,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<any> {
+    if (!payload.sid || !(await this.authService.validateSession(payload.sub, payload.sid))) {
+      throw new UnauthorizedException('Session expired. Sign in again.');
+    }
     const user = await this.authService.validateUser(payload.sub);
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    return user;
+    return { ...user, sessionId: payload.sid };
   }
 }

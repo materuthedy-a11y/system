@@ -12,16 +12,16 @@ const envSchema = z.object({
     .default('15m'),
   JWT_REFRESH_EXPIRATION: z
     .string()
-    .regex(/^\d+[smhd]$/, 'Use a JWT duration such as 30d')
-    .default('30d'),
+    .regex(/^\d+[smhd]$/, 'Use a JWT duration such as 12h')
+    .default('12h'),
   SESSION_IDLE_TIMEOUT: z
     .string()
-    .regex(/^\d+[smhd]$/, 'Use a session duration such as 7d')
-    .default('7d'),
+    .regex(/^\d+[smhd]$/, 'Use a session duration such as 30m')
+    .default('30m'),
   SESSION_ABSOLUTE_TIMEOUT: z
     .string()
-    .regex(/^\d+[smhd]$/, 'Use a session duration such as 30d')
-    .default('30d'),
+    .regex(/^\d+[smhd]$/, 'Use a session duration such as 12h')
+    .default('12h'),
   PORT: z.coerce.number().int().min(1).max(65535).optional(),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(3002),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
@@ -34,6 +34,12 @@ const envSchema = z.object({
     .default('false'),
   DEFAULT_COSTING_METHOD: z.enum(['FIFO', 'WEIGHTED_AVERAGE']).default('WEIGHTED_AVERAGE'),
 }).superRefine((env, context) => {
+  const toSeconds = (value: string) => {
+    const match = /^(\d+)([smhd])$/.exec(value);
+    if (!match) return 0;
+    const scale = { s: 1, m: 60, h: 3600, d: 86_400 }[match[2] as 's' | 'm' | 'h' | 'd'];
+    return Number(match[1]) * scale;
+  };
   if (env.NOTIFICATION_CONFIG_ENCRYPTION_KEY && env.NOTIFICATION_CONFIG_ENCRYPTION_KEY.length < 32) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -43,6 +49,22 @@ const envSchema = z.object({
   }
 
   if (env.NODE_ENV !== 'production') return;
+
+  const productionSessionMaximums = [
+    ['JWT_ACCESS_EXPIRATION', env.JWT_ACCESS_EXPIRATION, 15 * 60],
+    ['SESSION_IDLE_TIMEOUT', env.SESSION_IDLE_TIMEOUT, 30 * 60],
+    ['SESSION_ABSOLUTE_TIMEOUT', env.SESSION_ABSOLUTE_TIMEOUT, 12 * 60 * 60],
+    ['JWT_REFRESH_EXPIRATION', env.JWT_REFRESH_EXPIRATION, 12 * 60 * 60],
+  ] as const;
+  for (const [key, value, maximum] of productionSessionMaximums) {
+    if (toSeconds(value) > maximum) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `${key} exceeds the production security limit (${key === 'SESSION_IDLE_TIMEOUT' ? '30m' : key === 'SESSION_ABSOLUTE_TIMEOUT' || key === 'JWT_REFRESH_EXPIRATION' ? '12h' : '15m'})`,
+      });
+    }
+  }
 
   const rejectPlaceholder = (key: string, value: string) => {
     if (/localhost|127\.0\.0\.1|your[-_. ]?(domain|url)|example\.com|placeholder|user:password@host/i.test(value)) {

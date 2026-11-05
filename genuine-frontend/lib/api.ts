@@ -1,15 +1,20 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
-if (!configuredApiUrl && process.env.NODE_ENV === 'production') {
-  throw new Error('The production API URL is missing. Configure NEXT_PUBLIC_API_URL and rebuild the frontend.');
-}
-export const API_URL = configuredApiUrl || 'http://localhost:3002/api/v1';
+// Keep browser traffic same-origin. Next.js rewrites /api/v1 to the configured backend,
+// so HttpOnly refresh cookies work without third-party cookies or browser-exposed API tokens.
+export const API_URL = '/api/v1';
 
-const ACCESS_TOKEN_KEY = 'genuine.accessToken';
-const REFRESH_TOKEN_KEY = 'genuine.refreshToken';
+const LEGACY_ACCESS_TOKEN_KEY = 'genuine.accessToken';
+const LEGACY_REFRESH_TOKEN_KEY = 'genuine.refreshToken';
 const USER_KEY = 'genuine.user';
-const SESSION_COOKIE = 'genuine-session';
+const AUTH_CHANNEL = 'mizania-auth';
+
+let accessTokenInMemory: string | null = null;
+let sessionExpiryInMemory: { idleExpiresAt: string | null; absoluteExpiresAt: string | null; idleTimeoutSeconds: number } = {
+  idleExpiresAt: null,
+  absoluteExpiresAt: null,
+  idleTimeoutSeconds: 30 * 60,
+};
 
 type ApiEnvelope<T> = { data?: T; message?: string | string[] };
 
@@ -26,20 +31,30 @@ export interface AuthUser {
   avatar?: string | null;
 }
 
+export interface ActiveAuthSession {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  expiresAt: string;
+  absoluteExpiresAt: string;
+  isCurrent: boolean;
+}
+
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
+  idleTimeoutSeconds: number;
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
   user: AuthUser;
 }
 
 type RetriableRequest = InternalAxiosRequestConfig & { _authRetry?: boolean };
 
 export const tokenStorage = {
-  accessKey: ACCESS_TOKEN_KEY,
-  refreshKey: REFRESH_TOKEN_KEY,
-  readAccess: () => (typeof window === 'undefined' ? null : localStorage.getItem(ACCESS_TOKEN_KEY)),
-  readRefresh: () => (typeof window === 'undefined' ? null : localStorage.getItem(REFRESH_TOKEN_KEY)),
+  readAccess: () => accessTokenInMemory,
+  readSessionExpiry: () => sessionExpiryInMemory,
   readUser: () => {
     if (typeof window === 'undefined') return null;
     try {
@@ -50,33 +65,42 @@ export const tokenStorage = {
       return null;
     }
   },
-  save(accessToken: string, refreshToken: string, user: AuthUser) {
+  save(accessToken: string, user: AuthUser, session?: { idleExpiresAt: string; absoluteExpiresAt: string; idleTimeoutSeconds: number }) {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    accessTokenInMemory = accessToken;
+    sessionExpiryInMemory = {
+      idleExpiresAt: session?.idleExpiresAt || null,
+      absoluteExpiresAt: session?.absoluteExpiresAt || null,
+      idleTimeoutSeconds: session?.idleTimeoutSeconds || 30 * 60,
+    };
     localStorage.setItem(USER_KEY, JSON.stringify(user));
-    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${SESSION_COOKIE}=1; Path=/; Max-Age=604800; SameSite=Lax${secure}`;
   },
   updateAccess(accessToken: string) {
-    if (typeof window !== 'undefined') localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    accessTokenInMemory = accessToken;
   },
-  updateTokens(accessToken: string, refreshToken: string) {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `${SESSION_COOKIE}=1; Path=/; Max-Age=604800; SameSite=Lax${secure}`;
+  updateTokens(accessToken: string, session: { idleExpiresAt: string; absoluteExpiresAt: string; idleTimeoutSeconds: number }) {
+    accessTokenInMemory = accessToken;
+    sessionExpiryInMemory = session;
   },
   updateUser(user: AuthUser) {
     if (typeof window !== 'undefined') localStorage.setItem(USER_KEY, JSON.stringify(user));
   },
+  notifySessionEnded() {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel(AUTH_CHANNEL);
+    channel.postMessage({ type: 'session-ended' });
+    channel.close();
+  },
   clear() {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    accessTokenInMemory = null;
+    sessionExpiryInMemory = { idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60 };
     localStorage.removeItem(USER_KEY);
-    document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
+    localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    document.cookie = 'genuine-session=; Path=/; Max-Age=0; SameSite=Lax';
   },
 };
 
@@ -84,6 +108,7 @@ export const apiClient = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 20_000,
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -92,24 +117,21 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-let refreshInFlight: Promise<string> | null = null;
+let refreshInFlight: Promise<{ accessToken: string; expiresIn: number; idleTimeoutSeconds: number; idleExpiresAt: string; absoluteExpiresAt: string }> | null = null;
 
-async function rotateRefreshToken(fallbackToken: string): Promise<string> {
+async function rotateRefreshToken(): Promise<{ accessToken: string; expiresIn: number; idleTimeoutSeconds: number; idleExpiresAt: string; absoluteExpiresAt: string }> {
   const rotate = async () => {
-    // Refresh tokens live in shared localStorage; serialize requests across tabs where supported.
-    const refreshToken = tokenStorage.readRefresh() || fallbackToken;
-    const response = await axios.post<ApiEnvelope<{ accessToken: string; refreshToken: string }>>(
-      `${API_URL}/auth/refresh`,
-      { refreshToken },
-      { timeout: 20_000 },
+    const response = await apiClient.post<ApiEnvelope<{ accessToken: string; expiresIn: number; idleTimeoutSeconds: number; idleExpiresAt: string; absoluteExpiresAt: string }>>(
+      '/auth/refresh',
+      {},
     );
-    const payload = response.data.data ?? (response.data as unknown as { accessToken: string; refreshToken: string });
-    if (!payload?.accessToken || !payload.refreshToken) {
-      throw new Error('Refresh response did not include rotated tokens');
+    const payload = response.data.data ?? (response.data as unknown as { accessToken: string; expiresIn: number; idleTimeoutSeconds: number; idleExpiresAt: string; absoluteExpiresAt: string });
+    if (!payload?.accessToken || !payload.idleExpiresAt || !payload.absoluteExpiresAt || !payload.idleTimeoutSeconds) {
+      throw new Error('Refresh response did not include session details');
     }
-    tokenStorage.updateTokens(payload.accessToken, payload.refreshToken);
-    if (typeof window !== 'undefined') window.dispatchEvent(new Event('genuine:token-refreshed'));
-    return payload.accessToken;
+    tokenStorage.updateTokens(payload.accessToken, payload);
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('genuine:token-refreshed', { detail: payload }));
+    return payload;
   };
 
   if (typeof navigator !== 'undefined' && navigator.locks) {
@@ -127,37 +149,18 @@ apiClient.interceptors.response.use(
     );
 
     if (error.response?.status === 401 && original && !original._authRetry && !isAuthEntryRequest) {
-      const refreshToken = tokenStorage.readRefresh();
-      if (refreshToken) {
+      if (typeof window !== 'undefined') {
         original._authRetry = true;
         try {
-          refreshInFlight ??= rotateRefreshToken(refreshToken).finally(() => {
+          refreshInFlight ??= rotateRefreshToken().finally(() => {
             refreshInFlight = null;
           });
-          const accessToken = await refreshInFlight;
-          original.headers.Authorization = `Bearer ${accessToken}`;
+          const session = await refreshInFlight;
+          original.headers.Authorization = `Bearer ${session.accessToken}`;
           return apiClient(original);
         } catch {
-          // Another tab may have rotated the shared refresh token first; do not erase its new session.
-          const latestRefreshToken = tokenStorage.readRefresh();
-          if (latestRefreshToken && latestRefreshToken !== refreshToken) {
-            try {
-              const response = await axios.post<ApiEnvelope<{ accessToken: string; refreshToken: string }>>(
-                `${API_URL}/auth/refresh`,
-                { refreshToken: latestRefreshToken },
-                { timeout: 20_000 },
-              );
-              const payload = response.data.data ?? (response.data as unknown as { accessToken: string; refreshToken: string });
-              if (!payload?.accessToken || !payload.refreshToken) throw new Error('Refresh response did not include rotated tokens');
-              tokenStorage.updateTokens(payload.accessToken, payload.refreshToken);
-              original.headers.Authorization = `Bearer ${payload.accessToken}`;
-              return apiClient(original);
-            } catch {
-              if (tokenStorage.readRefresh() === latestRefreshToken) tokenStorage.clear();
-            }
-          } else {
-            tokenStorage.clear();
-          }
+          tokenStorage.notifySessionEnded();
+          tokenStorage.clear();
           if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
             window.location.assign('/login?reason=session-expired');
           }
@@ -201,6 +204,9 @@ export interface UserProfile extends AuthUser {
 }
 
 export const authAPI = {
+  async refreshSession() {
+    return rotateRefreshToken();
+  },
   async login(data: { email: string; password: string }) {
     return unwrap<AuthResponse>(await apiClient.post('/auth/login', data));
   },
@@ -227,5 +233,11 @@ export const authAPI = {
   },
   async logout() {
     return unwrap<{ message: string }>(await apiClient.post('/auth/logout', {}));
+  },
+  async listSessions() {
+    return unwrap<ActiveAuthSession[]>(await apiClient.get('/auth/sessions'));
+  },
+  async revokeSession(sessionId: string) {
+    return unwrap<{ message: string }>(await apiClient.delete(`/auth/sessions/${encodeURIComponent(sessionId)}`));
   },
 };

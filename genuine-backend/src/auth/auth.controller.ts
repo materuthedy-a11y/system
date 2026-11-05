@@ -7,8 +7,11 @@ import {
   HttpStatus,
   Req,
   Get,
+  Delete,
+  Param,
   Patch,
   BadRequestException,
+  UnauthorizedException,
   Res,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
@@ -23,7 +26,6 @@ import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import {
   RegisterDto,
   LoginDto,
-  RefreshTokenDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
@@ -44,8 +46,19 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register new business and admin user' })
   @ApiResponse({ status: 201, type: AuthResponseDto })
-  async register(@Body() dto: RegisterDto, @Req() req: Request): Promise<AuthResponseDto> {
-    return this.authService.register(dto, req.ip || 'unknown');
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponseDto> {
+    const result = await this.authService.register(
+      dto,
+      req.ip || 'unknown',
+      req.get('user-agent') || undefined,
+    );
+    this.setRefreshCookie(req, response, result.refreshTokenCookie);
+    const { refreshTokenCookie: _refreshTokenCookie, ...authResponse } = result;
+    return authResponse;
   }
 
   @Post('login')
@@ -53,9 +66,16 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
-  async login(@Body() dto: LoginDto, @Req() req: Request): Promise<AuthResponseDto> {
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponseDto> {
     const ipAddress = req.ip || 'unknown';
-    return this.authService.login(dto, ipAddress);
+    const result = await this.authService.login(dto, ipAddress, req.get('user-agent') || undefined);
+    this.setRefreshCookie(req, response, result.refreshTokenCookie);
+    const { refreshTokenCookie: _refreshTokenCookie, ...authResponse } = result;
+    return authResponse;
   }
 
   @Post('refresh')
@@ -64,14 +84,31 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200 })
   async refreshToken(
-    @Body() dto: RefreshTokenDto,
-  ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
-    const payload = this.jwtService.decode(dto.refreshToken) as any;
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<Pick<AuthResponseDto, 'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'>> {
+    const refreshToken = this.readRefreshCookie(req);
+    if (!refreshToken) throw new UnauthorizedException('Session expired. Sign in again.');
+    const payload = this.jwtService.decode(refreshToken) as any;
     const userId = payload?.sub;
     if (!userId) {
       throw new BadRequestException('Invalid refresh token');
     }
-    return this.authService.refreshToken(dto, userId);
+    let result: Awaited<ReturnType<AuthService['refreshToken']>>;
+    try {
+      result = await this.authService.refreshToken(refreshToken, userId);
+    } catch (error) {
+      response.clearCookie(this.refreshCookieName(req), this.refreshCookieOptions(req));
+      throw error;
+    }
+    this.setRefreshCookie(req, response, result.refreshTokenCookie);
+    return {
+      accessToken: result.accessToken,
+      expiresIn: result.expiresIn,
+      idleTimeoutSeconds: result.idleTimeoutSeconds,
+      idleExpiresAt: result.idleExpiresAt,
+      absoluteExpiresAt: result.absoluteExpiresAt,
+    };
   }
 
   @Post('forgot-password')
@@ -88,8 +125,14 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with token' })
   @ApiResponse({ status: 200 })
-  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
-    return this.authService.resetPassword(dto);
+  async resetPassword(
+    @Body() dto: ResetPasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ message: string }> {
+    const result = await this.authService.resetPassword(dto);
+    response.clearCookie(this.refreshCookieName(req), this.refreshCookieOptions(req));
+    return result;
   }
 
   @Patch('change-password')
@@ -101,8 +144,12 @@ export class AuthController {
   async changePasswordPatch(
     @UserId() userId: string,
     @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
-    return this.authService.changePassword(userId, dto);
+    const result = await this.authService.changePassword(userId, dto);
+    response.clearCookie(this.refreshCookieName(req), this.refreshCookieOptions(req));
+    return result;
   }
 
   @Post('change-password')
@@ -114,8 +161,12 @@ export class AuthController {
   async changePassword(
     @UserId() userId: string,
     @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
-    return this.authService.changePassword(userId, dto);
+    const result = await this.authService.changePassword(userId, dto);
+    response.clearCookie(this.refreshCookieName(req), this.refreshCookieOptions(req));
+    return result;
   }
 
   @Post('logout')
@@ -124,8 +175,27 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout user' })
   @ApiResponse({ status: 200 })
-  async logout(@UserId() userId: string): Promise<{ message: string }> {
-    return this.authService.logout(userId);
+  async logout(
+    @CurrentUser() user: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ message: string }> {
+    response.clearCookie(this.refreshCookieName(req), this.refreshCookieOptions(req));
+    return this.authService.logout(user.id, user.sessionId);
+  }
+
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async listSessions(@CurrentUser() user: any) {
+    return this.authService.listActiveSessions(user.id, user.sessionId);
+  }
+
+  @Delete('sessions/:sessionId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  async revokeSession(@CurrentUser() user: any, @Param('sessionId') sessionId: string) {
+    return this.authService.revokeSession(user.id, sessionId);
   }
 
   @Get('me')
@@ -180,5 +250,37 @@ export class AuthController {
     response.setHeader('Content-Type', avatar.mimeType);
     response.setHeader('Cache-Control', 'private, max-age=300');
     response.send(avatar.bytes);
+  }
+
+  private refreshCookieName(req: Request): string {
+    void req;
+    return process.env.NODE_ENV === 'production' ? '__Host-mizania-refresh' : 'mizania-refresh';
+  }
+
+  private refreshCookieOptions(req: Request) {
+    return {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || req.secure,
+      sameSite: 'lax' as const,
+      path: '/',
+    };
+  }
+
+  private setRefreshCookie(req: Request, response: Response, token: string) {
+    response.cookie(this.refreshCookieName(req), token, {
+      ...this.refreshCookieOptions(req),
+    });
+  }
+
+  private readRefreshCookie(req: Request): string | null {
+    const cookies = req.headers.cookie || '';
+    const names = ['__Host-mizania-refresh', 'mizania-refresh'];
+    for (const name of names) {
+      const entry = cookies.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+      // JWT base64url values need no decoding; returning the raw cookie value also
+      // avoids malformed percent-encoding turning an expired cookie into a 500.
+      if (entry) return entry.slice(name.length + 1);
+    }
+    return null;
   }
 }

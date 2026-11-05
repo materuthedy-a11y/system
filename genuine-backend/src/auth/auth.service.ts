@@ -16,7 +16,6 @@ import { durationSeconds } from './session-lifetime';
 import {
   RegisterDto,
   LoginDto,
-  RefreshTokenDto,
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
@@ -103,7 +102,11 @@ export class AuthService {
     });
   }
 
-  async register(dto: RegisterDto, ipAddress = 'unknown'): Promise<AuthResponseDto> {
+  async register(
+    dto: RegisterDto,
+    ipAddress = 'unknown',
+    userAgent?: string,
+  ): Promise<AuthResponseDto & { refreshTokenCookie: string }> {
     this.logger.log(`[AUTH] Register attempt: ${dto.email}`);
     const normalizedEmail = dto.email.trim().toLowerCase();
 
@@ -168,13 +171,19 @@ export class AuthService {
             userId: user.id,
             refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 10),
             ipAddress,
+            userAgent,
             expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
             absoluteExpiresAt,
           },
         });
 
         return {
-          ...tokens,
+          accessToken: tokens.accessToken,
+          expiresIn: tokens.expiresIn,
+          idleTimeoutSeconds: durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m'),
+          refreshTokenCookie: tokens.refreshToken,
+          idleExpiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt).toISOString(),
+          absoluteExpiresAt: absoluteExpiresAt.toISOString(),
           user: {
             id: user.id,
             email: user.email,
@@ -204,7 +213,11 @@ export class AuthService {
     }
   }
 
-  async login(dto: LoginDto, ipAddress: string): Promise<AuthResponseDto> {
+  async login(
+    dto: LoginDto,
+    ipAddress: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto & { refreshTokenCookie: string }> {
     const normalizedEmail = dto.email.trim().toLowerCase();
     this.logger.log(`[AUTH] Login attempt: ${normalizedEmail}`);
 
@@ -266,6 +279,7 @@ export class AuthService {
         userId: user.id,
         refreshTokenHash,
         ipAddress,
+        userAgent,
         expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
         absoluteExpiresAt,
       },
@@ -279,7 +293,12 @@ export class AuthService {
     this.logger.log(`[AUTH] Login successful: ${user.email}`);
 
     return {
-      ...tokens,
+      accessToken: tokens.accessToken,
+      expiresIn: tokens.expiresIn,
+      idleTimeoutSeconds: durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m'),
+      refreshTokenCookie: tokens.refreshToken,
+      idleExpiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt).toISOString(),
+      absoluteExpiresAt: absoluteExpiresAt.toISOString(),
       user: {
         id: user.id,
         email: user.email,
@@ -296,18 +315,21 @@ export class AuthService {
   }
 
   async refreshToken(
-    dto: RefreshTokenDto,
+    refreshTokenValue: string,
     userId: string,
-  ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  ): Promise<Pick<AuthResponseDto, 'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'> & { refreshTokenCookie: string }> {
     this.logger.log(`[AUTH] Refresh token attempt for user: ${userId}`);
 
     let payload: any;
     try {
-      payload = await this.jwtService.verifyAsync(dto.refreshToken, {
+      payload = await this.jwtService.verifyAsync(refreshTokenValue, {
         secret: this.config.get('JWT_REFRESH_SECRET'),
       });
       if (payload.sub !== userId || payload.type !== 'refresh') {
         throw new UnauthorizedException('Invalid refresh token');
+      }
+      if (typeof payload.sid !== 'string' || !payload.sid) {
+        throw new UnauthorizedException('Refresh token is missing its session binding');
       }
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
@@ -318,7 +340,7 @@ export class AuthService {
     const sessions = await this.prisma.userSession.findMany({
       where: {
         userId,
-        ...(typeof payload.sid === 'string' ? { id: payload.sid } : {}),
+        id: payload.sid,
         expiresAt: { gt: now },
         absoluteExpiresAt: { gt: now },
       },
@@ -327,7 +349,7 @@ export class AuthService {
 
     let matchedSession: (typeof sessions)[number] | undefined;
     for (const session of sessions) {
-      if (await bcrypt.compare(dto.refreshToken, session.refreshTokenHash)) {
+      if (await bcrypt.compare(refreshTokenValue, session.refreshTokenHash)) {
         matchedSession = session;
         break;
       }
@@ -364,6 +386,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(
       {
         sub: user.id,
+        sid: matchedSession.id,
         email: user.email,
         businessId: user.businessId,
         permissions: user.userRoles.flatMap((ur) => ur.role.permissions).map((p) => p.key),
@@ -371,10 +394,10 @@ export class AuthService {
       { secret: this.config.get('JWT_SECRET'), expiresIn: accessLifetime },
     );
     const refreshLifetime = Math.min(
-      durationSeconds(this.config, 'JWT_REFRESH_EXPIRATION', '30d'),
+      durationSeconds(this.config, 'JWT_REFRESH_EXPIRATION', '12h'),
       absoluteRemaining,
     );
-    const refreshToken = this.jwtService.sign(
+    const rotatedRefreshToken = this.jwtService.sign(
       {
         sub: user.id,
         email: user.email,
@@ -384,7 +407,7 @@ export class AuthService {
       },
       { secret: this.config.get('JWT_REFRESH_SECRET'), expiresIn: refreshLifetime },
     );
-    const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+    const refreshTokenHash = await bcrypt.hash(rotatedRefreshToken, 10);
     const idleExpiry = this._sessionIdleExpiry(nowAfterLookup, matchedSession.absoluteExpiresAt);
     const rotated = await this.prisma.$transaction((tx) =>
       tx.userSession.updateMany({
@@ -408,9 +431,40 @@ export class AuthService {
 
     return {
       accessToken,
-      refreshToken,
+      refreshTokenCookie: rotatedRefreshToken,
       expiresIn: accessLifetime,
+      idleTimeoutSeconds: durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m'),
+      idleExpiresAt: idleExpiry.toISOString(),
+      absoluteExpiresAt: matchedSession.absoluteExpiresAt.toISOString(),
     };
+  }
+
+  async validateSession(userId: string, sessionId: string): Promise<boolean> {
+    const now = new Date();
+    const session = await this.prisma.userSession.findFirst({
+      where: { id: sessionId, userId, expiresAt: { gt: now }, absoluteExpiresAt: { gt: now } },
+      select: { id: true, expiresAt: true, absoluteExpiresAt: true },
+    });
+    if (!session) return false;
+
+    const idleTimeoutMs = durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m') * 1000;
+    const touchIntervalMs = Math.min(5 * 60 * 1000, idleTimeoutMs / 3);
+    const touchThresholdMs = idleTimeoutMs - touchIntervalMs;
+    // Touch at most once per five minutes to keep server-side inactivity enforcement current
+    // without writing a database row on every API request.
+    if (session.expiresAt.getTime() - now.getTime() < touchThresholdMs) {
+      const touched = await this.prisma.userSession.updateMany({
+        where: {
+          id: session.id,
+          userId,
+          expiresAt: { gt: now },
+          absoluteExpiresAt: { gt: now },
+        },
+        data: { expiresAt: this._sessionIdleExpiry(now, session.absoluteExpiresAt) },
+      });
+      if (touched.count !== 1) return false;
+    }
+    return true;
   }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<PasswordResetRequestDto> {
@@ -551,16 +605,39 @@ export class AuthService {
     return { message: 'Password changed successfully. Please login again.' };
   }
 
-  async logout(userId: string): Promise<{ message: string }> {
+  async logout(userId: string, sessionId: string): Promise<{ message: string }> {
     this.logger.log(`[AUTH] Logout for user: ${userId}`);
 
     await this.prisma.userSession.deleteMany({
-      where: { userId },
+      where: { userId, id: sessionId },
     });
 
     this.logger.log(`[AUTH] Logout successful: ${userId}`);
 
     return { message: 'Logged out successfully' };
+  }
+
+  async listActiveSessions(userId: string, currentSessionId: string) {
+    const now = new Date();
+    const sessions = await this.prisma.userSession.findMany({
+      where: { userId, expiresAt: { gt: now }, absoluteExpiresAt: { gt: now } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+        expiresAt: true,
+        absoluteExpiresAt: true,
+      },
+    });
+    return sessions.map((session) => ({ ...session, isCurrent: session.id === currentSessionId }));
+  }
+
+  async revokeSession(userId: string, sessionId: string): Promise<{ message: string }> {
+    const result = await this.prisma.userSession.deleteMany({ where: { id: sessionId, userId } });
+    if (result.count !== 1) throw new UnauthorizedException('Session not found or already ended');
+    return { message: 'Session signed out successfully' };
   }
 
   async validateUser(userId: string) {
@@ -592,11 +669,12 @@ export class AuthService {
       .flatMap((ur: any) => ur.role.permissions)
       .map((p: any) => p.key);
     const accessLifetime = durationSeconds(this.config, 'JWT_ACCESS_EXPIRATION', '15m');
-    const refreshLifetime = durationSeconds(this.config, 'JWT_REFRESH_EXPIRATION', '30d');
+    const refreshLifetime = durationSeconds(this.config, 'JWT_REFRESH_EXPIRATION', '12h');
 
     const accessToken = this.jwtService.sign(
       {
         sub: userId,
+        sid: sessionId,
         email,
         businessId,
         permissions,
@@ -630,14 +708,14 @@ export class AuthService {
 
   private _sessionAbsoluteExpiry(now: Date): Date {
     return new Date(
-      now.getTime() + durationSeconds(this.config, 'SESSION_ABSOLUTE_TIMEOUT', '30d') * 1000,
+      now.getTime() + durationSeconds(this.config, 'SESSION_ABSOLUTE_TIMEOUT', '12h') * 1000,
     );
   }
 
   private _sessionIdleExpiry(now: Date, absoluteExpiresAt: Date): Date {
     return new Date(
       Math.min(
-        now.getTime() + durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '7d') * 1000,
+        now.getTime() + durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m') * 1000,
         absoluteExpiresAt.getTime(),
       ),
     );

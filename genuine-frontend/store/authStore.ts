@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import axios from 'axios';
 import { authAPI, AuthUser, getApiError, RegisterRequest, tokenStorage } from '@/lib/api';
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
@@ -8,11 +7,15 @@ interface AuthState {
   status: AuthStatus;
   user: AuthUser | null;
   accessToken: string | null;
+  idleExpiresAt: string | null;
+  absoluteExpiresAt: string | null;
+  idleTimeoutSeconds: number;
   error: string | null;
   initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (input: RegisterRequest) => Promise<void>;
   logout: () => Promise<void>;
+  expireSession: () => void;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   clearError: () => void;
   syncToken: () => void;
@@ -23,36 +26,35 @@ export const useAuthStore = create<AuthState>((set) => ({
   status: 'loading',
   user: null,
   accessToken: null,
+  idleExpiresAt: null,
+  absoluteExpiresAt: null,
+  idleTimeoutSeconds: 30 * 60,
   error: null,
 
   initialize: async () => {
-    const accessToken = tokenStorage.readAccess();
     const savedUser = tokenStorage.readUser();
-    if (!accessToken) {
-      tokenStorage.clear();
-      set({ status: 'anonymous', user: null, accessToken: null });
-      return;
-    }
-    set({ status: 'loading', accessToken, error: null });
+    set({ status: 'loading', accessToken: tokenStorage.readAccess(), error: null });
     try {
+      let accessToken = tokenStorage.readAccess();
+      if (!accessToken) {
+        const session = await authAPI.refreshSession();
+        tokenStorage.updateTokens(session.accessToken, session);
+        accessToken = session.accessToken;
+      }
       const profile = await authAPI.getProfile();
       const current = savedUser || useAuthStore.getState().user;
+      const sessionExpiry = tokenStorage.readSessionExpiry();
       set({
         status: 'authenticated',
-        accessToken: tokenStorage.readAccess(),
+        accessToken,
+        idleExpiresAt: sessionExpiry.idleExpiresAt,
+        absoluteExpiresAt: sessionExpiry.absoluteExpiresAt,
+        idleTimeoutSeconds: sessionExpiry.idleTimeoutSeconds,
         user: { ...current, ...profile, businessName: profile.businessName || current?.businessName },
       });
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        tokenStorage.clear();
-        set({ status: 'anonymous', user: null, accessToken: null });
-        return;
-      }
-      if (savedUser) {
-        set({ status: 'authenticated', user: savedUser, accessToken: tokenStorage.readAccess() });
-      } else {
-        set({ status: 'anonymous', user: null, accessToken: tokenStorage.readAccess() });
-      }
+    } catch {
+      tokenStorage.clear();
+      set({ status: 'anonymous', user: null, accessToken: null, idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60, error: null });
     }
   },
 
@@ -60,8 +62,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ status: 'loading', error: null });
     try {
       const result = await authAPI.login({ email: email.trim(), password });
-      tokenStorage.save(result.accessToken, result.refreshToken, result.user);
-      set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, error: null });
+      tokenStorage.save(result.accessToken, result.user, result);
+      set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, idleExpiresAt: result.idleExpiresAt, absoluteExpiresAt: result.absoluteExpiresAt, idleTimeoutSeconds: result.idleTimeoutSeconds, error: null });
     } catch (error) {
       const message = getApiError(error, 'Sign in failed. Check your details and try again.');
       set({ status: 'anonymous', error: message });
@@ -73,8 +75,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ status: 'loading', error: null });
     try {
       const result = await authAPI.register(input);
-      tokenStorage.save(result.accessToken, result.refreshToken, result.user);
-      set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, error: null });
+      tokenStorage.save(result.accessToken, result.user, result);
+      set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, idleExpiresAt: result.idleExpiresAt, absoluteExpiresAt: result.absoluteExpiresAt, idleTimeoutSeconds: result.idleTimeoutSeconds, error: null });
     } catch (error) {
       const message = getApiError(error, 'We could not create your account. Please try again.');
       set({ status: 'anonymous', error: message });
@@ -88,19 +90,26 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Local sign out still completes if the API is unavailable or the session expired.
     } finally {
+      tokenStorage.notifySessionEnded();
       tokenStorage.clear();
-      set({ status: 'anonymous', user: null, accessToken: null, error: null });
+      set({ status: 'anonymous', user: null, accessToken: null, idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60, error: null });
     }
+  },
+
+  expireSession: () => {
+    tokenStorage.clear();
+    set({ status: 'anonymous', user: null, accessToken: null, idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60, error: null });
   },
 
   changePassword: async (currentPassword, newPassword) => {
     await authAPI.changePassword(currentPassword, newPassword);
+    tokenStorage.notifySessionEnded();
     tokenStorage.clear();
-    set({ status: 'anonymous', user: null, accessToken: null, error: null });
+    set({ status: 'anonymous', user: null, accessToken: null, idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60, error: null });
   },
 
   clearError: () => set({ error: null }),
-  syncToken: () => set({ accessToken: tokenStorage.readAccess() }),
+  syncToken: () => set({ accessToken: tokenStorage.readAccess(), ...tokenStorage.readSessionExpiry() }),
   updateUser: (user) => {
     tokenStorage.updateUser(user);
     set({ user });

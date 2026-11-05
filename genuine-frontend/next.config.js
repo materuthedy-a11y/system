@@ -5,6 +5,16 @@ const nextConfig = {
   swcMinify: true,
   compress: true,
   output: 'standalone',
+
+  async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api/v1';
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${apiUrl.replace(/\/$/, '')}/:path*`,
+      },
+    ];
+  },
   
   images: {
     unoptimized: false,

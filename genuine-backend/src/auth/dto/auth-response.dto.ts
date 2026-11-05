@@ -1,7 +1,9 @@
 export class AuthResponseDto {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
+  idleTimeoutSeconds: number;
+  idleExpiresAt: string;
+  absoluteExpiresAt: string;
   user: {
     id: string;
     email: string;

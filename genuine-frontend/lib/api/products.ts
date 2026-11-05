@@ -252,7 +252,7 @@ export const productsAPI = {
   },
   async updateCategory(
     id: string,
-    input: { name?: string; description?: string; parentCategoryId?: string | null }
+    input: { name?: string; description?: string; parentCategoryId?: string | null; isActive?: boolean }
   ) {
     return unwrap<Category>(
       await apiClient.patch(`/products/categories/${encodeURIComponent(id)}`, input)
@@ -263,8 +263,8 @@ export const productsAPI = {
       await apiClient.delete(`/products/categories/${encodeURIComponent(id)}`)
     );
   },
-  async units() {
-    return unwrap<Unit[]>(await apiClient.get('/products/units'));
+  async units(includeInactive = false) {
+    return unwrap<Unit[]>(await apiClient.get(`/products/units${includeInactive ? '?includeInactive=true' : ''}`));
   },
   async createUnit(input: {
     name: string;
@@ -283,6 +283,7 @@ export const productsAPI = {
       description?: string;
       baseUnit?: string;
       conversionFactor?: number;
+      isActive?: boolean;
     }
   ) {
     return unwrap<Unit>(await apiClient.patch(`/products/units/${encodeURIComponent(id)}`, input));

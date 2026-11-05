@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Clock3, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useWorkspaceStore } from '@/store/workspaceStore';
+import { formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessWeekStart } from '@/lib/format/businessDate';
 import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type DashboardMetric, type DashboardTransaction, type ExpenseBreakdownRow, type LowStockRow } from '@/lib/api/dashboard';
 import { getApiError } from '@/lib/api';
 import { CashFlowPanel, DashboardSkeleton, ExpenseBreakdown, InventoryAlerts, MetricCard, RecentActivity, RevenueExpenseChart, SalesTrendChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
@@ -30,15 +32,19 @@ function periodFilter(period: PeriodKey, asOfTime: number): DashboardFilter {
   let groupBy: DashboardFilter['groupBy'] = 'DAILY';
 
   if (period === 'week') {
-    const daysSinceMonday = (start.getDay() + 6) % 7;
-    start.setDate(start.getDate() - daysSinceMonday);
+    const firstDay = getBusinessWeekStart() === 'SUNDAY' ? 0 : 1;
+    const daysSinceStart = (start.getDay() - firstDay + 7) % 7;
+    start.setDate(start.getDate() - daysSinceStart);
   } else if (period === 'month') {
     start.setDate(1);
   } else if (period === 'quarter') {
     start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1);
     groupBy = 'WEEKLY';
   } else {
-    start.setMonth(0, 1);
+    const financialYear = getBusinessFinancialYear();
+    const startMonth = financialYear === 'JULY' ? 6 : financialYear === 'APRIL' ? 3 : 0;
+    const year = now.getMonth() < startMonth ? now.getFullYear() - 1 : now.getFullYear();
+    start.setFullYear(year, startMonth, 1);
     groupBy = 'MONTHLY';
   }
 
@@ -52,11 +58,14 @@ function dateRangeLabel(filter: DashboardFilter) {
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
+  const activeLocation = useWorkspaceStore((state) => state.activeLocation);
   const permissions = user?.permissions ?? EMPTY_PERMISSIONS;
   const canViewReports = permissions.includes('reports.view');
   const canViewInventory = permissions.includes('inventory.view');
+  const canViewProducts = permissions.includes('products.view');
   const [period, setPeriod] = useState<PeriodKey>('month');
   const [definitionsLanguage, setDefinitionsLanguage] = useState<'sw' | 'en'>('sw');
+  const [businessSettingsVersion, setBusinessSettingsVersion] = useState(0);
   const [asOfTime, setAsOfTime] = useState(0);
   const [executive, setExecutive] = useState<DashboardExecutiveData | null>(null);
   const [expenseRows, setExpenseRows] = useState<ExpenseBreakdownRow[]>([]);
@@ -67,11 +76,21 @@ export default function DashboardPage() {
   const [unavailableActivitySources, setUnavailableActivitySources] = useState<string[]>([]);
   const [expenseUnavailable, setExpenseUnavailable] = useState(false);
   const [optionalDataWarning, setOptionalDataWarning] = useState(false);
+
+  useEffect(() => {
+    const syncLanguage = () => {
+      setDefinitionsLanguage(getBusinessLanguage());
+      setBusinessSettingsVersion((version) => version + 1);
+    };
+    syncLanguage();
+    window.addEventListener('mizania-business-settings-updated', syncLanguage);
+    return () => window.removeEventListener('mizania-business-settings-updated', syncLanguage);
+  }, [user?.businessId]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasData = useRef(false);
-  const filter = useMemo(() => periodFilter(period, asOfTime), [period, asOfTime]);
+  const filter = useMemo(() => periodFilter(period, asOfTime), [period, asOfTime, businessSettingsVersion]);
 
   useEffect(() => {
     let active = true;
@@ -148,15 +167,15 @@ export default function DashboardPage() {
       : costingMethod === 'WEIGHTED_AVERAGE'
         ? 'Weighted average: stock value uses the average purchase cost of the items.'
         : `Stock valuation method: ${costingMethod || 'provided by the inventory service.'}`;
-  const metricCards: Array<{ metric: DashboardMetric; tone: string; valueColor: string; invertTrend?: boolean }> = availableMetrics ? [
-    { metric: availableMetrics.totalRevenue, tone: 'bg-[#b9e52e] text-[#354900]', valueColor: 'text-[#24713c]' },
-    { metric: availableMetrics.totalExpenses, tone: 'bg-[#e7a7b6] text-[#842a20]', valueColor: 'text-[#842a20]', invertTrend: true },
-    { metric: availableMetrics.totalProfit, tone: 'bg-[#ffd541] text-[#624500]', valueColor: 'text-[#9a6a00]' },
-    { metric: availableMetrics.profitMargin, tone: 'bg-[#a8ccff] text-[#214e88]', valueColor: 'text-[#315fa5]' },
-    { metric: availableMetrics.cashOnHand, tone: 'bg-[#77ddb0] text-[#10563f]', valueColor: 'text-[#147554]' },
-    { metric: availableMetrics.outstandingReceivables, tone: 'bg-[#ffcf24] text-[#5c4000]', valueColor: 'text-[#926100]', invertTrend: true },
-    { metric: availableMetrics.outstandingPayables, tone: 'bg-[#91b9ff] text-[#1e477f]', valueColor: 'text-[#315fa5]', invertTrend: true },
-    { metric: { ...availableMetrics.inventoryValue, changePercent: null }, tone: 'bg-[#c8a8ee] text-[#513276]', valueColor: 'text-[#7043a3]' },
+  const metricCards: Array<{ metric: DashboardMetric; tone: string; valueColor: string; href: string; invertTrend?: boolean }> = availableMetrics ? [
+    { metric: availableMetrics.totalRevenue, tone: 'bg-[#b9e52e] text-[#354900]', valueColor: 'text-[#24713c]', href: permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/reports?tab=sales' },
+    { metric: availableMetrics.totalExpenses, tone: 'bg-[#e7a7b6] text-[#842a20]', valueColor: 'text-[#842a20]', href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: availableMetrics.totalProfit, tone: 'bg-[#ffd541] text-[#624500]', valueColor: 'text-[#9a6a00]', href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.profitMargin, tone: 'bg-[#a8ccff] text-[#214e88]', valueColor: 'text-[#315fa5]', href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.cashOnHand, tone: 'bg-[#77ddb0] text-[#10563f]', valueColor: 'text-[#147554]', href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.outstandingReceivables, tone: 'bg-[#ffcf24] text-[#5c4000]', valueColor: 'text-[#926100]', href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: availableMetrics.outstandingPayables, tone: 'bg-[#91b9ff] text-[#1e477f]', valueColor: 'text-[#315fa5]', href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: { ...availableMetrics.inventoryValue, changePercent: null }, tone: 'bg-[#c8a8ee] text-[#513276]', valueColor: 'text-[#7043a3]', href: canViewInventory ? '/dashboard/inventory' : '/dashboard/reports?tab=inventory' },
   ] : [];
 
   if (isLoading && !executive) return <DashboardSkeleton />;
@@ -164,7 +183,7 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
       <section className="flex flex-col gap-5 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-5 shadow-sm shadow-amber-950/[0.03] sm:flex-row sm:items-end sm:justify-between sm:p-7 dark:border-amber-900/60 dark:bg-[#282317] dark:shadow-black/20">
-        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#527000]">Executive overview</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">Business at a glance</h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p></div>
+        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#527000]">Executive overview · all locations</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">Business at a glance</h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">Business-wide totals across locations. Active location for new activity: <span className="font-semibold text-[#315c45]">{activeLocation?.name || 'Choose a location'}</span>.</p></div>
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="dashboard-period" className="sr-only">Dashboard date range</label>
           <select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">
@@ -182,8 +201,8 @@ export default function DashboardPage() {
       {executive ? <>
         <section aria-labelledby="kpi-heading">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Key indicators</p><h2 id="kpi-heading" className="mt-1 text-lg font-semibold text-[#292d27]">Financial and stock position</h2></div><p className="text-[11px] text-[#747a68]">Based on {executive.period}</p></div>
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(({ metric, tone, valueColor, invertTrend }) => <MetricCard key={metric.name} metric={metric} currency={executive.currency} tone={tone} valueColor={valueColor} invertTrend={invertTrend} />)}</div>
-          <p className="mt-3 text-[11px] leading-5 text-[#8a8d85]">Revenue, expenses and profit use the selected period. Inventory value is a current snapshot as of {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(executive.inventoryAsOf))}; it is not a historical comparison.</p>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(({ metric, tone, valueColor, href, invertTrend }) => <MetricCard key={metric.name} metric={metric} currency={executive.currency} tone={tone} valueColor={valueColor} href={href} invertTrend={invertTrend} />)}</div>
+          <p className="mt-3 text-[11px] leading-5 text-[#8a8d85]">Revenue, expenses and profit use the selected period. Inventory value is a current snapshot as of {formatBusinessDateTime(executive.inventoryAsOf)}; it is not a historical comparison.</p>
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[1.4fr_1fr]">
@@ -195,7 +214,7 @@ export default function DashboardPage() {
           <ExpenseBreakdown rows={expenseRows} currency={executive.currency} unavailable={expenseUnavailable} />
           <CashFlowPanel data={executive} currency={executive.currency} />
           <TopProducts data={executive} currency={executive.currency} />
-          <InventoryAlerts rows={lowStockRows} total={lowStockTotal} canView={canViewInventory} unavailable={inventoryUnavailable} />
+          <InventoryAlerts rows={lowStockRows} total={lowStockTotal} canView={canViewInventory} canViewProducts={canViewProducts} unavailable={inventoryUnavailable} />
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-2">
@@ -215,7 +234,7 @@ export default function DashboardPage() {
               <div className="rounded-xl border border-[#e0ebe3] bg-white/80 p-3.5 dark:border-white/[0.07] dark:bg-white/[0.03]"><dt className="text-xs font-bold text-emerald-800 dark:text-emerald-300">{definitionsLanguage === 'sw' ? 'Thamani ya stock' : 'Stock value'}</dt><dd className="mt-1.5 text-xs leading-5 text-[#515b53] dark:text-[#c2c8bd]">{definitionsLanguage === 'sw' ? 'Thamani ya bidhaa zilizopo sasa. Kipindi ulichochagua hakionyeshi stock ya tarehe za zamani.' : 'The value of stock currently on hand. The selected date range does not show historical stock value.'}</dd></div>
             </dl>
             <p className="mt-3 rounded-xl bg-emerald-50 px-3.5 py-3 text-xs leading-5 text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100"><span className="font-bold">{definitionsLanguage === 'sw' ? 'Namna ya kukokotoa stock: ' : 'Stock costing: '}</span>{costingMethodExplanation}</p>
-            <p className="mt-4 flex items-center gap-1.5 border-t border-violet-200 pt-4 text-[11px] text-[#62675f] dark:border-violet-900/60 dark:text-[#afb5ac]"><Clock3 size={13} />{definitionsLanguage === 'sw' ? 'Takwimu zimekokotolewa hadi' : 'Figures calculated as of'} {new Intl.DateTimeFormat(definitionsLanguage === 'sw' ? 'sw-TZ' : undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(executive.asOf))}</p>
+            <p className="mt-4 flex items-center gap-1.5 border-t border-violet-200 pt-4 text-[11px] text-[#62675f] dark:border-violet-900/60 dark:text-[#afb5ac]"><Clock3 size={13} />{definitionsLanguage === 'sw' ? 'Takwimu zimekokotolewa hadi' : 'Figures calculated as of'} {formatBusinessDateTime(executive.asOf)}</p>
           </section>
         </section>
       </> : !error ? <DashboardSkeleton /> : null}

@@ -31,6 +31,7 @@ import {
 } from '@/lib/api/support';
 import { notify } from '@/components/ui/AppToaster';
 import { useAuthStore } from '@/store/authStore';
+import { formatBusinessDateTime } from '@/lib/format/businessDate';
 
 const statusStyles: Record<FeedbackStatus, string> = {
   OPEN: 'border-emerald-700 bg-emerald-600 text-white dark:border-emerald-500 dark:bg-emerald-600 dark:text-white',
@@ -45,7 +46,7 @@ const categoryLabels: Record<FeedbackCategory, string> = {
 };
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return formatBusinessDateTime(value);
 }
 
 function relativeDate(value: string) {

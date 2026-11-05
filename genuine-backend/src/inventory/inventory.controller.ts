@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -24,8 +25,12 @@ import {
   LowStockReportDto,
   ReceiveStockTransferDto,
   RejectInventoryDto,
+  InventoryListQueryDto,
+  StockBalanceQueryDto,
   StockAgeingReportDto,
   StockValuationReportDto,
+  ReorderPointQueryDto,
+  UpdateReorderPointDto,
 } from './dto';
 import { InventoryService } from './inventory.service';
 
@@ -35,6 +40,43 @@ import { InventoryService } from './inventory.service';
 @UseGuards(JwtAuthGuard, PermissionGuard)
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
+
+  @Get('balances')
+  @RequirePermission('inventory.view')
+  @ApiOperation({ summary: 'List current stock balances by product and location' })
+  balances(@Business() businessId: string, @Query() filter: StockBalanceQueryDto) {
+    return this.inventory.getStockBalances(businessId, filter);
+  }
+
+  @Get('options')
+  @RequirePermission('inventory.view')
+  options(@Business() businessId: string) {
+    return this.inventory.getInventoryOptions(businessId);
+  }
+
+  @Get('reorder-points')
+  @RequirePermission('inventory.view')
+  reorderPoints(@Business() businessId: string, @Query() filter: ReorderPointQueryDto) {
+    return this.inventory.getReorderPoints(businessId, filter);
+  }
+
+  @Patch('reorder-points/:productId')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('inventory.adjust')
+  updateReorderPoints(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('productId') productId: string,
+    @Body() dto: UpdateReorderPointDto,
+  ) {
+    return this.inventory.updateReorderPoint(businessId, userId, productId, dto);
+  }
+
+  @Get('adjustments')
+  @RequirePermission('inventory.view')
+  listAdjustments(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listStockAdjustments(businessId, filter);
+  }
 
   @Post('adjustments')
   @HttpCode(HttpStatus.CREATED)
@@ -46,6 +88,12 @@ export class InventoryController {
     @Body() dto: CreateStockAdjustmentDto,
   ) {
     return this.inventory.createStockAdjustment(businessId, userId, dto);
+  }
+
+  @Get('transfers')
+  @RequirePermission('inventory.view')
+  listTransfers(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listStockTransfers(businessId, filter);
   }
 
   @Get('adjustments/:id')
@@ -86,6 +134,12 @@ export class InventoryController {
     @Body() dto: CreateStockTransferDto,
   ) {
     return this.inventory.createStockTransfer(businessId, userId, dto);
+  }
+
+  @Get('counts')
+  @RequirePermission('inventory.view')
+  listCounts(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listPhysicalCounts(businessId, filter);
   }
 
   @Get('transfers/:id')

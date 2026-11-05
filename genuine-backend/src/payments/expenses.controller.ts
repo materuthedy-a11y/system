@@ -41,7 +41,7 @@ export class ExpensesController {
 
   @Post('categories')
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermission('expenses.create')
+  @RequirePermission('expenses.create', 'settings.edit')
   createCategory(
     @Business() businessId: string,
     @UserId() userId: string,
@@ -51,19 +51,19 @@ export class ExpensesController {
   }
 
   @Get('categories')
-  @RequirePermission('expenses.view')
+  @RequirePermission('expenses.view', 'settings.view')
   listCategories(@Business() businessId: string, @Query('activeOnly') activeOnly?: string) {
     return this.expenses.listCategories(businessId, activeOnly === 'true');
   }
 
   @Get('categories/:id')
-  @RequirePermission('expenses.view')
+  @RequirePermission('expenses.view', 'settings.view')
   getCategory(@Business() businessId: string, @Param('id') id: string) {
     return this.expenses.getCategory(businessId, id);
   }
 
   @Patch('categories/:id')
-  @RequirePermission('expenses.edit')
+  @RequirePermission('expenses.edit', 'settings.edit')
   updateCategory(
     @Business() businessId: string,
     @UserId() userId: string,
@@ -74,7 +74,7 @@ export class ExpensesController {
   }
 
   @Delete('categories/:id')
-  @RequirePermission('expenses.delete')
+  @RequirePermission('expenses.delete', 'settings.edit')
   deleteCategory(
     @Business() businessId: string,
     @UserId() userId: string,

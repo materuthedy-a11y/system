@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import { PrismaService } from '../database/prisma.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { assertAccountingPeriodOpen } from '../common/utils/accounting-period.util';
+import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationEventType } from '../notifications/dto';
@@ -83,6 +84,12 @@ export class PurchaseService {
     if (dto.taxAmount !== undefined && dto.taxPercentage !== undefined) {
       throw new BadRequestException('Provide either taxAmount or taxPercentage, not both');
     }
+    const defaultPurchaseTax = dto.taxPercentage === undefined && dto.taxAmount === undefined
+      ? await this.prisma.taxRate.findFirst({
+          where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['PURCHASES', 'BOTH'] } },
+          select: { rate: true },
+        })
+      : null;
     if (dto.expectedDeliveryDate) {
       const orderDate = dto.orderDate ?? new Date();
       const calendarDay = (date: Date) =>
@@ -164,7 +171,7 @@ export class PurchaseService {
     const taxAmount =
       dto.taxAmount !== undefined
         ? roundMoney(Number(dto.taxAmount))
-        : roundMoney(subtotal * (Number(dto.taxPercentage || 0) / 100));
+        : roundMoney(subtotal * (Number(dto.taxPercentage ?? defaultPurchaseTax?.rate ?? 0) / 100));
     const totalAmount = roundMoney(subtotal + shippingCost + taxAmount);
 
     // Create PO and its lines as one operation so failed line creation cannot
@@ -2192,7 +2199,8 @@ export class PurchaseService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     const month = new Date().toISOString().slice(0, 7).replace('-', '');
-    const prefix = `PO-${month}-`;
+    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { poPrefix: true } });
+    const prefix = `${normalizeDocumentPrefix(settings?.poPrefix, 'PO')}-${month}-`;
     const numbers = await tx.purchaseOrder.findMany({
       where: { businessId, poNumber: { startsWith: prefix } },
       select: { poNumber: true },
@@ -2234,7 +2242,8 @@ export class PurchaseService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     const month = new Date().toISOString().slice(0, 7).replace('-', '');
-    const prefix = `GRN-${month}-`;
+    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { grnPrefix: true } });
+    const prefix = `${normalizeDocumentPrefix(settings?.grnPrefix, 'GRN')}-${month}-`;
     const numbers = await tx.goodsReceivedNote.findMany({
       where: { businessId, grnNumber: { startsWith: prefix } },
       select: { grnNumber: true },

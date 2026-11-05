@@ -11,6 +11,10 @@ import {
   CreatePhysicalCountDto,
   CreateStockAdjustmentDto,
   CreateStockTransferDto,
+  InventoryListQueryDto,
+  StockBalanceQueryDto,
+  ReorderPointQueryDto,
+  UpdateReorderPointDto,
   InventoryMovementReportDto,
   LowStockReportDto,
   StockAgeingReportDto,
@@ -41,6 +45,182 @@ export class InventoryService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  async getStockBalances(businessId: string, filter: StockBalanceQueryDto) {
+    const { page, limit, skip } = this.pagination(filter);
+    const search = filter.search?.trim();
+    const where: Prisma.StockBalanceWhereInput = {
+      product: { businessId, ...(search ? { OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
+      ] } : {}) },
+      location: { businessId, ...(filter.locationId ? { id: filter.locationId } : {}) },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.stockBalance.findMany({
+        where, skip, take: limit,
+        include: {
+          product: { select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true } },
+          location: { select: { id: true, name: true, code: true } },
+        },
+        orderBy: [{ product: { name: 'asc' } }, { location: { name: 'asc' } }],
+      }),
+      this.prisma.stockBalance.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  /** Inventory-only picklists avoid requiring the separate Products permission. */
+  async getInventoryOptions(businessId: string) {
+    const [products, locations] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { businessId, status: 'ACTIVE' },
+        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.location.findMany({
+        where: { businessId, isActive: true },
+        select: { id: true, name: true, code: true, type: true, isActive: true },
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    return { products, locations };
+  }
+
+  async getReorderPoints(businessId: string, filter: ReorderPointQueryDto) {
+    const { page, limit, skip } = this.pagination(filter);
+    const search = filter.search?.trim();
+    const where: Prisma.ProductWhereInput = {
+      businessId,
+      status: 'ACTIVE',
+      ...(search ? { OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { sku: { contains: search, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where, skip, take: limit,
+        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+    const balances = products.length ? await this.prisma.stockBalance.groupBy({
+      by: ['productId'],
+      where: { productId: { in: products.map((product) => product.id) }, location: { businessId } },
+      _sum: { quantity: true },
+    }) : [];
+    const quantityByProduct = new Map(balances.map((balance) => [balance.productId, balance._sum.quantity ?? 0]));
+    return {
+      data: products.map((product) => ({ ...product, currentStock: quantityByProduct.get(product.id) ?? 0 })),
+      total, page, limit,
+    };
+  }
+
+  async updateReorderPoint(
+    businessId: string,
+    userId: string,
+    productId: string,
+    dto: UpdateReorderPointDto,
+  ) {
+    if (dto.minimumStock === undefined && dto.reorderLevel === undefined)
+      throw new BadRequestException('Provide minimumStock or reorderLevel');
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findFirst({ where: { id: productId, businessId, status: 'ACTIVE' } });
+      if (!product) throw new NotFoundException('Active product not found');
+      const minimumStock = dto.minimumStock ?? product.minimumStock;
+      const reorderLevel = dto.reorderLevel ?? product.reorderLevel;
+      if (minimumStock > reorderLevel)
+        throw new BadRequestException('Minimum stock cannot exceed reorder level');
+      const updated = await tx.product.update({
+        where: { id: product.id },
+        data: { minimumStock, reorderLevel },
+        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+      });
+      await this.audit(tx, businessId, userId, 'UPDATE_REORDER_POINTS', 'Product', product.id,
+        { minimumStock: product.minimumStock, reorderLevel: product.reorderLevel },
+        { minimumStock: updated.minimumStock, reorderLevel: updated.reorderLevel });
+      return updated;
+    });
+  }
+
+  async listStockAdjustments(businessId: string, filter: InventoryListQueryDto) {
+    const { page, limit, skip } = this.pagination(filter);
+    const search = filter.search?.trim();
+    const where: Prisma.StockAdjustmentWhereInput = {
+      businessId,
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.locationId ? { items: { some: { locationId: filter.locationId } } } : {}),
+      ...(search ? { OR: [
+        { adjustmentNumber: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.stockAdjustment.findMany({
+        where, skip, take: limit,
+        include: { items: { include: { product: { select: { id: true, name: true, sku: true } }, location: { select: { id: true, name: true } } } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.stockAdjustment.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  async listStockTransfers(businessId: string, filter: InventoryListQueryDto) {
+    const { page, limit, skip } = this.pagination(filter);
+    const search = filter.search?.trim();
+    const where: Prisma.StockTransferWhereInput = {
+      businessId,
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(filter.locationId ? { OR: [{ fromLocationId: filter.locationId }, { toLocationId: filter.locationId }] } : {}),
+      ...(search ? { OR: [
+        { transferNumber: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    // Combine the location and text OR filters without allowing one to overwrite the other.
+    if (filter.locationId && search) {
+      where.AND = [
+        { OR: [{ fromLocationId: filter.locationId }, { toLocationId: filter.locationId }] },
+        { OR: [{ transferNumber: { contains: search, mode: 'insensitive' } }, { notes: { contains: search, mode: 'insensitive' } }] },
+      ];
+      delete where.OR;
+    }
+    const [data, total] = await Promise.all([
+      this.prisma.stockTransfer.findMany({
+        where, skip, take: limit,
+        include: { fromLocation: { select: { id: true, name: true, code: true } }, toLocation: { select: { id: true, name: true, code: true } }, items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.stockTransfer.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
+
+  async listPhysicalCounts(businessId: string, filter: InventoryListQueryDto) {
+    const { page, limit, skip } = this.pagination(filter);
+    const search = filter.search?.trim();
+    const where: Prisma.PhysicalCountWhereInput = {
+      businessId,
+      ...(filter.locationId ? { locationId: filter.locationId } : {}),
+      ...(filter.status ? { status: filter.status } : {}),
+      ...(search ? { OR: [
+        { countNumber: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+      ] } : {}),
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.physicalCount.findMany({
+        where, skip, take: limit,
+        include: { location: { select: { id: true, name: true, code: true } }, items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.physicalCount.count({ where }),
+    ]);
+    return { data, total, page, limit };
+  }
 
   private async serializableTransaction<T>(callback: (tx: Tx) => Promise<T>): Promise<T> {
     try {
@@ -761,7 +941,7 @@ export class InventoryService {
 
   async getLowStockReport(businessId: string, filter: LowStockReportDto) {
     const { page, limit, skip } = this.pagination(filter);
-    const [products, locations] = await Promise.all([
+    const [products, locations, settings] = await Promise.all([
       this.prisma.product.findMany({
         where: {
           businessId,
@@ -781,7 +961,9 @@ export class InventoryService {
         },
         select: { id: true, name: true },
       }),
+      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { lowStockThreshold: true } }),
     ]);
+    const globalThreshold = settings?.lowStockThreshold ?? 0;
     const usageSince = new Date(Date.now() - 30 * 86400000);
     const usage = await this.prisma.inventoryMovement.groupBy({
       by: ['productId', 'locationId'],
@@ -803,8 +985,10 @@ export class InventoryService {
       locations
         .map((location) => {
           const qty = round(p.stocks.find((s) => s.locationId === location.id)?.quantity || 0);
-          const belowMinimum = qty <= p.minimumStock;
-          const reorder = qty <= p.reorderLevel;
+          const minimumStock = Math.max(p.minimumStock, globalThreshold);
+          const reorderLevel = Math.max(p.reorderLevel, globalThreshold);
+          const belowMinimum = qty <= minimumStock;
+          const reorder = qty <= reorderLevel;
           const include =
             filter.type === 'BELOW_MINIMUM'
               ? belowMinimum
@@ -820,8 +1004,8 @@ export class InventoryService {
                 locationId: location.id,
                 locationName: location.name,
                 quantity: qty,
-                minimumStock: p.minimumStock,
-                reorderLevel: p.reorderLevel,
+                minimumStock,
+                reorderLevel,
                 belowMinimum,
                 atOrBelowReorderLevel: reorder,
                 daysToStockout: dailyUse > 0 ? round(qty / dailyUse) : null,
@@ -985,7 +1169,7 @@ export class InventoryService {
   }
 
   async getInventoryDashboard(businessId: string) {
-    const [balances, products, movements, pendingAdjustments, pendingTransfers, pendingCounts] =
+    const [balances, products, movements, pendingAdjustments, pendingTransfers, pendingCounts, settings] =
       await Promise.all([
         this.prisma.stockBalance.findMany({
           where: { product: { businessId }, location: { businessId } },
@@ -1013,7 +1197,9 @@ export class InventoryService {
         this.prisma.physicalCount.count({
           where: { businessId, status: { in: ['DRAFT', 'COMPLETED'] } },
         }),
+        this.prisma.businessSettings.findUnique({ where: { businessId }, select: { lowStockThreshold: true } }),
       ]);
+    const globalThreshold = settings?.lowStockThreshold ?? 0;
     const activeLocations = await this.prisma.location.findMany({
       where: { businessId, isActive: true },
       select: { id: true },
@@ -1026,7 +1212,7 @@ export class InventoryService {
         total +
         activeLocations.filter(
           (location) =>
-            (balanceByKey.get(`${product.id}:${location.id}`) || 0) <= product.reorderLevel,
+            (balanceByKey.get(`${product.id}:${location.id}`) || 0) <= Math.max(product.reorderLevel, globalThreshold),
         ).length,
       0,
     );

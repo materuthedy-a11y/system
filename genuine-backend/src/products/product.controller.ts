@@ -50,7 +50,7 @@ export class ProductController {
 
   @Post('categories')
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermission('products.create')
+  @RequirePermission('products.create', 'settings.edit')
   @ApiOperation({ summary: 'Create product category' })
   @ApiResponse({ status: 201, type: CategoryResponseDto })
   async createCategory(
@@ -63,16 +63,16 @@ export class ProductController {
 
   @Get('categories')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view')
+  @RequirePermission('products.view', 'settings.view')
   @ApiOperation({ summary: 'Get all product categories' })
   @ApiResponse({ status: 200, type: [CategoryResponseDto] })
-  async getCategories(@Business() businessId: string): Promise<CategoryResponseDto[]> {
-    return this.productService.getCategories(businessId);
+  async getCategories(@Business() businessId: string, @Query('includeInactive') includeInactive?: string): Promise<CategoryResponseDto[]> {
+    return this.productService.getCategories(businessId, includeInactive === 'true');
   }
 
   @Get('categories/hierarchy')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view')
+  @RequirePermission('products.view', 'settings.view')
   @ApiOperation({ summary: 'Get category hierarchy' })
   @ApiResponse({ status: 200 })
   async getCategoryHierarchy(@Business() businessId: string) {
@@ -81,15 +81,15 @@ export class ProductController {
 
   @Get('units')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view')
+  @RequirePermission('products.view', 'settings.view')
   @ApiOperation({ summary: 'Get active standard and business-specific product units' })
-  async getUnits(@Business() businessId: string) {
-    return this.productService.getUnits(businessId);
+  async getUnits(@Business() businessId: string, @Query('includeInactive') includeInactive?: string) {
+    return this.productService.getUnits(businessId, includeInactive === 'true');
   }
 
   @Post('units')
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermission('products.create')
+  @RequirePermission('products.create', 'settings.edit')
   @ApiOperation({ summary: 'Create a unit owned by the current business' })
   async createUnit(@Business() businessId: string, @Body() dto: CreateUnitDto) {
     return this.productService.createUnit(businessId, dto);
@@ -97,7 +97,7 @@ export class ProductController {
 
   @Patch('units/:id')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.edit')
+  @RequirePermission('products.edit', 'settings.edit')
   @ApiOperation({ summary: 'Update a unit owned by the current business' })
   async updateUnit(
     @Business() businessId: string,
@@ -109,7 +109,7 @@ export class ProductController {
 
   @Delete('units/:id')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.delete')
+  @RequirePermission('products.delete', 'settings.edit')
   @ApiOperation({ summary: 'Delete an unused unit owned by the current business' })
   async deleteUnit(@Business() businessId: string, @Param('id') unitId: string) {
     return this.productService.deleteUnit(businessId, unitId);
@@ -117,7 +117,7 @@ export class ProductController {
 
   @Patch('categories/:id')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.edit')
+  @RequirePermission('products.edit', 'settings.edit')
   @ApiOperation({ summary: 'Update product category' })
   @ApiResponse({ status: 200, type: CategoryResponseDto })
   async updateCategory(
@@ -131,7 +131,7 @@ export class ProductController {
 
   @Delete('categories/:id')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.delete')
+  @RequirePermission('products.delete', 'settings.edit')
   @ApiOperation({ summary: 'Delete product category' })
   @ApiResponse({ status: 200 })
   async deleteCategory(@Business() businessId: string, @Param('id') categoryId: string) {

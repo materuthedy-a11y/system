@@ -58,11 +58,13 @@ export default function NewSalesInvoicePage() {
       if (results[0].status === 'fulfilled') setCustomers(results[0].value); else messages.push(getApiError(results[0].reason, 'Customer options could not be loaded.'));
       if (results[1].status === 'fulfilled') setProducts(results[1].value); else messages.push(getApiError(results[1].reason, 'Product options could not be loaded.'));
       if (results[2].status === 'fulfilled') {
-        const availableLocations = results[2].value.locations;
+        const invoiceOptions = results[2].value;
+        const availableLocations = invoiceOptions.locations;
         setLocations(availableLocations);
-        setTaxPercentage(String(results[2].value.taxPercentage));
-        setCurrency(results[2].value.currency);
-        const preferred = availableLocations.length === 1 ? availableLocations[0] : undefined;
+        setTaxPercentage(String(invoiceOptions.taxPercentage));
+        setCurrency(invoiceOptions.currency);
+        const preferred = availableLocations.find((location) => location.id === invoiceOptions.defaultLocationId)
+          ?? (availableLocations.length === 1 ? availableLocations[0] : undefined);
         if (preferred) setLocationId(preferred.id);
       }
       else messages.push(getApiError(results[2].reason, 'Invoice locations and business tax settings could not be loaded.'));

@@ -557,10 +557,12 @@ export class CustomerService {
       where: { id: customerId, businessId }, select: { id: true },
     });
     if (!customer) throw new NotFoundException('Customer not found');
+    const description = dto.description.trim();
+    if (!description) throw new BadRequestException('Interaction details are required.');
     return this.prisma.$transaction(async (tx) => {
       const activity = await tx.customerActivity.create({ data: {
         id: uuid(), businessId, customerId, userId, type: dto.type,
-        description: dto.description.trim(), reference: dto.reference?.trim() || null,
+        description, reference: dto.reference?.trim() || null,
       } });
       await tx.auditLog.create({ data: {
         businessId, userId, action: 'CREATE', entityType: 'CUSTOMER_ACTIVITY', entityId: activity.id,

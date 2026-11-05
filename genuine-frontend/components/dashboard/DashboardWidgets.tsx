@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
+import Link from 'next/link';
 import type {
   DashboardExecutiveData,
   DashboardMetric,
@@ -22,6 +23,7 @@ import type {
   LowStockRow,
 } from '@/lib/api/dashboard';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const panel = 'min-w-0 max-w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm shadow-black/[0.02] dark:border-[#343b33] dark:bg-[#191d19] sm:p-6';
 const performancePanel = 'min-w-0 max-w-full rounded-2xl border border-blue-200/80 bg-blue-50/80 p-5 shadow-sm shadow-blue-950/[0.03] dark:border-blue-900/70 dark:bg-[#172435] dark:shadow-black/20 sm:p-6';
@@ -37,9 +39,7 @@ export function formatMoney(value: number, currency: string) {
 }
 
 function formatDate(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return 'Date unavailable';
-  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+  return formatBusinessDate(value);
 }
 
 function formatPeriod(value: string) {
@@ -81,12 +81,14 @@ export function MetricCard({
   tone,
   valueColor,
   invertTrend = false,
+  href,
 }: {
   metric: DashboardMetric;
   currency: string;
   tone: string;
   valueColor: string;
   invertTrend?: boolean;
+  href: string;
 }) {
   const delta = metric.changePercent;
   const positive = metric.trend === 'UP';
@@ -97,7 +99,8 @@ export function MetricCard({
   const TrendIcon = positive ? ArrowUpRight : negative ? ArrowDownRight : Minus;
 
   return (
-    <article className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm shadow-emerald-950/[0.03] transition hover:-translate-y-0.5 hover:shadow-md dark:border-emerald-900/70 dark:bg-[#10251b] dark:shadow-black/20 sm:p-5">
+    <Link href={href} aria-label={`View details for ${metric.label || metric.name}`} className="group block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-emerald-400 dark:focus-visible:ring-offset-[#090b09]">
+    <article className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm shadow-emerald-950/[0.03] transition hover:-translate-y-0.5 hover:shadow-md group-hover:border-emerald-300 dark:border-emerald-900/70 dark:bg-[#10251b] dark:shadow-black/20 dark:group-hover:border-emerald-800 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-[#777b73]">{metric.label || metric.name}</p>
@@ -117,7 +120,9 @@ export function MetricCard({
         )}
       </div>
       {metric.name === 'Inventory Value' ? <p className="mt-2 text-[11px] leading-4 text-[#95988f]">Current stock valuation snapshot</p> : null}
+      <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">View details <span aria-hidden="true">→</span></span>
     </article>
+    </Link>
   );
 }
 
@@ -261,11 +266,11 @@ export function CashFlowPanel({ data, currency }: { data: DashboardExecutiveData
   );
 }
 
-export function InventoryAlerts({ rows, total, canView, unavailable = false }: { rows: LowStockRow[]; total: number; canView: boolean; unavailable?: boolean }) {
+export function InventoryAlerts({ rows, total, canView, canViewProducts, unavailable = false }: { rows: LowStockRow[]; total: number; canView: boolean; canViewProducts: boolean; unavailable?: boolean }) {
   return (
     <section className={panel} aria-labelledby="inventory-alerts-title">
       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Stock health</p><h2 id="inventory-alerts-title" className="mt-1 text-base font-semibold text-[#292d27]">Reorder watch</h2></div><span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${total ? 'bg-[#ffe0b8] text-[#874400]' : 'bg-[#c9ef9d] text-[#245d20]'}`}>{total} items</span></div>
-      {!canView ? <div className="mt-5"><EmptyPanel>Your role does not include inventory viewing.</EmptyPanel></div> : unavailable ? <div className="mt-5"><EmptyPanel>Stock alerts could not be loaded. Refresh to try again.</EmptyPanel></div> : rows.length === 0 ? <div className="mt-5"><EmptyState compact title="No active products are currently at or below their reorder thresholds." /></div> : <div className="mt-4 divide-y divide-[#f0f1ed]">{rows.slice(0, 6).map((row) => <div key={`${row.productId}:${row.locationId}`} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${row.belowMinimum ? 'bg-[#ffd9d3] text-[#a62f24]' : 'bg-[#e4f58c] text-[#527000]'}`}><PackageSearch size={16} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[#343832]">{row.productName}</p><p className="mt-0.5 truncate text-[10px] text-[#747a68]">{row.sku} · {row.locationName}</p></div><div className="text-right"><p className={`text-xs font-semibold ${row.belowMinimum ? 'text-[#b54742]' : 'text-[#527000]'}`}>{row.quantity} on hand</p><p className="text-[10px] text-[#747a68]">reorder at {row.reorderLevel}</p>{row.daysToStockout !== null ? <p className="text-[10px] text-[#747a68]">~{row.daysToStockout} days at recent use</p> : null}</div></div>)}</div>}
+      {!canView ? <div className="mt-5"><EmptyPanel>Your role does not include inventory viewing.</EmptyPanel></div> : unavailable ? <div className="mt-5"><EmptyPanel>Stock alerts could not be loaded. Refresh to try again.</EmptyPanel></div> : rows.length === 0 ? <div className="mt-5"><EmptyState compact title="No active products are currently at or below their reorder thresholds." /></div> : <div className="mt-4 divide-y divide-[#f0f1ed]">{rows.slice(0, 6).map((row) => <Link key={`${row.productId}:${row.locationId}`} href={canViewProducts ? `/dashboard/products/${row.productId}` : '/dashboard/inventory'} aria-label={canViewProducts ? `View ${row.productName} product details` : `View inventory for ${row.productName} at ${row.locationName}`} className="flex items-center gap-3 rounded-lg py-3 outline-none transition hover:bg-emerald-50/70 focus-visible:ring-2 focus-visible:ring-emerald-600 first:pt-0 last:pb-0 dark:hover:bg-emerald-950/20 dark:focus-visible:ring-emerald-400"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${row.belowMinimum ? 'bg-[#ffd9d3] text-[#a62f24]' : 'bg-[#e4f58c] text-[#527000]'}`}><PackageSearch size={16} /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-[#343832]">{row.productName}</p><p className="mt-0.5 truncate text-[10px] text-[#747a68]">{row.sku} · {row.locationName}</p></div><div className="text-right"><p className={`text-xs font-semibold ${row.belowMinimum ? 'text-[#b54742]' : 'text-[#527000]'}`}>{row.quantity} on hand</p><p className="text-[10px] text-[#747a68]">reorder at {row.reorderLevel}</p>{row.daysToStockout !== null ? <p className="text-[10px] text-[#747a68]">~{row.daysToStockout} days at recent use</p> : null}</div><span className="ml-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300" aria-hidden="true">→</span></Link>)}</div>}
     </section>
   );
 }
@@ -286,7 +291,7 @@ export function RecentActivity({ transactions, unavailableSources, currency }: {
     <section className={lavenderPanel} aria-labelledby="recent-activity-title">
       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Latest records</p><h2 id="recent-activity-title" className="mt-1 text-base font-semibold text-[#292d27]">Recent activity</h2></div><span className="text-[11px] text-[#858880]">Latest 8</span></div>
       {unavailableSources.length > 0 ? <p className="mt-3 rounded-lg bg-[#fff8e9] px-3 py-2 text-[11px] text-[#8a6822]">Some activity sources could not be loaded ({unavailableSources.join(', ')}). Use refresh to try again.</p> : null}
-      {transactions.length === 0 ? <div className="mt-4"><EmptyState compact title="No recent records are available for the permissions on this account." /></div> : <div className="mt-3 divide-y divide-[#f0f1ed]">{transactions.map((row) => { const config = activityConfig[row.type]; const Icon = config.icon; return <div key={row.id} className="flex items-center gap-3 py-3 first:pt-1"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${config.tone}`}><Icon size={16} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><p className="truncate text-xs font-semibold text-[#30342e]">{row.reference}</p><span className={`text-[10px] font-semibold ${config.labelTone}`}>{config.label}</span></div><p className="truncate text-[11px] text-[#747a68]">{row.description} · {humanizeStatus(row.status)}</p></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[#30342e]">{formatMoney(row.amount, currency)}</p><p className="mt-0.5 text-[10px] text-[#747a68]">{formatDate(row.date)}</p></div></div>; })}</div>}
+      {transactions.length === 0 ? <div className="mt-4"><EmptyState compact title="No recent records are available for the permissions on this account." /></div> : <div className="mt-3 divide-y divide-[#f0f1ed]">{transactions.map((row) => { const config = activityConfig[row.type]; const Icon = config.icon; return <Link key={row.id} href={row.href} aria-label={`Open ${config.label.toLowerCase()} ${row.reference}`} className="flex items-center gap-3 rounded-lg py-3 outline-none transition hover:bg-violet-50/70 focus-visible:ring-2 focus-visible:ring-emerald-600 first:pt-1 dark:hover:bg-white/[0.03] dark:focus-visible:ring-emerald-400"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${config.tone}`}><Icon size={16} /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><p className="truncate text-xs font-semibold text-[#30342e]">{row.reference}</p><span className={`text-[10px] font-semibold ${config.labelTone}`}>{config.label}</span></div><p className="truncate text-[11px] text-[#747a68]">{row.description} · {humanizeStatus(row.status)}</p><p className="truncate text-[10px] text-[#858880]">{row.locationName || 'Location not recorded'}</p></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[#30342e]">{formatMoney(row.amount, currency)}</p><p className="mt-0.5 text-[10px] text-[#747a68]">{formatDate(row.date)}</p></div><span className="ml-1 text-xs font-semibold text-violet-700 dark:text-violet-300" aria-hidden="true">→</span></Link>; })}</div>}
     </section>
   );
 }

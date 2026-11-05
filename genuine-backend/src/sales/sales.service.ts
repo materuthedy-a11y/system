@@ -11,6 +11,7 @@ import { v4 as uuid } from 'uuid';
 import { LoggerService } from '../common/logger/logger.service';
 import { PrismaService } from '../database/prisma.service';
 import { assertAccountingPeriodOpen } from '../common/utils/accounting-period.util';
+import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationEventType } from '../notifications/dto';
@@ -59,11 +60,12 @@ export class SalesService {
   ) {}
 
   async getInvoiceOptions(businessId: string) {
-    const [business, locations, salespeople, customers] = await Promise.all([
+    const [business, defaultTaxRate, locations, salespeople, customers, settings] = await Promise.all([
       this.prisma.business.findUnique({
         where: { id: businessId },
         select: { currency: true, taxPercentage: true },
       }),
+      this.prisma.taxRate.findFirst({ where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } }, select: { rate: true } }),
       this.prisma.location.findMany({
         where: { businessId, isActive: true },
         orderBy: { createdAt: 'desc' },
@@ -79,16 +81,20 @@ export class SalesService {
         orderBy: { name: 'asc' },
         select: { id: true, name: true },
       }),
+      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { defaultLocationId: true } }),
     ]);
     if (!business) throw new NotFoundException('Business not found');
     return {
       customers,
       locations,
+      defaultLocationId: locations.some((location) => location.id === settings?.defaultLocationId)
+        ? settings?.defaultLocationId
+        : null,
       salespeople: salespeople.map((user) => ({
         id: user.id,
         name: `${user.firstName} ${user.lastName}`.trim(),
       })),
-      taxPercentage: business.taxPercentage,
+      taxPercentage: defaultTaxRate?.rate ?? business.taxPercentage,
       currency: business.currency,
     };
   }
@@ -113,16 +119,16 @@ export class SalesService {
     const lines = await this.prepareLines(businessId, dto.items);
     const subtotal = money(lines.reduce((sum, line) => sum + line.total, 0));
     const discount = this.discountFor(subtotal, dto.discountAmount, dto.discountPercentage);
-    const business = await this.prisma.business.findUnique({
-      where: { id: businessId },
-      select: { taxPercentage: true },
-    });
+    const [business, defaultTaxRate] = await Promise.all([
+      this.prisma.business.findUnique({ where: { id: businessId }, select: { taxPercentage: true } }),
+      this.prisma.taxRate.findFirst({ where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } }, select: { rate: true } }),
+    ]);
     if (!business) throw new NotFoundException('Business not found');
     const taxableAmount = money(subtotal - discount.amount);
     const taxAmount =
       dto.taxAmount !== undefined
         ? money(dto.taxAmount)
-        : money((taxableAmount * (dto.taxPercentage ?? business.taxPercentage)) / 100);
+        : money((taxableAmount * (dto.taxPercentage ?? defaultTaxRate?.rate ?? business.taxPercentage)) / 100);
     const totalAmount = money(subtotal - discount.amount + taxAmount);
     if (totalAmount < 0) throw new BadRequestException('Invoice total cannot be negative');
     const invoiceDate = dto.invoiceDate ? this.parseInvoiceDate(dto.invoiceDate) : new Date();
@@ -1441,13 +1447,14 @@ export class SalesService {
     businessId: string,
   ): Promise<string> {
     await this.lockSequence(tx, 'SalesInvoice', businessId);
+    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { invoicePrefix: true } });
     return this.nextMonthlyNumber(
       await tx.salesInvoice.findMany({
         where: { businessId },
         select: { invoiceNumber: true },
       }),
       'invoiceNumber',
-      'INV',
+      normalizeDocumentPrefix(settings?.invoicePrefix, 'INV'),
     );
   }
 

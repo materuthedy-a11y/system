@@ -124,6 +124,8 @@ login and `genuine` database using the setup steps above. Keep credentials in
 
 ## Documentation
 
+- [Deployment guide (Docker, Railway, Render, and other container hosts)](DEPLOYMENT.md)
+
 - [Phase 0: Business Rules](https://claude.ai/chat/PHASE_0_RULES.md)
 - [Phase 1: Project Setup](https://claude.ai/chat/PHASE_1_SETUP.md)
 - [Phase 2: Database Schema](https://claude.ai/chat/PHASE_2_SCHEMA.md)

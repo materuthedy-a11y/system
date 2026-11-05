@@ -89,6 +89,28 @@ export class ReportPaginationDto {
   @IsOptional() @IsString() productId?: string;
 }
 
+/** Shared, tenant-scoped filters for inventory work queues. */
+export class InventoryListQueryDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+  @IsOptional() @IsString() locationId?: string;
+  @IsOptional() @IsString() status?: string;
+  @IsOptional() @IsString() search?: string;
+}
+
+export class StockBalanceQueryDto extends ReportPaginationDto {
+  @IsOptional() @IsString() search?: string;
+}
+
+export class ReorderPointQueryDto extends ReportPaginationDto {
+  @IsOptional() @IsString() search?: string;
+}
+
+export class UpdateReorderPointDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) minimumStock?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) reorderLevel?: number;
+}
+
 export class StockValuationReportDto extends ReportPaginationDto {
   @IsOptional() @IsIn(['FIFO', 'LIFO', 'WEIGHTED_AVERAGE']) valuationMethod?: string;
 }

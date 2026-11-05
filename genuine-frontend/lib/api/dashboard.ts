@@ -88,6 +88,8 @@ export interface DashboardTransaction {
   amount: number;
   status: string;
   date: string;
+  locationName?: string | null;
+  href: string;
 }
 
 interface PageResponse<T> {
@@ -102,6 +104,7 @@ interface InvoiceRow {
   totalAmount: number;
   createdAt: string;
   invoiceDate: string;
+  locationName?: string | null;
 }
 
 interface PurchaseRow {
@@ -112,6 +115,7 @@ interface PurchaseRow {
   totalAmount: number;
   createdAt: string;
   orderDate: string;
+  locationName?: string | null;
 }
 
 interface ExpenseRow {
@@ -121,6 +125,8 @@ interface ExpenseRow {
   status: string;
   totalAmount: number;
   expenseDate: string;
+  locationName?: string | null;
+  location?: { name?: string | null } | null;
 }
 
 interface PaymentRow {
@@ -135,6 +141,7 @@ interface PaymentRow {
   status: string;
   amount: number | string;
   paymentDate: string;
+  locationName?: string | null;
 }
 
 async function loadPage<T>(path: string, params: Record<string, string | number>) {
@@ -182,7 +189,8 @@ export const dashboardAPI = {
       }).then((rows) => rows.map((row) => ({
         id: `sale:${row.id}`, type: 'sale' as const, reference: row.invoiceNumber,
         description: row.customerName, amount: row.totalAmount, status: row.status,
-        date: row.createdAt || row.invoiceDate,
+        date: row.createdAt || row.invoiceDate, locationName: row.locationName,
+        href: `/dashboard/sales/invoices/${row.id}`,
       }))) });
     }
 
@@ -192,7 +200,8 @@ export const dashboardAPI = {
       }).then((rows) => rows.map((row) => ({
         id: `purchase:${row.id}`, type: 'purchase' as const, reference: row.poNumber,
         description: row.supplierName, amount: row.totalAmount, status: row.status,
-        date: row.createdAt || row.orderDate,
+        date: row.createdAt || row.orderDate, locationName: row.locationName,
+        href: `/dashboard/purchases/orders/${row.id}`,
       }))) });
     }
 
@@ -200,7 +209,8 @@ export const dashboardAPI = {
       sources.push({ name: 'expenses', request: loadPage<ExpenseRow>('/payments/expenses', { page: 1, limit: 8 }).then((rows) => rows.map((row) => ({
         id: `expense:${row.id}`, type: 'expense' as const, reference: row.expenseNumber,
         description: row.categoryName, amount: row.totalAmount, status: row.status,
-        date: row.expenseDate,
+        date: row.expenseDate, locationName: row.locationName || row.location?.name,
+        href: '/dashboard/reports?tab=finance',
       }))) });
     }
 
@@ -208,7 +218,8 @@ export const dashboardAPI = {
       sources.push({ name: 'payments', request: loadPage<PaymentRow>('/payments', { page: 1, limit: 8 }).then((rows) => rows.map((row) => ({
         id: `payment:${row.id}`, type: 'payment' as const, reference: row.paymentNumber,
         description: paymentSourceLabel(row),
-        amount: Number(row.amount), status: row.status, date: row.paymentDate,
+        amount: Number(row.amount), status: row.status, date: row.paymentDate, locationName: row.locationName,
+        href: paymentDestination(row, permissions),
       }))) });
     }
 
@@ -235,4 +246,10 @@ function paymentSourceLabel(row: PaymentRow) {
   if (row.supplierId) return 'Supplier';
   if (row.customerId) return 'Customer';
   return (row.referenceType || 'Other').replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+
+function paymentDestination(row: PaymentRow, permissions: string[]) {
+  if (row.poId && permissions.includes('purchases.view')) return `/dashboard/purchases/orders/${row.poId}`;
+  if (row.invoiceId && permissions.includes('sales.view')) return `/dashboard/sales/invoices/${row.invoiceId}`;
+  return '/dashboard/reports?tab=finance';
 }

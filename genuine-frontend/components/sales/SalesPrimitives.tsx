@@ -3,15 +3,14 @@
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import type { InvoiceStatus, ReturnStatus } from '@/lib/api/sales';
+import { formatBusinessDate } from '@/lib/format/businessDate';
 
 export const money = (value: number, currency?: string) => new Intl.NumberFormat(undefined, {
   ...(currency ? { style: 'currency' as const, currency } : { style: 'decimal' as const }),
   maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
 
-export const dateLabel = (value?: string) => value
-  ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value))
-  : '—';
+export const dateLabel = (value?: string) => formatBusinessDate(value);
 
 export function useSalesPermissions() {
   const permissions = useAuthStore((state) => state.user?.permissions ?? []);

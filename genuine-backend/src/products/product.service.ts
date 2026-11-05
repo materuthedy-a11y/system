@@ -279,9 +279,9 @@ export class ProductService {
     return image;
   }
 
-  async getUnits(businessId: string) {
+  async getUnits(businessId: string, includeInactive = false) {
     return this.prisma.unit.findMany({
-      where: { isActive: true, OR: [{ businessId: null }, { businessId }] },
+      where: { ...(includeInactive ? {} : { isActive: true }), OR: [{ businessId: null }, { businessId }] },
       orderBy: { name: 'asc' },
     });
   }
@@ -364,6 +364,7 @@ export class ProductService {
           ...(dto.description !== undefined && { description: dto.description.trim() || null }),
           ...(dto.baseUnit !== undefined && { baseUnit: dto.baseUnit.trim() || null }),
           ...(dto.conversionFactor !== undefined && { conversionFactor: dto.conversionFactor }),
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         },
       });
     } catch (error) {
@@ -1056,9 +1057,9 @@ export class ProductService {
     };
   }
 
-  async getCategories(businessId: string): Promise<CategoryResponseDto[]> {
+  async getCategories(businessId: string, includeInactive = false): Promise<CategoryResponseDto[]> {
     const categories = await this.prisma.category.findMany({
-      where: { businessId, isActive: true },
+      where: { businessId, ...(includeInactive ? {} : { isActive: true }) },
       include: { parentCategory: { select: { name: true } } },
       orderBy: { name: 'asc' },
     });
@@ -1161,6 +1162,7 @@ export class ProductService {
         ...(dto.parentCategoryId !== undefined && {
           parentCategoryId: dto.parentCategoryId || null,
         }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
       },
     });
 

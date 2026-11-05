@@ -1,8 +1,10 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ||
-  'http://localhost:3002/api/v1';
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
+if (!configuredApiUrl && process.env.NODE_ENV === 'production') {
+  throw new Error('The production API URL is missing. Configure NEXT_PUBLIC_API_URL and rebuild the frontend.');
+}
+export const API_URL = configuredApiUrl || 'http://localhost:3002/api/v1';
 
 const ACCESS_TOKEN_KEY = 'genuine.accessToken';
 const REFRESH_TOKEN_KEY = 'genuine.refreshToken';

@@ -9,6 +9,7 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
 import { NotificationEventType } from '../notifications/dto';
 import {
   CloseAccountingPeriodDto,
@@ -36,11 +37,17 @@ export class PaymentsService {
   ) {}
 
   async getPaymentMethodsForEntry(businessId: string) {
-    return this.prisma.paymentMethod.findMany({
+    const [methods, settings] = await Promise.all([
+      this.prisma.paymentMethod.findMany({
       where: { businessId, isActive: true },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, isActive: true },
-    });
+      select: { id: true, name: true, isActive: true, requiresReference: true },
+      }),
+      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { defaultPaymentMethodId: true } }),
+    ]);
+    return methods
+      .map((method) => ({ ...method, isDefault: method.id === settings?.defaultPaymentMethodId }))
+      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name));
   }
 
   async createPayment(businessId: string, userId: string, dto: CreatePaymentDto) {
@@ -65,6 +72,9 @@ export class PaymentsService {
               where: { id: dto.paymentMethodId, businessId, isActive: true },
             });
             if (!method) throw new NotFoundException('Active payment method not found');
+            if (method.requiresReference && ![dto.referenceNumber, dto.transactionId, dto.chequeNumber].some((value) => value?.trim())) {
+              throw new BadRequestException('This payment method requires a transaction or reference number');
+            }
             await this.assertPeriodOpen(tx, businessId, paymentDate);
 
             const duplicateKey = dto.idempotencyKey
@@ -339,7 +349,12 @@ export class PaymentsService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.payment.findMany({
         where,
-        include: { paymentMethod: true },
+        include: {
+          paymentMethod: true,
+          invoice: { include: { location: { select: { name: true } } } },
+          po: { include: { location: { select: { name: true } } } },
+          expense: { include: { location: { select: { name: true } } } },
+        },
         orderBy: [{ paymentDate: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
@@ -347,7 +362,11 @@ export class PaymentsService {
       this.prisma.payment.count({ where }),
     ]);
     return {
-      data: data.map((row) => ({ ...row, paymentMethodName: row.paymentMethod.name })),
+      data: data.map((row) => ({
+        ...row,
+        paymentMethodName: row.paymentMethod.name,
+        locationName: row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
+      })),
       total,
       page,
       limit,
@@ -486,6 +505,9 @@ export class PaymentsService {
           where: { id: dto.paymentMethodId, businessId, isActive: true },
         });
         if (!method) throw new NotFoundException('Active payment method not found');
+        if (method.requiresReference && ![dto.referenceNumber, dto.reference].some((value) => value?.trim())) {
+          throw new BadRequestException('This payment method requires a transaction or reference number');
+        }
         const categoryIds = [...new Set(dto.items.map((item) => item.expenseCategoryId))];
         const categories = await tx.expenseCategory.findMany({
           where: { businessId, isActive: true, id: { in: categoryIds } },
@@ -1471,7 +1493,8 @@ export class PaymentsService {
   }
 
   private async nextPaymentNumber(tx: Prisma.TransactionClient, businessId: string, date: Date) {
-    const prefix = `PAY-${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}-`;
+    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { receiptPrefix: true } });
+    const prefix = `${normalizeDocumentPrefix(settings?.receiptPrefix, 'PAY')}-${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}-`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-number:${businessId}:${prefix}`}, 0)) IS NULL AS locked`;
     const last = await tx.payment.findFirst({
       where: { businessId, paymentNumber: { startsWith: prefix } },

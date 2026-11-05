@@ -1,4 +1,5 @@
-import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, Min, Max } from 'class-validator';
+import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, Matches, Min, Max, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateBusinessProfileDto {
   @IsOptional()
@@ -11,6 +12,42 @@ export class UpdateBusinessProfileDto {
 
   @IsOptional()
   @IsString()
+  phone2?: string;
+
+  @IsOptional()
+  @IsString()
+  legalName?: string;
+
+  @IsOptional()
+  @IsString()
+  registrationNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  region?: string;
+
+  @IsOptional()
+  @IsString()
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsString()
   email?: string;
 
   @IsOptional()
@@ -19,11 +56,33 @@ export class UpdateBusinessProfileDto {
 
   @IsOptional()
   @IsString()
+  businessDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
   businessName?: string;
 
   @IsOptional()
   @IsString()
-  businessDescription?: string;
+  businessType?: string;
+
+  @IsOptional()
+  @IsString()
+  website?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @Matches(/^(?:https:\/\/[^\s]+|data:image\/webp;base64,[A-Za-z0-9+/]+={0,2})$/)
+  @MaxLength(90_000)
+  logoUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  financialYear?: string;
 
   @IsOptional()
   @IsNumber()
@@ -59,8 +118,19 @@ export class BusinessProfileResponseDto {
   description?: string;
   email?: string;
   phone?: string;
+  phone2?: string;
+  legalName?: string;
+  registrationNumber?: string;
   address?: string;
+  city?: string;
+  region?: string;
+  country: string;
+  taxId?: string;
+  timezone: string;
+  language: string;
   website?: string;
+  logoUrl?: string;
+  financialYear: string;
   currency: string;
   taxPercentage: number;
   allowNegativeStock: boolean;

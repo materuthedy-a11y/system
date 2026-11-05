@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Mizania Business Suite - Business records and operations frontend",
   "private": true,
+  "packageManager": "pnpm@11.10.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -128,6 +128,8 @@ export interface PaymentMethodOption {
   id: string;
   name: string;
   isActive: boolean;
+  isDefault?: boolean;
+  requiresReference?: boolean;
 }
 export interface PurchaseProductOption {
   id: string;

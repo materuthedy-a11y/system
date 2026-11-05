@@ -11,6 +11,8 @@ datasource db {
 model Business {
   id                    String                 @id @default(cuid())
   name                  String                 @unique
+  legalName             String?
+  registrationNumber    String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   address               String?
@@ -20,6 +22,13 @@ model Business {
   currency              String                 @default("TZS")
   description           String?
   email                 String?
+  phone2                String?
+  city                  String?
+  region                String?
+  country               String                  @default("Tanzania")
+  taxId                 String?
+  timezone              String                  @default("Africa/Dar_es_Salaam")
+  language              String                  @default("en")
   financialYear         String                 @default("CALENDAR")
   isSetupComplete       Boolean                @default(false)
   isActive              Boolean                @default(true)
@@ -27,6 +36,8 @@ model Business {
   phone                 String?
   taxPercentage         Float                  @default(18.0)
   website               String?
+  settings              BusinessSettings?
+  taxRates              TaxRate[]
   periods               AccountingPeriod[]
   auditLogs             AuditLog[]
   categories            Category[]
@@ -196,6 +207,7 @@ model Unit {
   @@unique([businessId, name])
   @@unique([businessId, symbol])
   @@index([businessId])
+  @@index([name], map: "Unit_name_idx")
 }
 
 model ProductUnit {
@@ -226,6 +238,7 @@ model Brand {
 
   @@unique([businessId, name])
   @@index([businessId])
+  @@index([name], map: "Brand_name_idx")
 }
 
 model ProductImage {
@@ -498,6 +511,10 @@ model PaymentMethod {
   businessId  String
   name        String
   description String?
+  code        String?
+  methodType  String    @default("CUSTOM")
+  requiresReference Boolean @default(false)
+  bankDetails String?
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   expenses    Expense[]
@@ -505,6 +522,47 @@ model PaymentMethod {
   business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, name])
+  @@unique([businessId, code], map: "PaymentMethod_businessId_code_key")
+  @@index([businessId])
+}
+
+model TaxRate {
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
+  code        String
+  rate        Float
+  description String?
+  appliesTo   String   @default("BOTH")
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, name])
+  @@unique([businessId, code])
+  @@index([businessId, isActive])
+}
+
+model BusinessSettings {
+  id                     String   @id @default(cuid())
+  businessId             String   @unique
+  defaultLocationId      String?
+  defaultPaymentMethodId String?
+  invoicePrefix          String   @default("INV")
+  poPrefix               String   @default("PO")
+  grnPrefix              String   @default("GRN")
+  receiptPrefix          String   @default("PAY")
+  dateFormat             String   @default("DD/MM/YYYY")
+  timeFormat             String   @default("24")
+  weekStartsOn           String   @default("MONDAY")
+  lowStockThreshold      Int      @default(0)
+  theme                  String   @default("SYSTEM")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
   @@index([businessId])
 }
 
@@ -518,7 +576,7 @@ model ExpenseCategory {
   budgetPeriod String?
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  updatedAt    DateTime      @default(now()) @updatedAt
   expenses     Expense[]
   expenseItems ExpenseItem[]
   business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1206,6 +1264,7 @@ model UserSession {
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([absoluteExpiresAt], map: "UserSession_absoluteExpiresAt_idx")
 }
 
 model NotificationTemplate {

@@ -118,11 +118,11 @@ export function CustomerPhotoField({
     finally { setBusy(false); }
   }
 
-  return <section className="rounded-2xl border border-[#cde9d9] bg-emerald-50/65 p-4 dark:border-emerald-950 dark:bg-[#141a16]" aria-labelledby="customer-photo-heading">
+  return <section className="rounded-2xl border border-[#cde9d9] bg-emerald-50/65 p-4 dark:border-emerald-950 dark:bg-[#141a16]" aria-labelledby="customer-photo-heading" aria-busy={busy}>
     <div className="flex flex-wrap items-center gap-4">
       <div className="relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border border-emerald-200 bg-white text-emerald-800 shadow-sm dark:border-emerald-900 dark:bg-[#111411] dark:text-emerald-300">
         {preview ? <Image unoptimized fill sizes="96px" src={preview} alt="Customer photo preview" className="object-cover" /> : <UserRound aria-hidden="true" size={32} />}
-        {busy ? <div className="absolute inset-0 grid place-items-center bg-black/45 text-white"><Loader2 size={22} className="animate-spin" /></div> : null}
+        {busy ? <div className="absolute inset-0 grid place-items-center bg-black/45 text-white"><Loader2 size={22} className="animate-spin" /><span className="sr-only" role="status">Inaandaa picha ya customer…</span></div> : null}
       </div>
       <div className="min-w-0 flex-1">
         <h2 id="customer-photo-heading" className="flex items-center gap-2 text-sm font-bold text-[#08784f] dark:text-emerald-300"><ImagePlus size={17}/>Picha ya customer</h2>

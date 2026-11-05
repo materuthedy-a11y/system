@@ -24,6 +24,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { ProductPhoto } from '@/components/products/ProductImages';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const panel = 'min-w-0 rounded-2xl border border-[#e6e9e1] bg-white p-4 shadow-sm sm:p-6';
 const statusStyles: Record<Product['status'], string> = {
@@ -323,9 +324,7 @@ export default function ProductDetailPage() {
                     {movement.quantity} {product.defaultUnit}
                   </span>
                   <time className="text-xs text-[#858880]">
-                    {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-                      new Date(movement.createdAt)
-                    )}
+                    {formatBusinessDate(movement.createdAt)}
                   </time>
                 </div>
               </div>
@@ -338,13 +337,9 @@ export default function ProductDetailPage() {
       <div className="flex items-center gap-2 text-xs text-[#858880]">
         <Barcode size={14} />
         Created{' '}
-        {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-          new Date(product.createdAt)
-        )}
+        {formatBusinessDate(product.createdAt)}
         ; updated{' '}
-        {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-          new Date(product.updatedAt)
-        )}
+        {formatBusinessDate(product.updatedAt)}
       </div>
     </div>
   );

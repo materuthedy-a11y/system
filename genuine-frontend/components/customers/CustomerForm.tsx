@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { getApiError } from '@/lib/api';
 import { customersAPI, type Customer, type CustomerInput, type CustomerType } from '@/lib/api/customers';
@@ -30,10 +31,11 @@ function phoneParts(value: string) {
   return { code: '+255', number: trimmed.replace(/\D/g, '').replace(/^0+/, '') };
 }
 
-function PhoneInput({ label, value, onChange, required = false }: { label: string; value: string; onChange: (value: string) => void; required?: boolean }) {
+function PhoneInput({ label, value, onChange, required = false, error, inputRef }: { label: string; value: string; onChange: (value: string) => void; required?: boolean; error?: string; inputRef?: Ref<HTMLInputElement> }) {
   const [selectedCode, setSelectedCode] = useState(() => phoneParts(value).code);
   const parts = phoneParts(value);
-  useEffect(() => { setSelectedCode(parts.code); }, [value]);
+  const errorId = `${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-error`;
+  useEffect(() => { setSelectedCode(parts.code); }, [value, parts.code]);
   const displayedNumber = selectedCode === 'OTHER' ? value : parts.code === 'OTHER' ? '' : parts.number;
   const selectClass = 'min-h-10 w-[46%] shrink-0 rounded-lg border border-[#d8ddd3] bg-white px-2 text-xs text-[#20231f] outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-600/70 sm:w-[44%] dark:border-white/15 dark:bg-[#111411] dark:text-white dark:focus-visible:ring-emerald-400/70';
   return <label className={labelClass}>{label}<span className="mt-1.5 flex min-w-0 gap-2">
@@ -47,13 +49,13 @@ function PhoneInput({ label, value, onChange, required = false }: { label: strin
       {phoneCountries.map((item) => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}
       <option value="OTHER">Other (international)</option>
     </select>
-    <input required={required} type="tel" inputMode={selectedCode === 'OTHER' ? 'tel' : 'numeric'} autoComplete={required ? 'tel' : 'off'} maxLength={selectedCode === 'OTHER' ? 30 : 18} className={`${inputClass} min-w-0 flex-1`} value={displayedNumber} onChange={(event) => {
+    <input ref={inputRef} required={required} type="tel" inputMode={selectedCode === 'OTHER' ? 'tel' : 'numeric'} autoComplete={required ? 'tel' : 'off'} maxLength={selectedCode === 'OTHER' ? 30 : 18} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined} className={`${inputClass} min-w-0 flex-1 ${error ? 'border-rose-500' : ''}`} value={displayedNumber} onChange={(event) => {
       const raw = event.target.value;
       if (selectedCode === 'OTHER') { onChange(raw.trim()); return; }
       const digits = raw.replace(/\D/g, '').replace(/^0+/, '');
       onChange(digits ? `${selectedCode}${digits}` : '');
     }} placeholder={selectedCode === 'OTHER' ? '+country code and number' : 'e.g. 650 745 642'} />
-  </span></label>;
+  </span>{error ? <span id={errorId} role="alert" className="mt-1 block text-xs font-medium text-rose-700 dark:text-rose-300">{error}</span> : null}</label>;
 }
 
 export function CustomerForm({ customerId }: { customerId?: string }) {
@@ -67,8 +69,13 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
   const [customerCode, setCustomerCode] = useState('');
   const [customerType, setCustomerType] = useState<CustomerType>('RETAIL');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
   const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const phoneRef = useRef<HTMLInputElement>(null);
   const [secondaryPhone, setSecondaryPhone] = useState('');
+  const [secondaryPhoneError, setSecondaryPhoneError] = useState('');
+  const secondaryPhoneRef = useRef<HTMLInputElement>(null);
   const [taxId, setTaxId] = useState('');
   const [description, setDescription] = useState('');
   const [creditLimit, setCreditLimit] = useState('0');
@@ -82,6 +89,15 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
   const [region, setRegion] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('Tanzania');
+
+  function validateEmail(value: string) {
+    const normalized = value.trim();
+    if (!normalized) return 'Email address is required.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized)) {
+      return 'Enter a valid email address, for example jina@kampuni.com.';
+    }
+    return '';
+  }
 
   useEffect(() => {
     if (!customerId) return;
@@ -128,10 +144,28 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
     };
     setSaving(true);
     try {
-      const saved = editing ? await customersAPI.update(customerId!, input) : await customersAPI.create(input);
+      // Customer code and opening balance are create-only fields. The update DTO
+      // rejects unknown fields, so never send them in an edit request.
+      const updateInput: Partial<CustomerInput> = { ...input };
+      delete updateInput.customerCode;
+      delete updateInput.openingBalance;
+      const saved = editing ? await customersAPI.update(customerId!, updateInput) : await customersAPI.create(input);
       notify.success(editing ? 'Customer changes saved.' : 'Customer created.');
       router.push(`/dashboard/customers/${saved.id}`);
-    } catch (cause) { setError(getApiError(cause, 'Could not save this customer.')); }
+    } catch (cause) {
+      const message = getApiError(cause, 'Could not save this customer.');
+      if (/secondaryPhone must be a valid phone number/i.test(message)) {
+        setError('');
+        setSecondaryPhoneError('Enter a valid phone number for the selected country code.');
+        window.requestAnimationFrame(() => secondaryPhoneRef.current?.focus());
+      } else if (/phone must be a valid phone number/i.test(message)) {
+        setError('');
+        setPhoneError('Enter a valid Tanzanian phone number, for example 650 745 642.');
+        window.requestAnimationFrame(() => phoneRef.current?.focus());
+      } else {
+        setError(message);
+      }
+    }
     finally { setSaving(false); }
   }
 
@@ -145,12 +179,12 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
       <h2 className="text-sm font-bold text-[#08784f] dark:text-emerald-300">Business details</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>Customer or business name *<input required maxLength={120} autoComplete="organization" className={`${inputClass} mt-1.5`} value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <label className={labelClass}>Customer code<input maxLength={32} className={`${inputClass} mt-1.5`} value={customerCode} onChange={(e) => setCustomerCode(e.target.value)} placeholder="Generated automatically" /></label>
+        <label className={labelClass}>Customer code<input maxLength={32} readOnly={editing} aria-readonly={editing} className={`${inputClass} mt-1.5 ${editing ? 'cursor-not-allowed bg-[#f4f6f2] dark:bg-white/[0.04]' : ''}`} value={customerCode} onChange={(e) => setCustomerCode(e.target.value)} placeholder="Generated automatically" />{editing ? <span className="mt-1 block text-[11px] font-normal text-[#697468] dark:text-white/55">Customer codes cannot be changed after creation.</span> : null}</label>
         <label className={labelClass}>Customer type *<select className={`${inputClass} mt-1.5`} value={customerType} onChange={(e) => setCustomerType(e.target.value as CustomerType)}><option value="RETAIL">Retail</option><option value="WHOLESALE">Wholesale</option><option value="CORPORATE">Corporate</option><option value="DISTRIBUTOR">Distributor</option></select></label>
         <label className={labelClass}>Status<select className={`${inputClass} mt-1.5`} value={status} onChange={(e) => setStatus(e.target.value as CustomerInput['status'])}><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="BLACKLISTED">Blacklisted</option><option value="ARCHIVED">Archived</option></select></label>
-        <label className={labelClass}>Email address *<input required type="email" autoComplete="email" maxLength={254} className={`${inputClass} mt-1.5`} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <PhoneInput label="Phone number *" required value={phone} onChange={setPhone} />
-        <PhoneInput label="Other phone" value={secondaryPhone} onChange={setSecondaryPhone} />
+        <label className={labelClass}>Email address *<input required type="email" autoComplete="email" maxLength={254} aria-invalid={emailError ? true : undefined} aria-describedby={emailError ? 'customer-email-error' : undefined} onInvalid={(e) => { e.preventDefault(); setEmailError(validateEmail(email)); e.currentTarget.focus(); }} onBlur={() => { if (email.trim()) setEmailError(validateEmail(email)); }} className={`${inputClass} mt-1.5 ${emailError ? 'border-rose-500' : ''}`} value={email} onChange={(e) => { const value = e.target.value; setEmail(value); if (emailError) setEmailError(value.trim() ? validateEmail(value) : ''); }} />{emailError ? <span id="customer-email-error" role="alert" className="mt-1 block text-xs font-medium text-rose-700 dark:text-rose-300">{emailError}</span> : null}</label>
+        <PhoneInput label="Phone number *" required value={phone} inputRef={phoneRef} error={phoneError} onChange={(value) => { setPhone(value); if (phoneError) setPhoneError(''); }} />
+        <PhoneInput label="Other phone" value={secondaryPhone} inputRef={secondaryPhoneRef} error={secondaryPhoneError} onChange={(value) => { setSecondaryPhone(value); if (secondaryPhoneError) setSecondaryPhoneError(''); }} />
         <label className={labelClass}>Tax ID<input maxLength={80} className={`${inputClass} mt-1.5`} value={taxId} onChange={(e) => setTaxId(e.target.value)} /></label>
         <label className={labelClass}>Credit limit (TZS) *<input required type="number" min="0" step="0.01" className={`${inputClass} mt-1.5`} value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} /></label>
         <label className={labelClass}>Payment terms *<select className={`${inputClass} mt-1.5`} value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)}>{['COD', 'PREPAID', 'NET-7', 'NET-14', 'NET-30', 'NET-45', 'NET-60'].map((term) => <option key={term}>{term}</option>)}</select></label>
@@ -171,6 +205,6 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
       <h2 className="text-sm font-bold text-[#87600a] dark:text-amber-300">Business address</h2><div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>Street<input maxLength={160} className={`${inputClass} mt-1.5`} value={street} onChange={(e) => setStreet(e.target.value)} /></label><label className={labelClass}>City<input maxLength={100} className={`${inputClass} mt-1.5`} value={city} onChange={(e) => setCity(e.target.value)} /></label><label className={labelClass}>Region<input maxLength={100} className={`${inputClass} mt-1.5`} value={region} onChange={(e) => setRegion(e.target.value)} /></label><label className={labelClass}>Postal code<input maxLength={30} className={`${inputClass} mt-1.5`} value={postalCode} onChange={(e) => setPostalCode(e.target.value)} /></label><label className={labelClass}>Country<input maxLength={80} className={`${inputClass} mt-1.5`} value={country} onChange={(e) => setCountry(e.target.value)} /></label>
       </div></section>
-    <div className="flex flex-wrap justify-end gap-2"><Link href={customerId ? `/dashboard/customers/${customerId}` : '/dashboard/customers'} className="inline-flex min-h-10 items-center rounded-md border border-[#d4d9ce] px-4 text-sm font-semibold text-[#414a40] hover:bg-white dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5">Cancel</Link><button disabled={saving} className="inline-flex min-h-10 items-center rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500">{saving ? 'Saving…' : editing ? 'Save customer' : 'Create customer'}</button></div>
+    <div className="flex flex-wrap justify-end gap-2"><Link href={customerId ? `/dashboard/customers/${customerId}` : '/dashboard/customers'} className="inline-flex min-h-10 items-center rounded-md border border-[#d4d9ce] px-4 text-sm font-semibold text-[#414a40] hover:bg-white dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5">Cancel</Link><button disabled={saving} aria-busy={saving} className="inline-flex min-h-10 items-center rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500">{saving ? 'Saving…' : editing ? 'Save customer' : 'Create customer'}</button></div>
   </form>;
 }

@@ -14,6 +14,10 @@ import { RouteTransitionOverlay } from './RouteTransitionOverlay';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { workspaceAPI, type WorkspaceLocation } from '@/lib/api/workspace';
 import { readSavedLocationId, useWorkspaceStore } from '@/store/workspaceStore';
+import { settingsAPI } from '@/lib/api/settings';
+import { useTheme } from 'next-themes';
+import { cacheBusinessDateSettings } from '@/lib/format/businessDate';
+import { useBusinessProfileStore } from '@/store/businessProfileStore';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -24,6 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const logout = useAuthStore((state) => state.logout);
   const updateUser = useAuthStore((state) => state.updateUser);
   const syncToken = useAuthStore((state) => state.syncToken);
+  const { setTheme } = useTheme();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -36,6 +41,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [avatarBusy, setAvatarBusy] = useState(false);
   const activeLocation = useWorkspaceStore((state) => state.activeLocation);
   const setActiveLocation = useWorkspaceStore((state) => state.setActiveLocation);
+  const businessBrand = useBusinessProfileStore((state) => state.businessId === user?.businessId ? state.brand : null);
+  const setBusinessProfile = useBusinessProfileStore((state) => state.setProfile);
+  const setBusinessBrand = useBusinessProfileStore((state) => state.setBrand);
+  const [workspaceLogoFailed, setWorkspaceLogoFailed] = useState(false);
   const [workspaceLocations, setWorkspaceLocations] = useState<WorkspaceLocation[]>([]);
   const [pendingLocation, setPendingLocation] = useState<WorkspaceLocation | null>(null);
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -54,6 +63,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setAvatarUrl(nextUrl);
   }, []);
   const compactSidebar = isDesktop && sidebarCollapsed;
+
+  useEffect(() => {
+    if (!user?.businessId || !user.permissions.includes('settings.view')) return;
+    // Load business date/time preferences every time; apply business theme only when the user has no local override.
+    let live = true;
+    Promise.all([settingsAPI.getGeneral(), settingsAPI.getProfile()]).then(([settings, profile]) => {
+      if (!live) return;
+      setBusinessProfile(user.businessId, profile);
+      cacheBusinessDateSettings({ ...settings, timezone: profile.timezone, language: profile.language, financialYear: profile.financialYear });
+      if (!window.localStorage.getItem('genuine.theme')) setTheme(settings.theme.toLowerCase());
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [user?.businessId, user?.permissions, setTheme, setBusinessProfile]);
+
+  useEffect(() => {
+    if (!user?.businessId) return;
+    let live = true;
+    settingsAPI.getBrand().then((brand) => { if (live) setBusinessBrand(user.businessId, brand); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [user?.businessId, setBusinessBrand]);
+
+  useEffect(() => { setWorkspaceLogoFailed(false); }, [businessBrand?.logoUrl]);
 
   useEffect(() => {
     if (!user?.businessId || !user.id) return;
@@ -265,14 +296,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, active: pathname === '/dashboard' },
     { label: 'Sales', href: user.permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/sales/invoices/new', icon: ShoppingCart, active: pathname.startsWith('/dashboard/sales'), comingSoon: !user.permissions.some((permission) => permission === 'sales.view' || permission === 'sales.create') },
     { label: 'Products', href: '/dashboard/products', icon: Package, active: pathname.startsWith('/dashboard/products') },
-    { label: 'Inventory', href: '#', icon: Warehouse, active: false, comingSoon: true },
+    { label: 'Inventory', href: user.permissions.includes('inventory.view') ? '/dashboard/inventory' : '#', icon: Warehouse, active: pathname.startsWith('/dashboard/inventory'), comingSoon: !user.permissions.includes('inventory.view') },
     { label: 'Purchases', href: '/dashboard/purchases', icon: Truck, active: pathname.startsWith('/dashboard/purchases') },
     { label: 'Customers', href: user.permissions.includes('customers.view') ? '/dashboard/customers' : '#', icon: UsersRound, active: pathname.startsWith('/dashboard/customers'), comingSoon: !user.permissions.includes('customers.view') },
     { label: 'Suppliers', href: '#', icon: UserRound, active: false, comingSoon: true },
     { label: 'Payments & Finance', href: '#', icon: CircleDollarSign, active: false, comingSoon: true },
     { label: 'Expenses', href: '#', icon: Receipt, active: false, comingSoon: true },
-    { label: 'Reports & Analytics', href: '#', icon: FileBarChart2, active: false, comingSoon: true },
-    { label: 'Settings', href: '/dashboard/security', icon: Settings2, active: pathname.startsWith('/dashboard/security') },
+    { label: 'Reports & Analytics', href: user.permissions.includes('reports.view') ? '/dashboard/reports' : '#', icon: FileBarChart2, active: pathname.startsWith('/dashboard/reports'), comingSoon: !user.permissions.includes('reports.view') },
+    { label: 'Settings', href: user.permissions.includes('settings.view') ? '/dashboard/settings' : '/dashboard/security', icon: Settings2, active: pathname.startsWith('/dashboard/settings') || pathname.startsWith('/dashboard/security'), comingSoon: !user.permissions.includes('settings.view') },
     { label: 'Help & feedback', href: '/dashboard/help-feedback', icon: LifeBuoy, active: pathname.startsWith('/dashboard/help-feedback') },
   ];
   const navGroups = [
@@ -298,14 +329,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
         <div className="mt-9 shrink-0">
           <button ref={locationButtonRef} type="button" aria-haspopup="dialog" aria-expanded={locationMenuOpen} onClick={toggleLocationMenu} title={compactSidebar ? `${user.businessName || 'Workspace'} · ${activeLocation?.name || 'Choose location'}` : undefined} className={`w-full rounded-xl border border-blue-100 bg-white/75 text-left shadow-sm shadow-blue-950/[0.03] transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-blue-400/50 dark:hover:bg-white/[0.07] dark:focus-visible:outline-blue-400 ${compactSidebar ? 'flex justify-center p-2.5' : 'p-2.5'}`}>
-            {compactSidebar ? <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-900/20 dark:bg-emerald-500/20 dark:text-emerald-300"><Store size={17} /></span> : <div className="flex min-w-0 items-center gap-2.5"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-900/20 dark:bg-emerald-500/20 dark:text-emerald-300"><Store size={18} strokeWidth={1.9} /></span><div className="min-w-0 flex-1"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Workspace</p><p className="mt-0.5 truncate text-sm font-bold text-[#252b23] dark:text-white">{user.businessName || 'Your business'}</p><p className="mt-1 flex min-w-0 items-center gap-1 truncate text-[11px] font-semibold text-[#465363] dark:text-white/75"><MapPin size={12} className="shrink-0 text-blue-700 dark:text-blue-300" />{locationsLoading ? 'Loading locations…' : activeLocation?.name || 'Choose location'}</p></div><ChevronDown size={15} className={`shrink-0 text-blue-700 transition-transform dark:text-blue-300 ${locationMenuOpen ? 'rotate-180' : ''}`} /></div>}
+            {compactSidebar ? <span className="grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-900/20 dark:bg-emerald-500/20 dark:text-emerald-300">{businessBrand?.logoUrl && !workspaceLogoFailed ? <img src={businessBrand.logoUrl} alt={`${businessBrand.name} logo`} onError={() => setWorkspaceLogoFailed(true)} className="h-full w-full object-contain" /> : <Store size={17} />}</span> : <div className="flex min-w-0 items-center gap-2.5"><span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl bg-emerald-600 text-white shadow-sm shadow-emerald-900/20 dark:bg-emerald-500/20 dark:text-emerald-300">{businessBrand?.logoUrl && !workspaceLogoFailed ? <img src={businessBrand.logoUrl} alt={`${businessBrand.name} logo`} onError={() => setWorkspaceLogoFailed(true)} className="h-full w-full object-contain" /> : <Store size={18} strokeWidth={1.9} />}</span><div className="min-w-0 flex-1"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Workspace</p><p className="mt-0.5 truncate text-sm font-bold text-[#252b23] dark:text-white">{user.businessName || 'Your business'}</p><p className="mt-1 flex min-w-0 items-center gap-1 truncate text-[11px] font-semibold text-[#465363] dark:text-white/75"><MapPin size={12} className="shrink-0 text-blue-700 dark:text-blue-300" />{locationsLoading ? 'Loading locations…' : activeLocation?.name || 'Choose location'}</p></div><ChevronDown size={15} className={`shrink-0 text-blue-700 transition-transform dark:text-blue-300 ${locationMenuOpen ? 'rotate-180' : ''}`} /></div>}
           </button>
           {locationMenuOpen && typeof document !== 'undefined' && createPortal(<div ref={locationMenuRef} role="dialog" aria-label="Workspace and location" style={{ left: locationMenuPosition.left, top: locationMenuPosition.top }} className="fixed z-[100] max-h-[min(360px,calc(100vh-24px))] w-[min(330px,calc(100vw-24px))] overflow-y-auto rounded-2xl border border-blue-100 bg-white p-3 text-[#252b23] shadow-2xl shadow-slate-950/25 dark:border-white/10 dark:bg-[#20211f] dark:text-white">
-            <div className="border-b border-slate-100 px-2 pb-3 dark:border-white/10"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300">Workspace</p><p className="mt-1 truncate text-sm font-bold">{user.businessName || 'Your business'}</p><p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-[#515b66] dark:text-white/70"><MapPin size={14} className="text-blue-700 dark:text-blue-300" />Active location</p></div>
+            <div className="border-b border-slate-100 px-2 pb-3 dark:border-white/10"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300">Workspace</p><p className="mt-1 truncate text-sm font-bold">{user.businessName || 'Your business'}</p><p className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-[#515b66] dark:text-white/70"><MapPin size={14} className="text-blue-700 dark:text-blue-300" />Active location</p><p className="mt-1 pl-[21px] text-[10px] leading-4 text-[#66717e] dark:text-white/55">Used for new activity. Dashboard and combined reports show all locations; detail reports have their own filters.</p></div>
             <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
               {locationsLoading ? <p className="flex items-center gap-2 px-2 py-3 text-xs text-[#59616b] dark:text-white/65"><Loader2 size={14} className="animate-spin" />Loading available locations…</p> : workspaceLocations.length ? workspaceLocations.map((location) => <button key={location.id} type="button" aria-pressed={activeLocation?.id === location.id} onClick={() => { if (location.id === activeLocation?.id) { setPendingLocation(null); setLocationMenuOpen(false); } else setPendingLocation(location); }} className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left transition ${activeLocation?.id === location.id ? 'bg-blue-50 text-blue-900 dark:bg-blue-950/50 dark:text-blue-100' : pendingLocation?.id === location.id ? 'bg-emerald-50 text-emerald-950 ring-1 ring-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-100 dark:ring-emerald-500' : 'hover:bg-slate-50 dark:hover:bg-white/[0.06]'}`}><MapPin size={15} className="shrink-0 text-blue-700 dark:text-blue-300" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{location.name}</span><span className="block truncate text-[10px] text-[#66717e] dark:text-white/55">{location.code} · {location.type}</span></span>{activeLocation?.id === location.id && <Check size={16} className="text-green-700 dark:text-green-400" />}</button>) : <p className="px-2 py-3 text-xs leading-5 text-[#59616b] dark:text-white/65">No active locations are available for this account.</p>}
             </div>
-            {pendingLocation ? <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900 dark:bg-emerald-950/30"><p className="text-xs leading-5 text-[#344139] dark:text-emerald-100">Switch active location to <span className="font-bold">{pendingLocation.name}</span>? New activity will use this location.</p><div className="mt-2.5 flex justify-end gap-2"><button type="button" onClick={() => setPendingLocation(null)} className="min-h-9 rounded-full px-4 text-xs font-semibold text-[#58635a] transition hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10">Cancel</button><button type="button" onClick={() => { setActiveLocation(pendingLocation, user.businessId, user.id); setPendingLocation(null); setLocationMenuOpen(false); }} className="min-h-9 rounded-full bg-emerald-700 px-4 text-xs font-semibold text-white shadow-sm shadow-emerald-900/15 transition hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">Switch location</button></div></div> : null}
+            {pendingLocation ? <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900 dark:bg-emerald-950/30"><p className="text-xs leading-5 text-[#344139] dark:text-emerald-100">Switch active location to <span className="font-bold">{pendingLocation.name}</span>? New activity will use this location. Dashboard and combined reports will still show all locations; detail reports have their own filters.</p><div className="mt-2.5 flex justify-end gap-2"><button type="button" onClick={() => setPendingLocation(null)} className="min-h-9 rounded-full px-4 text-xs font-semibold text-[#58635a] transition hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10">Cancel</button><button type="button" onClick={() => { setActiveLocation(pendingLocation, user.businessId, user.id); setPendingLocation(null); setLocationMenuOpen(false); }} className="min-h-9 rounded-full bg-emerald-700 px-4 text-xs font-semibold text-white shadow-sm shadow-emerald-900/15 transition hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500">Switch location</button></div></div> : null}
           </div>, document.body)}
         </div>
         <nav aria-label="Main navigation" className="dashboard-sidebar-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pb-3">

@@ -102,6 +102,12 @@ html.dark .dashboard-sidebar-scrollbar::-webkit-scrollbar-thumb:hover { backgrou
 @media (prefers-reduced-motion: reduce) {
   .auth-background-video { display: none; }
   .auth-form-backdrop { background: #263b30; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* App-wide dark theme. Light mode remains the default; the account toggle

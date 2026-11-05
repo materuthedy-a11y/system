@@ -169,6 +169,10 @@ export class ExportFilterDto extends PeriodFilterDto {
     'SUPPLIER_ANALYTICS',
     'SALES_BY_CHANNEL',
     'EXPENSE_BREAKDOWN',
+    'TREND_ANALYSIS',
+    'FORECAST',
+    'TRIAL_BALANCE',
+    'FINANCIAL_SUMMARY',
   ])
   reportType: string;
 
@@ -183,6 +187,25 @@ export class ExportFilterDto extends PeriodFilterDto {
   @IsOptional()
   @IsIn(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'])
   groupBy?: AnalyticsGroup;
+
+  @IsOptional()
+  @IsIn(['LOCATION', 'SALESPERSON', 'CUSTOMER_TYPE'])
+  channelBy?: 'LOCATION' | 'SALESPERSON' | 'CUSTOMER_TYPE';
+
+  @IsOptional()
+  @IsIn(['REVENUE', 'EXPENSES', 'PROFIT', 'SALES_QUANTITY', 'CUSTOMER_COUNT'])
+  metric?: 'REVENUE' | 'EXPENSES' | 'PROFIT' | 'SALES_QUANTITY' | 'CUSTOMER_COUNT';
+
+  @IsOptional()
+  @IsIn(['SIMPLE_LINEAR', 'EXPONENTIAL_SMOOTHING', 'MOVING_AVERAGE'])
+  method?: 'SIMPLE_LINEAR' | 'EXPONENTIAL_SMOOTHING' | 'MOVING_AVERAGE';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  periods?: number;
 }
 
 export interface AnalyticsMetric {

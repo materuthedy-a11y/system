@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, MaxLength, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, Min, MaxLength, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUnitDto {
@@ -57,6 +57,10 @@ export class UpdateUnitDto {
   @IsNumber({ allowInfinity: false, allowNaN: false })
   @Min(0.0001)
   conversionFactor?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class UnitResponseDto {

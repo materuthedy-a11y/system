@@ -26,6 +26,7 @@ import {
   type PurchaseReturn,
 } from '@/lib/api/purchases';
 import { notify } from '@/components/ui/AppToaster';
+import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const input =
   'min-h-10 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#829600] focus:ring-2 focus:ring-[#d8f04b]/40';
@@ -630,11 +631,11 @@ export default function PurchaseOrderDetailPage() {
           <h1 className="mt-2 break-all text-2xl font-semibold sm:text-3xl">{po.poNumber}</h1>
           <p className="mt-2 text-sm text-[#73766f]">
             {po.supplierName} Â· {po.locationName} Â· Ordered{' '}
-            {new Date(po.orderDate).toLocaleDateString()}
+            {formatBusinessDate(po.orderDate)}
           </p>
           {po.expectedDeliveryDate && (
             <p className="mt-1 text-sm text-[#73766f]">
-              Expected delivery Â· {new Date(po.expectedDeliveryDate).toLocaleDateString()}
+              Expected delivery Â· {formatBusinessDate(po.expectedDeliveryDate)}
             </p>
           )}
           {po.referenceNumber && (
@@ -974,7 +975,7 @@ export default function PurchaseOrderDetailPage() {
                     )}
                     {g.receivedDate && (
                       <p className="mt-1 text-xs text-[#73766f]">
-                        Received on {new Date(g.receivedDate).toLocaleDateString()}
+                        Received on {formatBusinessDate(g.receivedDate)}
                       </p>
                     )}
                   </div>

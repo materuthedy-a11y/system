@@ -1280,11 +1280,39 @@ export class AnalyticsService {
         break;
       }
       case 'SALES_BY_CHANNEL':
-        report = await this.getSalesByChannel(businessId, common);
+        report = await this.getSalesByChannel(businessId, { ...common, channelBy: filter.channelBy });
         break;
       case 'EXPENSE_BREAKDOWN':
         report = await this.getExpenseBreakdown(businessId, common);
         break;
+      case 'TREND_ANALYSIS':
+        report = await this.analyzeTrends(businessId, {
+          ...common,
+          metric: filter.metric || 'REVENUE',
+          periods: filter.periods || 12,
+        });
+        break;
+      case 'FORECAST':
+        report = await this.forecastMetric(businessId, {
+          metric: filter.metric || 'REVENUE',
+          method: filter.method,
+          periods: filter.periods || 3,
+        });
+        break;
+      case 'TRIAL_BALANCE': {
+        const range = await this.getDateRange(businessId, filter);
+        report = await this.payments.getTrialBalanceReport(businessId, {
+          dateAs: range.endDate.toISOString(),
+        });
+        break;
+      }
+      case 'FINANCIAL_SUMMARY': {
+        const range = await this.getDateRange(businessId, filter);
+        report = await this.payments.getFinancialSummary(businessId, {
+          dateAs: range.endDate.toISOString(),
+        });
+        break;
+      }
       default:
         throw new BadRequestException('Unsupported report type');
     }

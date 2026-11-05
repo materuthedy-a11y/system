@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { getApiError } from '@/lib/api';
 import { purchasesAPI, purchaseMoney, type LocationOption, type PurchaseProductOption, type SupplierOption } from '@/lib/api/purchases';
+import { settingsAPI } from '@/lib/api/settings';
 import { notify } from '@/components/ui/AppToaster';
 import { saveOfflinePurchaseDraft } from '@/lib/pwa/offlinePurchaseDrafts';
 
@@ -29,6 +30,7 @@ export default function NewPurchaseOrderPage() {
   const [fieldErrors,setFieldErrors]=useState<Record<string,string>>({});
   const idempotencyRef=useRef<{signature:string;key:string}|null>(null);
   useEffect(()=>{let active=true; Promise.all([purchasesAPI.suppliers(),purchasesAPI.locations(),purchasesAPI.products()]).then(([s,l,p])=>{if(!active)return;setSuppliers(s.filter(x=>x.isActive));setLocations(l.filter(x=>x.isActive));setProducts(p.filter(x=>x.status==='ACTIVE'));if(l.length===1)setLocationId(l[0].id)}).catch(e=>{if(active)setError(getApiError(e,'Could not load suppliers, locations or products. Check your account permissions.'))}).finally(()=>{if(active)setLoading(false)});return()=>{active=false}},[]);
+  useEffect(()=>{let active=true; settingsAPI.getGeneral().then((settings)=>{if(active&&settings.defaultLocationId&&!activeLocation)setLocationId(settings.defaultLocationId)}).catch(()=>{});return()=>{active=false}},[activeLocation]);
   useEffect(()=>{if(activeLocation&&locations.some(location=>location.id===activeLocation.id))setLocationId(activeLocation.id)},[activeLocation,locations]);
   function chooseLocation(id:string){setLocationId(id);const selected=locations.find(location=>location.id===id);if(selected&&user?.businessId&&user.id)setActiveLocation(selected,user.businessId,user.id)}
   const subtotal=roundMoney(lines.reduce((sum,line)=>{const q=Number(line.quantity)||0;const price=Number(line.unitPrice)||0;const discount=Number(line.discount)||0;return sum+roundMoney(Math.max(0,q*price-discount))},0)); const taxValue=taxMode==='amount'?(Number(tax)||0):roundMoney(subtotal*(Number(tax)||0)/100); const total=roundMoney(subtotal+(Number(shipping)||0)+taxValue);

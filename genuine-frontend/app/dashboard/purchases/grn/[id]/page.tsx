@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
 import { purchasesAPI, type GoodsReceivedNote } from '@/lib/api/purchases';
 import { notify } from '@/components/ui/AppToaster';
+import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const statusStyles: Record<GoodsReceivedNote['status'], string> = {
   RECEIVED: 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white',
@@ -16,9 +17,7 @@ const statusStyles: Record<GoodsReceivedNote['status'], string> = {
 };
 
 const formatDate = (value?: string) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+  return formatBusinessDate(value);
 };
 
 export default function GoodsReceivedNoteDetailPage() {

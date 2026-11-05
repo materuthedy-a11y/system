@@ -3,6 +3,7 @@ import './globals.css';
 import { AppToaster } from '@/components/ui/AppToaster';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { PWAExperience } from '@/components/pwa/PWAExperience';
+import { PwaThemeColor } from '@/components/pwa/PwaThemeColor';
 
 export const metadata: Metadata = {
   title: 'Mizania Business Suite',
@@ -46,12 +47,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="referrer" content="no-referrer" />
-        <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#080908" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#f3efe6" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Mizania" />
       </head>
-      <body><ThemeProvider>{children}<PWAExperience /><AppToaster /></ThemeProvider></body>
+      <body><ThemeProvider>{children}<PwaThemeColor /><PWAExperience /><AppToaster /></ThemeProvider></body>
     </html>
   );
 }

@@ -23,6 +23,7 @@ import type {
   LowStockRow,
 } from '@/lib/api/dashboard';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const panel = 'min-w-0 max-w-full rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm shadow-black/[0.02] dark:border-[#343b33] dark:bg-[#191d19] sm:p-6';
@@ -67,12 +68,12 @@ function IconForMetric({ name }: { name: string }) {
   return <Icon size={18} strokeWidth={1.8} />;
 }
 
-function formatMetric(metric: DashboardMetric, currency: string) {
-  if (metric.unit === '%') return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(metric.value)}%`;
+function formatMetric(metric: DashboardMetric, currency: string, value = metric.value) {
+  if (metric.unit === '%') return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)}%`;
   if (metric.unit === 'Invoices' || metric.unit === 'Units' || metric.unit === 'Times') {
-    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(metric.value)} ${metric.unit.toLowerCase()}`;
+    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value)} ${metric.unit.toLowerCase()}`;
   }
-  return formatMoney(metric.value, currency);
+  return formatMoney(value, currency);
 }
 
 export function MetricCard({
@@ -104,7 +105,7 @@ export function MetricCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-[#777b73]">{metric.label || metric.name}</p>
-          <p className={`mt-3 text-xl font-semibold tracking-tight sm:text-2xl ${valueColor}`}>{formatMetric(metric, currency)}</p>
+          <p className={`mt-3 text-xl font-semibold tracking-tight tabular-nums sm:text-2xl ${valueColor}`}><AnimatedNumber value={metric.value} format={(value) => formatMetric(metric, currency, value)} /></p>
         </div>
         <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tone}`}><IconForMetric name={metric.name} /></span>
       </div>
@@ -179,12 +180,12 @@ export function RevenueExpenseChart({ data, currency }: { data: DashboardExecuti
                 const y = padTop + (step / 3) * (chartBottom - padTop);
                 return <line key={step} x1={padX} x2={width - padX} y1={y} y2={y} stroke="#e9ecdf" strokeDasharray="4 6" />;
               })}
-              <path d={areaPath(expensePoints)} fill="url(#expenses-area-fill)" />
-              <path d={areaPath(revenuePoints)} fill="url(#revenue-area-fill)" />
-              <path d={linePath(expensePoints)} fill="none" stroke="#94b800" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              <path d={linePath(revenuePoints)} fill="none" stroke="#167346" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-              {revenuePoints.map((point, index) => <circle key={`revenue-point-${index}`} cx={point.x} cy={point.y} r={labels.length <= 10 ? 4 : 2.5} fill="white" stroke="#167346" strokeWidth="2"><title>{`${formatPeriod(point.label)} · Revenue ${formatMoney(point.value, currency)} · Expenses ${formatMoney(expensePoints[index]?.value || 0, currency)}`}</title></circle>)}
-              {expensePoints.map((point, index) => <circle key={`expense-point-${index}`} cx={point.x} cy={point.y} r={labels.length <= 10 ? 3.5 : 2} fill="#c9e600" stroke="#657d00" strokeWidth="1.5"><title>{`${formatPeriod(point.label)} · Expenses ${formatMoney(point.value, currency)} · Revenue ${formatMoney(revenuePoints[index]?.value || 0, currency)}`}</title></circle>)}
+              <path key={`expense-area-${linePath(expensePoints)}`} className="chart-area-reveal" d={areaPath(expensePoints)} fill="url(#expenses-area-fill)" />
+              <path key={`revenue-area-${linePath(revenuePoints)}`} className="chart-area-reveal" d={areaPath(revenuePoints)} fill="url(#revenue-area-fill)" />
+              <path key={`expense-line-${linePath(expensePoints)}`} pathLength={1} className="chart-line-draw" d={linePath(expensePoints)} fill="none" stroke="#94b800" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              <path key={`revenue-line-${linePath(revenuePoints)}`} pathLength={1} className="chart-line-draw" d={linePath(revenuePoints)} fill="none" stroke="#167346" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" style={{ animationDelay: '140ms' }} />
+              {revenuePoints.map((point, index) => <circle key={`revenue-point-${point.label}-${point.value}`} className="chart-point-appear" style={{ animationDelay: `${350 + index * 55}ms` }} cx={point.x} cy={point.y} r={labels.length <= 10 ? 4 : 2.5} fill="white" stroke="#167346" strokeWidth="2"><title>{`${formatPeriod(point.label)} · Revenue ${formatMoney(point.value, currency)} · Expenses ${formatMoney(expensePoints[index]?.value || 0, currency)}`}</title></circle>)}
+              {expensePoints.map((point, index) => <circle key={`expense-point-${point.label}-${point.value}`} className="chart-point-appear" style={{ animationDelay: `${450 + index * 55}ms` }} cx={point.x} cy={point.y} r={labels.length <= 10 ? 3.5 : 2} fill="#c9e600" stroke="#657d00" strokeWidth="1.5"><title>{`${formatPeriod(point.label)} · Expenses ${formatMoney(point.value, currency)} · Revenue ${formatMoney(revenuePoints[index]?.value || 0, currency)}`}</title></circle>)}
               {visibleLabelIndexes.map((index) => <text key={`period-label-${index}`} x={revenuePoints[index]?.x || padX} y={height - 8} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} fill="#747a68" fontSize="11">{formatPeriod(labels[index])}</text>)}
             </svg>
           <ul className="sr-only" aria-label="Revenue and expenses by period">
@@ -227,8 +228,8 @@ export function SalesTrendChart({ data, currency }: { data: DashboardExecutiveDa
               const y = padTop + (step / 3) * (height - padTop - padBottom);
               return <line key={step} x1={padX} x2={width - padX} y1={y} y2={y} stroke="#eceee9" strokeDasharray="4 5" />;
             })}
-            <path d={path} fill="none" stroke="#167346" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            {points.map((point, index) => <g key={`${point.label}-${index}`}><circle cx={point.x} cy={point.y} r="5" fill="#fff" stroke="#167346" strokeWidth="3"><title>{`${formatPeriod(point.label)}: ${formatMoney(point.value, currency)}`}</title></circle>{(index === 0 || index === points.length - 1 || points.length <= 7) ? <text x={point.x} y={height - 5} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fill="#858880" fontSize="11">{formatPeriod(point.label)}</text> : null}</g>)}
+            <path key={path} pathLength={1} className="chart-line-draw" d={path} fill="none" stroke="#167346" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((point, index) => <g key={`${point.label}-${point.value}-${index}`}><circle className="chart-point-appear" style={{ animationDelay: `${260 + index * 65}ms` }} cx={point.x} cy={point.y} r="5" fill="#fff" stroke="#167346" strokeWidth="3"><title>{`${formatPeriod(point.label)}: ${formatMoney(point.value, currency)}`}</title></circle>{(index === 0 || index === points.length - 1 || points.length <= 7) ? <text x={point.x} y={height - 5} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} fill="#858880" fontSize="11">{formatPeriod(point.label)}</text> : null}</g>)}
           </svg>
           <ul className="sr-only" aria-label="Revenue by period">{points.map((point, index) => <li key={`${point.label}-trend-${index}`}>{formatPeriod(point.label)}: {formatMoney(point.value, currency)}.</li>)}</ul>
         </div>
@@ -248,7 +249,7 @@ export function ExpenseBreakdown({ rows, currency, unavailable = false }: { rows
       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Spending</p><h2 id="expense-breakdown-title" className="mt-1 text-base font-semibold text-[#292d27]">Expenses by category</h2></div><span className="text-sm font-semibold text-[#30342e]">{formatMoney(total, currency)}</span></div>
       {!unavailable && rows.length === 0 ? <div className="mt-5"><EmptyState compact title="No approved or paid expenses in this period." /></div> : null}
       {total <= 0 && !unavailable && rows.length > 0 ? <div className="mt-5"><EmptyState compact title="No expense amounts to chart for this period." /></div> : null}
-      {total > 0 && rows.length > 0 ? <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center"><svg viewBox="0 0 120 120" role="img" aria-label={`Expense breakdown totaling ${formatMoney(total, currency)}`} className="mx-auto h-32 w-32 shrink-0 sm:mx-0"><g transform="rotate(-90 60 60)">{rows.slice(0, 6).map((row, index) => { const length = (row.amount / total) * circumference; const segment = <circle key={row.categoryId} cx="60" cy="60" r="43" fill="none" stroke={colors[index % colors.length]} strokeWidth="16" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset}><title>{`${row.category}: ${formatMoney(row.amount, currency)} (${row.percentage.toFixed(1)}%)`}</title></circle>; offset += length; return segment; })}</g><circle cx="60" cy="60" r="31" fill="white" /><text x="60" y="57" textAnchor="middle" fill="#858880" fontSize="8">TOTAL</text><text x="60" y="69" textAnchor="middle" fill="#30342e" fontSize="9" fontWeight="600">{new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 2 }).format(total)}</text></svg><ul className="sr-only" aria-label="Expense amounts by category">{rows.slice(0, 6).map((row) => <li key={row.categoryId}>{row.category}: {formatMoney(row.amount, currency)}, {row.percentage.toFixed(1)} percent.</li>)}</ul><div className="min-w-0 flex-1 space-y-3">{rows.slice(0, 6).map((row, index) => <div key={row.categoryId}><div className="mb-1 flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 truncate text-[#4d514a]"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />{row.category}</span><span className="shrink-0 font-medium text-[#30342e]">{row.percentage.toFixed(1)}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, row.percentage))}%`, backgroundColor: colors[index % colors.length] }} /></div></div>)}</div></div> : null}
+      {total > 0 && rows.length > 0 ? <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center"><svg viewBox="0 0 120 120" role="img" aria-label={`Expense breakdown totaling ${formatMoney(total, currency)}`} className="mx-auto h-32 w-32 shrink-0 sm:mx-0"><g key={rows.slice(0, 6).map((row) => `${row.categoryId}:${row.amount}`).join('|')} className="chart-donut-reveal" transform="rotate(-90 60 60)">{rows.slice(0, 6).map((row, index) => { const length = (row.amount / total) * circumference; const segment = <circle key={row.categoryId} cx="60" cy="60" r="43" fill="none" stroke={colors[index % colors.length]} strokeWidth="16" strokeDasharray={`${length} ${circumference - length}`} strokeDashoffset={-offset}><title>{`${row.category}: ${formatMoney(row.amount, currency)} (${row.percentage.toFixed(1)}%)`}</title></circle>; offset += length; return segment; })}</g><circle cx="60" cy="60" r="31" fill="white" /><text x="60" y="57" textAnchor="middle" fill="#858880" fontSize="8">TOTAL</text><text x="60" y="69" textAnchor="middle" fill="#30342e" fontSize="9" fontWeight="600">{new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 2 }).format(total)}</text></svg><ul className="sr-only" aria-label="Expense amounts by category">{rows.slice(0, 6).map((row) => <li key={row.categoryId}>{row.category}: {formatMoney(row.amount, currency)}, {row.percentage.toFixed(1)} percent.</li>)}</ul><div className="min-w-0 flex-1 space-y-3">{rows.slice(0, 6).map((row, index) => <div key={row.categoryId}><div className="mb-1 flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 truncate text-[#4d514a]"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />{row.category}</span><span className="shrink-0 font-medium text-[#30342e]">{row.percentage.toFixed(1)}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="chart-progress-fill h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, row.percentage))}%`, backgroundColor: colors[index % colors.length], animationDelay: `${index * 90}ms` }} /></div></div>)}</div></div> : null}
       {unavailable ? <div className="mt-5"><EmptyPanel>Expense categories could not be loaded. Refresh to try again.</EmptyPanel></div> : null}
     </section>
   );
@@ -260,7 +261,7 @@ export function CashFlowPanel({ data, currency }: { data: DashboardExecutiveData
   return (
     <section className={spendingPanel} aria-labelledby="cash-flow-title">
       <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Liquidity</p><h2 id="cash-flow-title" className="mt-1 text-base font-semibold text-[#292d27]">Cash flow</h2></div>
-      {flow.labels.length === 0 || max === 0 ? <div className="mt-5"><EmptyState compact title="No payment activity in this period yet." /></div> : <div className="mt-5 space-y-3">{flow.labels.map((label, index) => <div key={`${label}-${index}`}><div className="mb-1 flex items-center justify-between gap-3 text-[11px]"><span className="text-[#777b73]">{formatPeriod(label)}</span><span className="font-medium text-[#40443d]">Net {formatMoney(flow.netFlow[index] || 0, currency)}</span></div><div className="grid grid-cols-2 gap-2"><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="h-full rounded-full bg-[#315c45]" style={{ width: `${Math.max(0, ((flow.inflows[index] || 0) / max) * 100)}%` }} /></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="h-full rounded-full bg-[#c56b5f]" style={{ width: `${Math.max(0, ((flow.outflows[index] || 0) / max) * 100)}%` }} /></div></div></div>)}</div>}
+      {flow.labels.length === 0 || max === 0 ? <div className="mt-5"><EmptyState compact title="No payment activity in this period yet." /></div> : <div className="mt-5 space-y-3">{flow.labels.map((label, index) => <div key={`${label}-${index}`}><div className="mb-1 flex items-center justify-between gap-3 text-[11px]"><span className="text-[#777b73]">{formatPeriod(label)}</span><span className="font-medium text-[#40443d]">Net {formatMoney(flow.netFlow[index] || 0, currency)}</span></div><div className="grid grid-cols-2 gap-2"><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="chart-progress-fill h-full rounded-full bg-[#315c45]" style={{ width: `${Math.max(0, ((flow.inflows[index] || 0) / max) * 100)}%`, animationDelay: `${index * 75}ms` }} /></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="chart-progress-fill h-full rounded-full bg-[#c56b5f]" style={{ width: `${Math.max(0, ((flow.outflows[index] || 0) / max) * 100)}%`, animationDelay: `${index * 75 + 45}ms` }} /></div></div></div>)}</div>}
       <div className="mt-4 flex gap-4 text-[10px] text-[#858880]"><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#315c45]" />Inflows</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[#c56b5f]" />Outflows</span></div>
     </section>
   );
@@ -302,7 +303,7 @@ export function TopProducts({ data, currency }: { data: DashboardExecutiveData; 
   return (
     <section className={panel} aria-labelledby="top-products-title">
       <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Sales mix</p><h2 id="top-products-title" className="mt-1 text-base font-semibold text-[#292d27]">Top products</h2></div>
-      {rows.length === 0 ? <div className="mt-5"><EmptyState compact title="No issued sales for this period yet." /></div> : <div className="mt-4 space-y-4">{rows.map((row, index) => <div key={`${row.name}:${index}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-medium text-[#4b5048]">{index + 1}. {row.name}</span><span className="shrink-0 text-[#30342e]">{formatMoney(row.revenue, currency)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="h-full rounded-full bg-[#315c45]" style={{ width: `${max ? Math.max(3, (row.revenue / max) * 100) : 0}%` }} /></div><p className="mt-1 text-[10px] text-[#9a9d95]">{row.quantity} units sold</p></div>)}</div>}
+      {rows.length === 0 ? <div className="mt-5"><EmptyState compact title="No issued sales for this period yet." /></div> : <div className="mt-4 space-y-4">{rows.map((row, index) => <div key={`${row.name}:${index}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="truncate font-medium text-[#4b5048]">{index + 1}. {row.name}</span><span className="shrink-0 text-[#30342e]">{formatMoney(row.revenue, currency)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-[#f0f1ed]"><div className="chart-progress-fill h-full rounded-full bg-[#315c45]" style={{ width: `${max ? Math.max(3, (row.revenue / max) * 100) : 0}%`, animationDelay: `${index * 90}ms` }} /></div><p className="mt-1 text-[10px] text-[#9a9d95]">{row.quantity} units sold</p></div>)}</div>}
     </section>
   );
 }

@@ -32,8 +32,8 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [x] Change invoice prefix to `PH25-INV-`; save and refresh; user confirmed it remained saved (5 Nov 2026).
 - [x] Invoice prefix integration: after fixing doubled separators, a saved draft generated `PH25-INV-202611-00001` (user confirmed, 5 Nov 2026).
 - [x] Change the purchase-order prefix to `PH25-PO-`; saved a draft and confirmed `PH25-PO-202611-00001` (user confirmed, 5 Nov 2026).
-- [ ] Change the GRN prefix; receive a test order and confirm the GRN number uses that prefix.
-- [ ] Change the payment-reference prefix; record a test payment and confirm the generated reference uses that prefix.
+- [x] Change the GRN prefix to `PH25-GRN-`; receive and accept 1 unit for `PH25-PO-202611-00001`; confirmed GRN `PH25-GRN-202611-00001`, status `ACCEPTED`, PO `FULLY RECEIVED`, and UI confirmed stock updated (5 Nov 2026).
+- [x] Payment reference prefix: recorded supplier payment for TZS 1,200; Dashboard Recent activity shows generated payment number `PAY-202611-93CE34B0` (6 Nov 2026), confirming the `PAY-` prefix is applied.
 - [ ] Change currency, tax percentage, costing method, financial-year setting and low-stock threshold; save and verify the stored values.
 - [ ] Confirm a new invoice and purchase order use the configured default tax when no override is supplied; existing documents retain their original totals.
 - [ ] Change date/time format, timezone, and week-start; confirm dates use the selected format/timezone on sales, customer, purchase, product, inventory, dashboard, and support screens. Confirm the week period uses the selected start day.

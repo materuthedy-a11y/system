@@ -9,6 +9,7 @@ import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type D
 import { getApiError } from '@/lib/api';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, RecentActivity, RevenueExpenseChart, SalesTrendChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
+import { notify } from '@/components/ui/AppToaster';
 
 type PeriodKey = 'week' | 'month' | 'quarter' | 'year';
 const EMPTY_PERMISSIONS: string[] = [];
@@ -68,6 +69,7 @@ export default function DashboardPage() {
   const [definitionsLanguage, setDefinitionsLanguage] = useState<'sw' | 'en'>('sw');
   const [businessSettingsVersion, setBusinessSettingsVersion] = useState(0);
   const [asOfTime, setAsOfTime] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [executive, setExecutive] = useState<DashboardExecutiveData | null>(null);
   const [expenseRows, setExpenseRows] = useState<ExpenseBreakdownRow[]>([]);
   const [lowStockRows, setLowStockRows] = useState<LowStockRow[]>([]);
@@ -91,6 +93,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasData = useRef(false);
+  const manualRefreshPending = useRef(false);
   const filter = useMemo(() => periodFilter(period, asOfTime), [period, asOfTime, businessSettingsVersion]);
 
   useEffect(() => {
@@ -141,8 +144,23 @@ export default function DashboardPage() {
         setTransactions(activityResult.status === 'fulfilled' ? activityResult.value.transactions : []);
         setUnavailableActivitySources(activityResult.status === 'fulfilled' ? activityResult.value.unavailableSources : ['recent activity']);
         setOptionalDataWarning(expenseFailed || stockFailed || activityFailed || (activityResult.status === 'fulfilled' && activityResult.value.unavailableSources.length > 0));
+        if (manualRefreshPending.current) {
+          manualRefreshPending.current = false;
+          if (expenseFailed || stockFailed || activityFailed || (activityResult.status === 'fulfilled' && activityResult.value.unavailableSources.length > 0)) {
+            notify.warning('Dashboard summary updated, but some panels could not refresh.');
+          } else {
+            notify.success('Dashboard updated.');
+          }
+        }
       } catch (cause) {
-        if (active) setError(getApiError(cause, 'We could not load the dashboard. Try again.'));
+        if (active) {
+          const message = getApiError(cause, 'We could not load the dashboard. Try again.');
+          setError(message);
+          if (manualRefreshPending.current) {
+            manualRefreshPending.current = false;
+            notify.error(message);
+          }
+        }
       } finally {
         if (active) {
           setIsLoading(false);
@@ -153,7 +171,7 @@ export default function DashboardPage() {
 
     void load();
     return () => { active = false; };
-  }, [canViewReports, canViewInventory, filter, permissions]);
+  }, [canViewReports, canViewInventory, filter, permissions, refreshVersion]);
 
   const availableMetrics = executive?.summary;
   const costingMethod = executive?.definitions.inventoryValue.match(/using\s+(.+?)(?:\.|$)/i)?.[1]?.trim().toUpperCase() || '';
@@ -190,7 +208,7 @@ export default function DashboardPage() {
           <select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">
             {periods.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
-          <button type="button" onClick={() => setAsOfTime(Date.now())} disabled={isRefreshing} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#20211f] px-3.5 text-sm font-semibold text-white transition hover:bg-[#245543] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Refresh dashboard">
+          <button type="button" onClick={() => { manualRefreshPending.current = true; setIsRefreshing(true); setAsOfTime(Date.now()); setRefreshVersion((version) => version + 1); }} disabled={isRefreshing} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#20211f] px-3.5 text-sm font-semibold text-white transition hover:bg-[#245543] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Refresh dashboard">
             <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> <span className="hidden sm:inline">{isRefreshing ? 'Updating' : 'Refresh'}</span>
           </button>
         </div>

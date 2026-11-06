@@ -22,6 +22,7 @@ import {
   purchaseMoney,
   type GoodsReceivedNote,
   type PaymentMethodOption,
+  type PurchasePayment,
   type PurchaseOrder,
   type PurchaseReturn,
 } from '@/lib/api/purchases';
@@ -74,6 +75,8 @@ export default function PurchaseOrderDetailPage() {
   const [grns, setGrns] = useState<GoodsReceivedNote[]>([]);
   const [returns, setReturns] = useState<PurchaseReturn[]>([]);
   const [methods, setMethods] = useState<PaymentMethodOption[]>([]);
+  const [payments, setPayments] = useState<PurchasePayment[]>([]);
+  const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
   const [receivedDate, setReceivedDate] = useState('');
   const [vehicleRegistration, setVehicleRegistration] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -132,9 +135,20 @@ export default function PurchaseOrderDetailPage() {
         purchasesAPI.grns(id),
         purchasesAPI.returns(id),
       ]);
+      let recordedPayments: PurchasePayment[] = [];
+      let paymentHistoryUnavailable = false;
+      if (permissions.includes('payments.view')) {
+        try {
+          recordedPayments = await purchasesAPI.payments(id);
+        } catch {
+          paymentHistoryUnavailable = true;
+        }
+      }
       setPo(order);
       setGrns(notes);
       setReturns(ret);
+      setPayments(recordedPayments);
+      setPaymentsUnavailable(paymentHistoryUnavailable);
       setReceipt(
         order.items
           .filter((i) => i.outstandingQty > 0)
@@ -1372,6 +1386,38 @@ export default function PurchaseOrderDetailPage() {
                   ? 'This order is fully paid.'
                   : 'Your account cannot record supplier payments.'}
               </p>
+            )}
+          </section>
+          <section className="space-y-3 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6" aria-labelledby="supplier-payment-history-heading">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Wallet className="text-[#738900]" size={19} />
+                <h2 id="supplier-payment-history-heading" className="text-lg font-semibold">Payment history</h2>
+              </div>
+              {permissions.includes('payments.view') ? <span className="text-xs text-[#73766f]">{payments.length} {payments.length === 1 ? 'payment' : 'payments'}</span> : null}
+            </div>
+            {!permissions.includes('payments.view') ? (
+              <p className="text-sm text-[#73766f]">Your account does not have permission to view payment details.</p>
+            ) : paymentsUnavailable ? (
+              <p role="status" className="rounded-xl border border-[#efcfcb] bg-[#fff5f3] px-3 py-2 text-sm text-[#9d443e]">Payment history could not be loaded. Use Refresh to try again.</p>
+            ) : payments.length === 0 ? (
+              <EmptyState compact title="No payments have been recorded for this purchase order." />
+            ) : (
+              <ul className="divide-y divide-[#eceee8]">
+                {payments.map((payment) => (
+                  <li key={payment.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-all text-sm font-semibold text-[#30342e]">{payment.paymentNumber}</p>
+                        <p className="mt-1 text-xs text-[#73766f]">{formatBusinessDate(payment.paymentDate)} · {payment.paymentMethodName} · {payment.status.replace(/_/g, ' ')}</p>
+                      </div>
+                      <p className="shrink-0 text-right text-sm font-semibold text-[#30342e]">{purchaseMoney(Number(payment.amount))}</p>
+                    </div>
+                    {payment.reference ? <p className="mt-2 break-words text-xs text-[#62675f]">Transaction reference: <span className="font-medium text-[#30342e]">{payment.reference}</span></p> : null}
+                    {payment.notes ? <p className="mt-1 break-words text-xs text-[#73766f]">{payment.notes}</p> : null}
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
           <section className="space-y-3 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6">

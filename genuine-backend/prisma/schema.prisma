@@ -110,6 +110,7 @@ model User {
   paidExpenses           Expense[]               @relation("ExpensePaidBy")
   rejectedExpenses       Expense[]               @relation("ExpenseRejectedBy")
   inAppNotifications     InAppNotification[]
+  notificationPreferences NotificationPreference[]
   notificationRecipients NotificationRecipient[]
   feedbackSubmissions    FeedbackSubmission[]    @relation("FeedbackSubmittedBy")
   feedbackMessages       FeedbackMessage[]       @relation("FeedbackMessageSender")
@@ -1354,12 +1355,27 @@ model InAppNotification {
   userId         String
   isRead         Boolean      @default(false)
   readAt         DateTime?
+  isArchived     Boolean      @default(false)
+  archivedAt     DateTime?
   createdAt      DateTime     @default(now())
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, userId])
   @@index([userId, isRead, createdAt])
+}
+
+model NotificationPreference {
+  id           String   @id @default(cuid())
+  userId       String
+  eventType    String
+  inAppEnabled Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@index([userId])
 }
 
 model FeedbackSubmission {

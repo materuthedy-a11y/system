@@ -138,16 +138,18 @@ export class SupplierService {
     }
 
     // Calculate financials
-    const [totalPurchased, totalPaid, totalReturned] = await Promise.all([
+    const [totalPurchased, totalPaid, totalReturned, lastPurchaseDate] = await Promise.all([
       this._calculateSupplierPurchases(businessId, supplierId),
       this._calculateSupplierPayments(businessId, supplierId),
       this._calculateSupplierReturns(businessId, supplierId),
+      this._getLastPurchaseDate(businessId, supplierId),
     ]);
 
     return this._formatSupplierResponse(supplier, supplier.contacts || [], supplier.address, {
       totalPurchased,
       totalPaid,
       totalReturned,
+      lastPurchaseDate,
     });
   }
 
@@ -159,8 +161,8 @@ export class SupplierService {
     businessId: string,
     filter: SupplierFilterDto,
   ): Promise<{ data: SupplierResponseDto[]; total: number; page: number; limit: number }> {
-    const page = Number(filter.page) || 1;
-    const limit = Number(filter.limit) || 20;
+    const page = Math.max(1, Number(filter.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(filter.limit) || 20));
     const skip = (page - 1) * limit;
 
     // Build filter conditions
@@ -199,7 +201,7 @@ export class SupplierService {
           // Will sort in memory
           break;
         case 'lastPurchase':
-          orderBy = { createdAt: direction };
+          // Sorted after the aggregate's actual last purchase date is loaded.
           break;
         case 'createdAt':
           orderBy = { createdAt: direction };
@@ -208,7 +210,8 @@ export class SupplierService {
     }
 
     // Query suppliers
-    const [suppliers, total] = await Promise.all([
+    const fullSort = filter.status === 'OVERDUE' || filter.sortBy === 'outstanding' || filter.sortBy === 'lastPurchase';
+    const [suppliers, matchedCount] = await Promise.all([
       this.prisma.supplier.findMany({
         where,
         include: {
@@ -216,8 +219,7 @@ export class SupplierService {
           address: true,
         },
         orderBy,
-        skip,
-        take: limit,
+        ...(fullSort ? {} : { skip, take: limit }),
       }),
       this.prisma.supplier.count({ where }),
     ]);
@@ -225,10 +227,11 @@ export class SupplierService {
     // Get financials for all suppliers
     const suppliersWithFinancials = await Promise.all(
       suppliers.map(async (supplier) => {
-        const [totalPurchased, totalPaid, totalReturned] = await Promise.all([
+        const [totalPurchased, totalPaid, totalReturned, lastPurchaseDate] = await Promise.all([
           this._calculateSupplierPurchases(businessId, supplier.id),
           this._calculateSupplierPayments(businessId, supplier.id),
           this._calculateSupplierReturns(businessId, supplier.id),
+          this._getLastPurchaseDate(businessId, supplier.id),
         ]);
 
         return {
@@ -236,6 +239,7 @@ export class SupplierService {
           totalPurchased,
           totalPaid,
           totalReturned,
+          lastPurchaseDate,
         };
       }),
     );
@@ -250,6 +254,7 @@ export class SupplierService {
           totalPurchased: item.totalPurchased,
           totalPaid: item.totalPaid,
           totalReturned: item.totalReturned,
+          lastPurchaseDate: item.lastPurchaseDate,
         },
       ),
     );
@@ -266,6 +271,18 @@ export class SupplierService {
         return (a.outstandingBalance - b.outstandingBalance) * direction;
       });
     }
+
+    if (filter.sortBy === 'lastPurchase') {
+      const direction = filter.sortOrder === 'asc' ? 1 : -1;
+      results.sort((a, b) => {
+        const left = a.lastPurchaseDate ? new Date(a.lastPurchaseDate).getTime() : 0;
+        const right = b.lastPurchaseDate ? new Date(b.lastPurchaseDate).getTime() : 0;
+        return (left - right) * direction;
+      });
+    }
+
+    const total = fullSort ? results.length : matchedCount;
+    if (fullSort) results = results.slice(skip, skip + limit);
 
     return {
       data: results,
@@ -302,77 +319,72 @@ export class SupplierService {
       throw new NotFoundException('Supplier not found');
     }
 
-    // Update supplier
-    await this.prisma.supplier.update({
-      where: { id: supplierId },
-      data: {
-        ...(dto.name && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.email && { email: dto.email }),
-        ...(dto.phone && { phone: dto.phone }),
-        ...(dto.secondaryPhone !== undefined && { secondaryPhone: dto.secondaryPhone }),
-        ...(dto.bankName !== undefined && { bankName: dto.bankName }),
-        ...(dto.bankAccountNumber !== undefined && { bankAccountNumber: dto.bankAccountNumber }),
-        ...(dto.bankSwiftCode !== undefined && { bankSwiftCode: dto.bankSwiftCode }),
-        ...(dto.taxId !== undefined && { taxId: dto.taxId }),
-        ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
-        ...(dto.paymentTerms && { paymentTerms: dto.paymentTerms }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      },
-    });
-
-    // Update contacts if provided
-    if (dto.contacts && dto.contacts.length > 0) {
-      // Delete existing contacts
-      await this.prisma.supplierContact.deleteMany({
-        where: { supplierId },
+    // Supplier and child records must update atomically so a failed contact/address
+    // write cannot leave the account half-saved.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.supplier.update({
+        where: { id: supplierId },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.email !== undefined && { email: dto.email }),
+          ...(dto.phone !== undefined && { phone: dto.phone }),
+          ...(dto.secondaryPhone !== undefined && { secondaryPhone: dto.secondaryPhone }),
+          ...(dto.bankName !== undefined && { bankName: dto.bankName }),
+          ...(dto.bankAccountNumber !== undefined && { bankAccountNumber: dto.bankAccountNumber }),
+          ...(dto.bankSwiftCode !== undefined && { bankSwiftCode: dto.bankSwiftCode }),
+          ...(dto.taxId !== undefined && { taxId: dto.taxId }),
+          ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
+          ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        },
       });
 
-      // Create new contacts
-      for (let i = 0; i < dto.contacts.length; i++) {
-        const contact = dto.contacts[i];
-        await this.prisma.supplierContact.create({
-          data: {
-            id: uuid(),
-            supplierId,
-            firstName: contact.firstName || supplier.contacts[0]?.firstName || '',
-            lastName: contact.lastName || supplier.contacts[0]?.lastName || '',
-            email: contact.email || supplier.contacts[0]?.email || '',
-            phone: contact.phone || supplier.contacts[0]?.phone || '',
-            position: contact.position,
-            isPrimary: i === 0,
-          },
-        });
+      if (dto.contacts !== undefined) {
+        await tx.supplierContact.deleteMany({ where: { supplierId } });
+        for (let i = 0; i < dto.contacts.length; i++) {
+          const contact = dto.contacts[i];
+          await tx.supplierContact.create({
+            data: {
+              id: uuid(),
+              supplierId,
+              firstName: contact.firstName ?? supplier.contacts[0]?.firstName ?? '',
+              lastName: contact.lastName ?? supplier.contacts[0]?.lastName ?? '',
+              email: contact.email ?? supplier.contacts[0]?.email ?? '',
+              phone: contact.phone ?? supplier.contacts[0]?.phone ?? '',
+              position: contact.position,
+              isPrimary: i === 0,
+            },
+          });
+        }
       }
-    }
 
-    // Update address if provided
-    if (dto.address) {
-      if (supplier.address) {
-        await this.prisma.supplierAddress.update({
-          where: { id: supplier.address.id },
-          data: {
-            ...(dto.address.street && { street: dto.address.street }),
-            ...(dto.address.city && { city: dto.address.city }),
-            ...(dto.address.region && { region: dto.address.region }),
-            ...(dto.address.postalCode && { postalCode: dto.address.postalCode }),
-            ...(dto.address.country !== undefined && { country: dto.address.country }),
-          },
-        });
-      } else {
-        await this.prisma.supplierAddress.create({
-          data: {
-            id: uuid(),
-            supplierId,
-            street: dto.address.street,
-            city: dto.address.city,
-            region: dto.address.region,
-            postalCode: dto.address.postalCode,
-            country: dto.address.country,
-          },
-        });
+      if (dto.address !== undefined) {
+        if (dto.address === null) {
+          await tx.supplierAddress.deleteMany({ where: { supplierId } });
+        } else if (supplier.address) {
+          await tx.supplierAddress.update({
+            where: { id: supplier.address.id },
+            data: {
+              ...(dto.address.street !== undefined && { street: dto.address.street }),
+              ...(dto.address.city !== undefined && { city: dto.address.city }),
+              ...(dto.address.region !== undefined && { region: dto.address.region }),
+              ...(dto.address.postalCode !== undefined && { postalCode: dto.address.postalCode }),
+              ...(dto.address.country !== undefined && { country: dto.address.country }),
+            },
+          });
+        } else {
+          await tx.supplierAddress.create({
+            data: {
+              id: uuid(), supplierId,
+              street: dto.address.street || '', city: dto.address.city || '',
+              region: dto.address.region || '', postalCode: dto.address.postalCode || '',
+              country: dto.address.country,
+            },
+          });
+        }
       }
-    }
+    });
 
     this.logger.log(`[SUPPLIERS] Supplier updated: ${supplierId}`);
 
@@ -399,12 +411,16 @@ export class SupplierService {
         throw new NotFoundException('Supplier not found');
       }
 
-      const poCount = await tx.purchaseOrder.count({
-        where: { supplierId, businessId },
-      });
+      const [poCount, paymentCount, returnCount] = await Promise.all([
+        tx.purchaseOrder.count({ where: { supplierId, businessId } }),
+        tx.payment.count({ where: { supplierId, businessId } }),
+        tx.purchaseReturn.count({ where: { supplierId, businessId } }),
+      ]);
 
-      if (poCount > 0) {
-        throw new BadRequestException('Cannot delete supplier with purchase orders');
+      if (poCount > 0 || paymentCount > 0 || returnCount > 0 || Number(supplier.openingBalance) !== 0) {
+        throw new BadRequestException(
+          'Cannot delete a supplier with account history or an opening balance. Deactivate the supplier to preserve its records.',
+        );
       }
 
       await tx.supplierContact.deleteMany({ where: { supplierId } });
@@ -638,7 +654,7 @@ export class SupplierService {
     supplier: any,
     contacts: any[],
     address: any,
-    financials?: { totalPurchased: number; totalPaid: number; totalReturned: number },
+    financials?: { totalPurchased: number; totalPaid: number; totalReturned: number; lastPurchaseDate?: Date | null },
   ): SupplierResponseDto {
     const totalPurchased = roundMoney(financials?.totalPurchased || 0);
     const totalPaid = roundMoney(financials?.totalPaid || 0);
@@ -691,8 +707,18 @@ export class SupplierService {
       outstandingBalance,
       creditUtilization: Math.round(creditUtilization * 100) / 100,
       isActive: supplier.isActive,
+      lastPurchaseDate: financials?.lastPurchaseDate || undefined,
       createdAt: supplier.createdAt,
       updatedAt: supplier.updatedAt,
     };
+  }
+
+  private async _getLastPurchaseDate(businessId: string, supplierId: string): Promise<Date | null> {
+    const latest = await this.prisma.purchaseOrder.findFirst({
+      where: { businessId, supplierId, status: SUPPLIER_PO_STATUSES },
+      orderBy: { orderDate: 'desc' },
+      select: { orderDate: true },
+    });
+    return latest?.orderDate || null;
   }
 }

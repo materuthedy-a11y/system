@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
 import { purchasesAPI, purchaseMoney, type GoodsReceivedNote, type PurchaseOrder, type PurchaseReturn, type PurchaseStatus } from '@/lib/api/purchases';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const statuses: PurchaseStatus[] = ['DRAFT', 'ORDERED', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CLOSED', 'CANCELLED'];
@@ -95,6 +96,6 @@ export default function PurchasesPage() {
   </div>;
 }
 
-function Metric({label,value}:{label:string;value:number}) { return <div className="rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm"><p className="text-sm text-[#73766f]">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p></div>; }
+function Metric({label,value}:{label:string;value:number}) { return <div className="rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm"><p className="text-sm text-[#73766f]">{label}</p><p className="mt-2 text-3xl font-semibold tabular-nums"><AnimatedNumber value={value} format={(number)=>Math.round(number).toLocaleString()}/></p></div>; }
 function Empty({title,text}:{title:string;text:string}) { return <div className="p-4 sm:p-6"><EmptyState compact title={title} description={text} /></div>; }
 function Pagination({page,pages,setPage,shown,total}:{page:number;pages:number;setPage:(n:number)=>void;shown:number;total:number}) { return <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#eceee8] px-4 py-3 text-sm text-[#73766f]"><span>Showing {total?((page-1)*20+1):0}–{(page-1)*20+shown} of {total}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(page-1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Previous</button><span className="px-2 py-1.5">{page} / {pages}</span><button disabled={page>=pages} onClick={()=>setPage(page+1)} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Next</button></div></div>; }

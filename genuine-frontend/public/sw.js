@@ -1,7 +1,7 @@
 /* Mizania app shell worker. Business/API responses and mutations are never cached or replayed. */
 const CACHE_PREFIX = 'mizania-shell-';
 const LEGACY_CACHE_PREFIXES = ['genuine-shell-'];
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const OFFLINE_URL = '/offline';
 const PRECACHE_URLS = [
   OFFLINE_URL,

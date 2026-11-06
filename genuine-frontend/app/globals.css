@@ -99,6 +99,56 @@ html.dark .dashboard-sidebar-scrollbar { scrollbar-color: rgb(255 255 255 / 22%)
 html.dark .dashboard-sidebar-scrollbar::-webkit-scrollbar-thumb { background: rgb(255 255 255 / 22%); }
 html.dark .dashboard-sidebar-scrollbar::-webkit-scrollbar-thumb:hover { background: rgb(255 255 255 / 38%); }
 
+@keyframes mizania-chart-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes mizania-chart-area-reveal {
+  from { opacity: 0; transform: scaleY(0.88); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+@keyframes mizania-chart-donut-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes mizania-chart-point-appear {
+  from { opacity: 0; transform: scale(0.45); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes mizania-chart-bar-rise {
+  from { transform: scaleY(0.03); }
+  to { transform: scaleY(1); }
+}
+@keyframes mizania-chart-progress-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.chart-line-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mizania-chart-draw 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.chart-area-reveal {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: mizania-chart-area-reveal 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.chart-donut-reveal {
+  animation: mizania-chart-donut-reveal 850ms ease-out both;
+}
+.chart-point-appear {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mizania-chart-point-appear 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.chart-bar-rise {
+  transform-origin: center bottom;
+  animation: mizania-chart-bar-rise 850ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.chart-progress-fill {
+  transform-origin: left center;
+  animation: mizania-chart-progress-grow 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-background-video { display: none; }
   .auth-form-backdrop { background: #263b30; }

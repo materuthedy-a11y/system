@@ -3,6 +3,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -123,6 +124,42 @@ export class CloseAccountingPeriodDto {
 }
 
 export class PaymentListQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  purchaseOrderId?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  expenseId?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  invoiceId?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  paymentMethodId?: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  locationId?: string;
+  @IsOptional()
+  @IsDateString()
+  fromDate?: string;
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
+  @IsOptional()
+  @IsIn(['INFLOW', 'OUTFLOW'])
+  direction?: 'INFLOW' | 'OUTFLOW';
+  @IsOptional()
+  @IsIn(['SALES_INVOICE', 'PURCHASE_ORDER', 'EXPENSE', 'OTHER'])
+  sourceType?: 'SALES_INVOICE' | 'PURCHASE_ORDER' | 'EXPENSE' | 'OTHER';
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  search?: string;
   @IsOptional()
   @IsString()
   referenceType?: string;

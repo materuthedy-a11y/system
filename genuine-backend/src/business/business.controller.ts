@@ -229,6 +229,7 @@ export class BusinessController {
     'sales.view', 'sales.create', 'sales.edit',
     'purchases.view', 'purchases.create',
     'inventory.view', 'products.view', 'settings.view',
+    'payments.view', 'expenses.view', 'expenses.create',
   )
   @ApiOperation({ summary: 'Get active locations for the current workspace' })
   @ApiResponse({ status: 200 })

@@ -2,7 +2,7 @@
 
 **Phase status:** IMPLEMENTATION IN PROGRESS; ACCEPTANCE TESTING NOT STARTED. All test boxes are intentionally unchecked.
 **Scope:** installability, app shell/offline behavior, offline data and mutation policy, synchronization, updates, notifications, security, accessibility, and browser/device compatibility for Mizania Business Suite.
-**Checkpoint:** Phase 20 is paused at **6.1**. Finish this Phase 30 checklist only when the user switches back to it; then resume Phase 20 at 6.1 without skipping any item.
+**Checkpoint:** Phase 25 is the active acceptance checklist; Phase 24 and Phase 23 follow it. Start Phase 30 acceptance only after the user returns to this PWA checklist in the agreed phase sequence.
 
 ## Test discipline — do not skip steps
 
@@ -27,6 +27,7 @@ Initial repository audit was code review only, not test evidence. The implementa
 - The new worker deletes only this app's versioned shell caches, skips API/auth responses, and activates an update only after the user chooses Update. Verify lifecycle and cache behavior in acceptance testing.
 - The current offline experience does not persist authenticated API responses. It supports only an explicit, local Purchase Order DRAFT queue using the existing business-scoped idempotency key; sync is foreground/manual, reuses the same key, and requires the same signed-in user/workspace plus `purchases.create`. Approval, receiving, payment, return, inventory, and other mutations are not queued.
 - Push subscription and periodic/background sync are not present in the backend contract reviewed so far. Do not claim them until subscription registration, tenant/user targeting, delivery, revocation, idempotency, and unsupported-browser behavior are specified and implemented.
+- Current cross-phase acceptance order and implementation inventory are tracked in [PHASE27-29-30-IMPLEMENTATION-CHECKLIST.md](../../PHASE27-29-30-IMPLEMENTATION-CHECKLIST.md). The browser/device tests in this Phase 30 file remain required and unchecked.
 
 ### Implementation checkpoint — 2026-10-07
 

@@ -224,6 +224,12 @@ export class RejectExpenseDto {
 
 export class PayExpenseDto {
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ allowInfinity: false, allowNaN: false, maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(128)
   paymentMethodId?: string;
@@ -247,6 +253,16 @@ export class ExpenseFilterDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  locationId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  search?: string;
 
   @IsOptional()
   @IsDateString()

@@ -396,6 +396,8 @@
 - [~] 12.6 DEFERRED — user confirmed UI work was intentionally left to the end; keyboard/accessibility evidence has not yet been entered.
 - [~] 12.7 DEFERRED — user confirmed UI work was intentionally left to the end; toast/screen-reader evidence has not yet been entered.
 - [~] 12.8 DEFERRED — user confirmed UI work was intentionally left to the end; browser/network evidence has not yet been entered.
+- [x] 12.9a Populated purchase-order payment history: user confirmed `PAY-202611-93CE34B0`, TZS 1,200, 06/11/2026, Cash, and `RECORDED` display for `PH25-PO-202611-00001`.
+- [ ] 12.9b Verify payment-history empty state and access denial for users without `payments.view`; verify optional transaction reference and notes when present.
 
 ## 13. Build, closeout, and gate to Phase 21
 

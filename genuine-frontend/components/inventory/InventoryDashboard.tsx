@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Boxes, ClipboardCheck, ClipboardList, Package, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { inventoryAPI, type InventoryDashboard as DashboardData, type InventoryLocationOption, type InventoryMovement, type StockBalance } from '@/lib/api/inventory';
 import { getApiError } from '@/lib/api';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { Empty, ErrorNotice, InventoryDenied, InventoryHeading, Loading, PageNav, Panel, PrimaryLink, dateLabel, fieldClass, money, useInventoryPermissions } from './InventoryPrimitives';
 
 export function InventoryDashboard() {
@@ -38,7 +39,7 @@ export function InventoryDashboard() {
   useEffect(() => { inventoryAPI.options().then((result) => setLocations(result.locations)).catch(() => undefined); }, []);
 
   if (!permission.canView) return <InventoryDenied/>;
-  const lowStockCount = summary?.lowStockBalances ?? 0;
+  const lowStockCount = summary?.lowStockBalances;
   const actions = [
     { href: '/dashboard/inventory/adjustments/new', label: 'Stock adjustment', icon: ArrowUpRight, enabled: permission.canAdjust },
     { href: '/dashboard/inventory/transfers/new', label: 'Stock transfer', icon: ArrowLeftRight, enabled: permission.canTransfer },
@@ -46,14 +47,14 @@ export function InventoryDashboard() {
     { href: '/dashboard/inventory/reports', label: 'Inventory reports', icon: ClipboardList, enabled: permission.canView },
   ];
   const dashboardCards = [
-    { label: 'Active products', value: summary?.totalProducts ?? '—', icon: Package, tone: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/[0.12] dark:text-emerald-300' },
-    { label: 'Stock on hand', value: summary ? `${summary.totalStockUnits.toLocaleString()} units` : '—', icon: Boxes, tone: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/[0.12] dark:text-blue-300' },
-    { label: 'Stock value', value: summary ? money(summary.totalStockValue) : '—', icon: ArrowDownLeft, tone: 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.12] dark:text-amber-300' },
-    { label: 'Low stock balances', value: lowStockCount, icon: AlertTriangle, tone: lowStockCount ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-400/25 dark:bg-rose-400/[0.12] dark:text-rose-300' : 'border-[#e6e8e1] bg-white text-[#30332e] dark:border-white/[0.08] dark:bg-[#1b1e1a] dark:text-[#e1e4dc]' },
+    { label: 'Active products', value: summary?.totalProducts, format: (value: number) => Math.round(value).toLocaleString(), icon: Package, tone: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-400/25 dark:bg-emerald-400/[0.12] dark:text-emerald-300' },
+    { label: 'Stock on hand', value: summary?.totalStockUnits, format: (value: number) => `${Math.round(value).toLocaleString()} units`, icon: Boxes, tone: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-400/25 dark:bg-blue-400/[0.12] dark:text-blue-300' },
+    { label: 'Stock value', value: summary?.totalStockValue, format: (value: number) => money(value), icon: ArrowDownLeft, tone: 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-400/25 dark:bg-amber-400/[0.12] dark:text-amber-300' },
+    { label: 'Low stock balances', value: lowStockCount, format: (value: number) => Math.round(value).toLocaleString(), icon: AlertTriangle, tone: lowStockCount ? 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-400/25 dark:bg-rose-400/[0.12] dark:text-rose-300' : 'border-[#e6e8e1] bg-white text-[#30332e] dark:border-white/[0.08] dark:bg-[#1b1e1a] dark:text-[#e1e4dc]' },
   ];
   return <div className="min-w-0 space-y-6">
     <InventoryHeading title="Stock overview" description="Current quantities, valuation, expiry alerts and movement history across your business locations." actions={<><button onClick={() => void load()} disabled={loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dfe2da] bg-white px-3.5 text-sm font-semibold text-[#454a41] hover:bg-[#f7f8f5] disabled:opacity-50 dark:border-white/10 dark:bg-[#111310] dark:text-[#e1e4dc]"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Refresh</button>{permission.canAdjust?<PrimaryLink href="/dashboard/inventory/settings/reorder-points"><Settings2 size={16} className="mr-2"/>Reorder levels</PrimaryLink>:null}</>}/>
-    <div><p className="mb-2 text-xs font-semibold text-[#596257] dark:text-[#afb5ac]">Business-wide inventory totals · all active locations</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{dashboardCards.map(({ label, value, icon: Icon, tone }) => <Panel key={label} className={`flex min-w-0 items-center gap-3 border p-4 ${tone}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/90 dark:bg-black/20"><Icon size={18}/></span><div className="min-w-0"><p className="text-xs font-bold">{label}</p><p className="mt-1 truncate text-xl font-extrabold">{value}</p></div></Panel>)}</div></div>
+    <div><p className="mb-2 text-xs font-semibold text-[#596257] dark:text-[#afb5ac]">Business-wide inventory totals · all active locations</p><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{dashboardCards.map(({ label, value, format, icon: Icon, tone }) => <Panel key={label} className={`flex min-w-0 items-center gap-3 border p-4 ${tone}`}><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/90 dark:bg-black/20"><Icon size={18}/></span><div className="min-w-0"><p className="text-xs font-bold">{label}</p><p className="mt-1 truncate text-xl font-extrabold tabular-nums">{value === undefined ? '—' : <AnimatedNumber value={value} format={format}/>}</p></div></Panel>)}</div></div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{actions.filter((x) => x.enabled).map(({ href, label, icon: Icon }) => <Link key={href} href={href} className="group flex min-h-16 items-center gap-3 rounded-2xl border border-[#e6e8e1] bg-white px-4 py-3 text-sm font-semibold text-[#30332e] shadow-sm transition hover:border-[#c49a35]/50 hover:bg-[#fffdf7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c49a35] dark:border-white/[0.08] dark:bg-[#1b1e1a] dark:text-[#e1e4dc] dark:hover:bg-[#24241f]"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#f7f0dc] text-[#775b17] dark:bg-[#d8b454]/10 dark:text-[#e2c471]"><Icon size={17}/></span>{label}<ArrowRight size={15} className="ml-auto text-[#8b8f86] transition group-hover:translate-x-0.5 group-hover:text-[#a17a16]"/></Link>)}</div>
     {error ? <ErrorNotice message={error} retry={() => void load()}/> : null}
     <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(300px,0.7fr)]">

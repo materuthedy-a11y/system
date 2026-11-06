@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownUp, ChevronLeft, ChevronRight, Loader2, Plus, UsersRound } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
 import { customersAPI, type Customer, type CustomerFilters, type CustomerStatus, type CustomerType } from '@/lib/api/customers';
@@ -55,7 +56,7 @@ export default function CustomersPage() {
 
   return <div className="mx-auto w-full max-w-7xl p-4 sm:p-6">
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Operations</p><h1 className="mt-1 text-2xl font-semibold text-[#20231f] dark:text-white">Customers</h1><p className="mt-1 text-sm text-[#667064] dark:text-white/60">Customer records, credit position and account history.</p></div>{canCreate ? <Link href="/dashboard/customers/new" className="inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-600"><Plus size={16} />New customer</Link> : null}</div>
-    <section className="mb-4 grid gap-3 sm:grid-cols-3"><Metric title="Customers shown" value={String(rows.length)} tone="mint"/><Metric title="Active accounts" value={String(rows.filter((row) => row.status === 'ACTIVE').length)} tone="blue"/><Metric title="Outstanding on this page" value={`TZS ${money(rows.reduce((sum, row) => sum + row.outstandingBalance, 0))}`} tone="gold"/></section>
+    <section className="mb-4 grid gap-3 sm:grid-cols-3"><Metric title="Customers shown" value={rows.length} format={(value) => Math.round(value).toLocaleString()} tone="mint"/><Metric title="Active accounts" value={rows.filter((row) => row.status === 'ACTIVE').length} format={(value) => Math.round(value).toLocaleString()} tone="blue"/><Metric title="Outstanding on this page" value={rows.reduce((sum, row) => sum + row.outstandingBalance, 0)} format={(value) => `TZS ${money(value)}`} tone="gold"/></section>
     <section className="mb-4 rounded-xl border border-[#dce8df] bg-emerald-50/65 p-4 dark:border-white/10 dark:bg-[#151a16]"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.5fr)_1fr_1fr_1fr_auto]">
       <label className="text-xs font-semibold text-[#4a554a] dark:text-white/70">Search<input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Name, code, email or phone" className={`${input} mt-1.5`} /></label>
       <label className="text-xs font-semibold text-[#4a554a] dark:text-white/70">Status<select className={`${input} mt-1.5`} value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="SUSPENDED">Suspended</option><option value="BLACKLISTED">Blacklisted</option><option value="ARCHIVED">Archived</option><option value="OVERDUE">Has outstanding balance</option></select></label>
@@ -76,7 +77,7 @@ export default function CustomersPage() {
   </div>;
 }
 
-function Metric({ title, value, tone }: { title: string; value: string; tone: 'mint' | 'blue' | 'gold' }) {
+function Metric({ title, value, format, tone }: { title: string; value: number; format: (value: number) => string; tone: 'mint' | 'blue' | 'gold' }) {
   const colors = { mint: 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-950 dark:bg-[#141a16]', blue: 'border-blue-200 bg-blue-50/75 dark:border-blue-950 dark:bg-[#14171d]', gold: 'border-amber-200 bg-amber-50/80 dark:border-amber-950 dark:bg-[#191710]' };
-  return <article className={`rounded-xl border p-4 ${colors[tone]}`}><p className="text-xs font-semibold text-[#627064] dark:text-white/55">{title}</p><p className="mt-2 truncate text-lg font-bold text-[#26362b] dark:text-white">{value}</p></article>;
+  return <article className={`rounded-xl border p-4 ${colors[tone]}`}><p className="text-xs font-semibold text-[#627064] dark:text-white/55">{title}</p><p className="mt-2 truncate text-lg font-bold tabular-nums text-[#26362b] dark:text-white"><AnimatedNumber value={value} format={format}/></p></article>;
 }

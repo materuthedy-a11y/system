@@ -26,6 +26,7 @@ import {
   RetryNotificationDto,
   SMSConfigDto,
   UpdateNotificationTemplateDto,
+  UpdateInAppPreferenceDto,
 } from './dto';
 import { NotificationsService } from './notifications.service';
 
@@ -105,6 +106,41 @@ export class NotificationsController {
   @Patch('inbox/in-app/:id/read')
   markAsRead(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
     return this.notifications.markAsRead(businessId, userId, id);
+  }
+
+  @Patch('inbox/in-app/read-all')
+  markAllAsRead(@Business() businessId: string, @UserId() userId: string) {
+    return this.notifications.markAllAsRead(businessId, userId);
+  }
+
+  @Patch('inbox/in-app/:id/archive')
+  archiveInApp(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.notifications.archiveInAppNotification(businessId, userId, id);
+  }
+
+  @Patch('inbox/in-app/:id/restore')
+  restoreInApp(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.notifications.restoreInAppNotification(businessId, userId, id);
+  }
+
+  @Delete('inbox/in-app/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteInboxEntry(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.notifications.deleteInAppInboxEntry(businessId, userId, id);
+  }
+
+  @Get('preferences/in-app')
+  getInAppPreferences(@Business() businessId: string, @UserId() userId: string) {
+    return this.notifications.getInAppPreferences(businessId, userId);
+  }
+
+  @Patch('preferences/in-app')
+  updateInAppPreference(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: UpdateInAppPreferenceDto,
+  ) {
+    return this.notifications.updateInAppPreference(businessId, userId, dto);
   }
 
   @Get('config/email')

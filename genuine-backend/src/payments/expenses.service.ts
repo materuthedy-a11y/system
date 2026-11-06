@@ -29,6 +29,7 @@ const BUDGETED_EXPENSE_STATUSES = [
   ExpenseStatus.PAID,
 ];
 const RECOGNIZED_EXPENSE_STATUSES = [ExpenseStatus.APPROVED, ExpenseStatus.PAID];
+const ACTIVE_EXPENSE_PAYMENT_STATUSES = ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'];
 
 @Injectable()
 export class ExpensesService {
@@ -143,6 +144,8 @@ export class ExpensesService {
     this.assertTotal(dto.totalAmount, amount);
     const mainCategoryId = dto.expenseCategoryId || items[0].categoryId;
     const reference = dto.reference?.trim() || dto.referenceNumber?.trim() || null;
+    const attachmentUrl = dto.attachmentUrl ?? dto.attachment;
+    this.validateAttachmentUrl(attachmentUrl);
     const id = await this.prisma
       .$transaction(async (tx) => {
         await this.validateExpenseRelations(tx, businessId, {
@@ -169,7 +172,7 @@ export class ExpensesService {
                 .join('; ') ||
               'Business expense',
             reference,
-            attachmentUrl: dto.attachmentUrl ?? dto.attachment ?? null,
+            attachmentUrl: attachmentUrl ?? null,
             budgetCode: dto.budgetCode?.trim() || null,
             paymentMethodId: dto.paymentMethodId ?? null,
             locationId: dto.locationId ?? null,
@@ -202,7 +205,39 @@ export class ExpensesService {
       include: this.expenseInclude(),
     });
     if (!row) throw new NotFoundException('Expense not found');
-    return this.mapExpense(row);
+    const paid = await this.prisma.payment.aggregate({
+      where: { businessId, expenseId: id, status: { in: ACTIVE_EXPENSE_PAYMENT_STATUSES } },
+      _sum: { amount: true },
+    });
+    const paidAmount = roundMoney(paid._sum.amount || 0);
+    return { ...this.mapExpense(row), paidAmount, balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)) };
+  }
+
+  async getExpenseOptions(businessId: string) {
+    const [categories, locations, suppliers, paymentMethods, business] = await Promise.all([
+      this.prisma.expenseCategory.findMany({
+        where: { businessId, isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, code: true, budgetLimit: true, budgetPeriod: true },
+      }),
+      this.prisma.location.findMany({
+        where: { businessId, isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, code: true },
+      }),
+      this.prisma.supplier.findMany({
+        where: { businessId, isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, supplierCode: true },
+      }),
+      this.prisma.paymentMethod.findMany({
+        where: { businessId, isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, methodType: true, requiresReference: true },
+      }),
+      this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } }),
+    ]);
+    return { categories, locations, suppliers, paymentMethods, currency: business?.currency || 'TZS' };
   }
 
   async listExpenses(businessId: string, filter: ExpenseFilterDto) {
@@ -212,16 +247,25 @@ export class ExpensesService {
       throw new BadRequestException('minAmount must be less than or equal to maxAmount');
     const page = filter.page ?? 1;
     const limit = filter.limit ?? 20;
+    const search = filter.search?.trim();
     const where: Prisma.ExpenseWhereInput = {
       businessId,
-      ...(filter.status && { status: filter.status }),
-      ...(filter.categoryId && {
-        OR: [
+      AND: [
+        ...(filter.categoryId ? [{ OR: [
           { categoryId: filter.categoryId },
           { items: { some: { categoryId: filter.categoryId } } },
-        ],
-      }),
+        ] } satisfies Prisma.ExpenseWhereInput] : []),
+        ...(search ? [{ OR: [
+          { expenseNumber: { contains: search, mode: 'insensitive' as const } },
+          { description: { contains: search, mode: 'insensitive' as const } },
+          { reference: { contains: search, mode: 'insensitive' as const } },
+          { category: { name: { contains: search, mode: 'insensitive' as const } } },
+          { supplier: { name: { contains: search, mode: 'insensitive' as const } } },
+        ] } satisfies Prisma.ExpenseWhereInput] : []),
+      ],
+      ...(filter.status && { status: filter.status }),
       ...(filter.supplierId && { supplierId: filter.supplierId }),
+      ...(filter.locationId && { locationId: filter.locationId }),
       ...(filter.fromDate || filter.toDate
         ? {
             expenseDate: {
@@ -249,7 +293,17 @@ export class ExpensesService {
       }),
       this.prisma.expense.count({ where }),
     ]);
-    return { data: data.map((row) => this.mapExpense(row)), total, page, limit };
+    const ids = data.map((row) => row.id);
+    const paidRows = ids.length ? await this.prisma.payment.groupBy({
+      by: ['expenseId'],
+      where: { businessId, expenseId: { in: ids }, status: { in: ACTIVE_EXPENSE_PAYMENT_STATUSES } },
+      _sum: { amount: true },
+    }) : [];
+    const paidByExpense = new Map(paidRows.map((row) => [row.expenseId, roundMoney(row._sum.amount || 0)]));
+    return { data: data.map((row) => {
+      const paidAmount = paidByExpense.get(row.id) || 0;
+      return { ...this.mapExpense(row), paidAmount, balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)) };
+    }), total, page, limit };
   }
 
   async updateExpense(businessId: string, userId: string, id: string, dto: UpdateExpenseDto) {
@@ -294,6 +348,7 @@ export class ExpensesService {
 
       const reference = dto.reference !== undefined ? dto.reference : dto.referenceNumber;
       const attachment = dto.attachmentUrl !== undefined ? dto.attachmentUrl : dto.attachment;
+      if (attachment !== undefined) this.validateAttachmentUrl(attachment);
       const updated = await tx.expense.update({
         where: { id },
         data: {
@@ -615,6 +670,17 @@ export class ExpensesService {
 
   private sumItems(items: Array<{ amount: number }>) {
     return roundMoney(items.reduce((total, item) => total + item.amount, 0));
+  }
+
+  private validateAttachmentUrl(value?: string | null) {
+    if (!value) return;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || url.username || url.password)
+        throw new Error('invalid URL scheme or credentials');
+    } catch {
+      throw new BadRequestException('Expense attachment must be a valid HTTPS URL without embedded credentials');
+    }
   }
 
   private assertTotal(provided: number | undefined, calculated: number) {

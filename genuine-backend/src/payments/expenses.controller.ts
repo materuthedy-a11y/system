@@ -51,7 +51,7 @@ export class ExpensesController {
   }
 
   @Get('categories')
-  @RequirePermission('expenses.view', 'settings.view')
+  @RequirePermission('expenses.view', 'expenses.create', 'settings.view')
   listCategories(@Business() businessId: string, @Query('activeOnly') activeOnly?: string) {
     return this.expenses.listCategories(businessId, activeOnly === 'true');
   }
@@ -99,6 +99,12 @@ export class ExpensesController {
   @RequirePermission('expenses.view')
   trends(@Business() businessId: string, @Query() query: ExpenseFilterDto) {
     return this.expenses.getExpenseTrends(businessId, query.months as unknown as string);
+  }
+
+  @Get('options')
+  @RequirePermission('expenses.view', 'expenses.create', 'expenses.pay')
+  options(@Business() businessId: string) {
+    return this.expenses.getExpenseOptions(businessId);
   }
 
   @Post(['', 'create'])

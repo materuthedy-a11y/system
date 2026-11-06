@@ -131,6 +131,16 @@ export interface PaymentMethodOption {
   isDefault?: boolean;
   requiresReference?: boolean;
 }
+export interface PurchasePayment {
+  id: string;
+  paymentNumber: string;
+  paymentDate: string;
+  amount: number;
+  paymentMethodName: string;
+  reference?: string | null;
+  notes?: string | null;
+  status: string;
+}
 export interface PurchaseProductOption {
   id: string;
   name: string;
@@ -213,6 +223,13 @@ export const purchasesAPI = {
     return unwrap(
       await apiClient.post(`/purchases/orders/${encodeURIComponent(id)}/payments`, input)
     );
+  },
+  async payments(purchaseOrderId: string) {
+    const response = await apiClient.get<{ data: PurchasePayment[]; total: number; page: number; limit: number }>(
+      '/payments',
+      { params: { purchaseOrderId, page: 1, limit: 100 } },
+    );
+    return unwrap<{ data: PurchasePayment[]; total: number; page: number; limit: number }>(response).data;
   },
   async grns(purchaseOrderId?: string) {
     return unwrap<GoodsReceivedNote[]>(

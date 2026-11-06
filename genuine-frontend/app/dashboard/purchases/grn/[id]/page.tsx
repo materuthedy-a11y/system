@@ -9,6 +9,7 @@ import { getApiError } from '@/lib/api';
 import { purchasesAPI, type GoodsReceivedNote } from '@/lib/api/purchases';
 import { notify } from '@/components/ui/AppToaster';
 import { formatBusinessDate } from '@/lib/format/businessDate';
+import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 
 const statusStyles: Record<GoodsReceivedNote['status'], string> = {
   RECEIVED: 'bg-blue-600 text-white dark:bg-blue-600 dark:text-white',
@@ -160,7 +161,7 @@ export default function GoodsReceivedNoteDetailPage() {
   );
 }
 
-function Summary({label,value}:{label:string;value:number}) { return <div className="rounded-xl border border-[#e6e8e1] bg-[#fafbf8] p-4 dark:border-[#343a32] dark:bg-[#1e221e]"><p className="text-xs font-medium text-[#73766f] dark:text-[#afb5ac]">{label}</p><p className="mt-1 text-2xl font-semibold text-[#20211f] dark:text-[#f0f1ed]">{value}</p></div>; }
+function Summary({label,value}:{label:string;value:number}) { return <div className="rounded-xl border border-[#e6e8e1] bg-[#fafbf8] p-4 dark:border-[#343a32] dark:bg-[#1e221e]"><p className="text-xs font-medium text-[#73766f] dark:text-[#afb5ac]">{label}</p><p className="mt-1 text-2xl font-semibold tabular-nums text-[#20211f] dark:text-[#f0f1ed]"><AnimatedNumber value={value} format={(number)=>number.toLocaleString()}/></p></div>; }
 function Quantity({label,value}:{label:string;value:number}) { return <div><p className="text-xs text-[#73766f] dark:text-[#afb5ac]">{label}</p><p className="mt-1 font-semibold text-[#20211f] dark:text-[#f0f1ed]">{value}</p></div>; }
 function Info({label,value}:{label:string;value?:string}) { return <div><dt className="text-xs font-medium text-[#73766f] dark:text-[#afb5ac]">{label}</dt><dd className="mt-1 break-words text-sm font-medium text-[#30332e] dark:text-[#e1e4dc]">{value?.trim() || '—'}</dd></div>; }
 function AccessMessage({title,message}:{title:string;message:string}) { return <section className="mx-auto max-w-2xl rounded-2xl border border-[#efd4cf] bg-white p-7 text-center dark:border-[#533530] dark:bg-[#171a17]"><AlertCircle className="mx-auto h-8 w-8 text-[#a63832]"/><h1 className="mt-3 text-xl font-semibold text-[#20211f] dark:text-[#f0f1ed]">{title}</h1><p className="mt-2 text-sm text-[#73766f] dark:text-[#afb5ac]">{message}</p></section>; }

@@ -36,6 +36,14 @@ export class PaymentsService {
     private readonly notifications: NotificationsService,
   ) {}
 
+  async getFinanceOptions(businessId: string) {
+    const [business, paymentMethods] = await Promise.all([
+      this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } }),
+      this.getPaymentMethodsForEntry(businessId),
+    ]);
+    return { currency: business?.currency || 'TZS', paymentMethods };
+  }
+
   async getPaymentMethodsForEntry(businessId: string) {
     const [methods, settings] = await Promise.all([
       this.prisma.paymentMethod.findMany({
@@ -305,10 +313,16 @@ export class PaymentsService {
     } else if (ref.poId) {
       // Payables are derived from non-voided Payment rows; do not overwrite PO lifecycle state.
     } else if (ref.expenseId) {
-      const paid = await tx.payment.aggregate({
-        where: { businessId, expenseId: ref.expenseId, status: { in: ACTIVE_PAYMENT_STATUSES } },
-        _sum: { amount: true },
-      });
+      const [paid, latestPayment] = await Promise.all([
+        tx.payment.aggregate({
+          where: { businessId, expenseId: ref.expenseId, status: { in: ACTIVE_PAYMENT_STATUSES } },
+          _sum: { amount: true },
+        }),
+        tx.payment.findFirst({
+          where: { businessId, expenseId: ref.expenseId, status: { in: ACTIVE_PAYMENT_STATUSES } },
+          orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+        }),
+      ]);
       const totalPaid = roundMoney(paid._sum.amount || 0);
       const isPaid = totalPaid >= ref.expense.amount - 0.000001;
       await tx.expense.update({
@@ -316,9 +330,10 @@ export class PaymentsService {
         data: {
           isPaid,
           status: isPaid ? 'PAID' : 'APPROVED',
-          ...(isPaid
-            ? { paidBy: userId, paidAt: new Date(), paymentMethodId: payment.paymentMethodId }
-            : {}),
+          paidBy: isPaid ? (latestPayment?.createdBy || userId) : null,
+          paidAt: isPaid ? (latestPayment?.processedAt || latestPayment?.paymentDate || new Date()) : null,
+          paymentMethodId: latestPayment?.paymentMethodId || null,
+          paymentReference: latestPayment?.transactionId || null,
         },
       });
     }
@@ -327,24 +342,74 @@ export class PaymentsService {
   async getPaymentById(businessId: string, id: string) {
     const row = await this.prisma.payment.findFirst({
       where: { id, businessId },
-      include: { paymentMethod: true },
+      include: {
+        paymentMethod: true,
+        invoice: { include: { location: { select: { id: true, name: true } } } },
+        po: { include: { location: { select: { id: true, name: true } } } },
+        expense: { include: { location: { select: { id: true, name: true } } } },
+        customer: { select: { id: true, name: true, customerCode: true } },
+        supplier: { select: { id: true, name: true, supplierCode: true } },
+      },
     });
     if (!row) throw new NotFoundException('Payment not found');
+    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
     return {
       ...row,
+      currency: business?.currency || 'TZS',
       paymentMethodName: row.paymentMethod.name,
+      locationName: row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
+      sourceType: row.invoiceId ? 'SALES_INVOICE' : row.poId ? 'PURCHASE_ORDER' : row.expenseId ? 'EXPENSE' : 'OTHER',
+      sourceReference: row.invoice?.invoiceNumber || row.po?.poNumber || row.expense?.expenseNumber || row.referenceId || null,
+      counterpartyName: row.customer?.name || row.supplier?.name || null,
       processedBy: row.createdBy,
       reconciledBy: row.reconciledBy || undefined,
     };
   }
 
   async getAllPayments(businessId: string, query: PaymentListQueryDto) {
+    if (query.fromDate && query.toDate && query.fromDate > query.toDate)
+      throw new BadRequestException('fromDate must be on or before toDate');
     const page = query.page || 1;
     const limit = query.limit || 20;
+    const and: Prisma.PaymentWhereInput[] = [];
+    if (query.fromDate || query.toDate) {
+      and.push({ paymentDate: {
+        ...(query.fromDate && { gte: new Date(`${query.fromDate}T00:00:00.000Z`) }),
+        ...(query.toDate && { lte: new Date(`${query.toDate}T23:59:59.999Z`) }),
+      } });
+    }
+    if (query.sourceType === 'SALES_INVOICE') and.push({ invoiceId: { not: null } });
+    if (query.sourceType === 'PURCHASE_ORDER') and.push({ poId: { not: null } });
+    if (query.sourceType === 'EXPENSE') and.push({ expenseId: { not: null } });
+    if (query.sourceType === 'OTHER') and.push({ invoiceId: null, poId: null, expenseId: null });
+    if (query.locationId) and.push({ OR: [
+      { invoice: { is: { locationId: query.locationId } } },
+      { po: { is: { locationId: query.locationId } } },
+      { expense: { is: { locationId: query.locationId } } },
+    ] });
+    const search = query.search?.trim();
+    if (search) and.push({ OR: [
+      { paymentNumber: { contains: search, mode: 'insensitive' } },
+      { reference: { contains: search, mode: 'insensitive' } },
+      { referenceNumber: { contains: search, mode: 'insensitive' } },
+      { transactionId: { contains: search, mode: 'insensitive' } },
+      { bankStatementReference: { contains: search, mode: 'insensitive' } },
+      { invoice: { is: { invoiceNumber: { contains: search, mode: 'insensitive' } } } },
+      { po: { is: { poNumber: { contains: search, mode: 'insensitive' } } } },
+      { expense: { is: { expenseNumber: { contains: search, mode: 'insensitive' } } } },
+      { customer: { is: { name: { contains: search, mode: 'insensitive' } } } },
+      { supplier: { is: { name: { contains: search, mode: 'insensitive' } } } },
+    ] });
     const where: Prisma.PaymentWhereInput = {
       businessId,
+      ...(query.purchaseOrderId ? { poId: query.purchaseOrderId } : {}),
+      ...(query.expenseId ? { expenseId: query.expenseId } : {}),
+      ...(query.invoiceId ? { invoiceId: query.invoiceId } : {}),
+      ...(query.paymentMethodId ? { paymentMethodId: query.paymentMethodId } : {}),
+      ...(query.direction ? { direction: query.direction } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.referenceType ? { referenceType: query.referenceType } : {}),
+      ...(and.length ? { AND: and } : {}),
     };
     const [data, total] = await this.prisma.$transaction([
       this.prisma.payment.findMany({
@@ -354,6 +419,8 @@ export class PaymentsService {
           invoice: { include: { location: { select: { name: true } } } },
           po: { include: { location: { select: { name: true } } } },
           expense: { include: { location: { select: { name: true } } } },
+          customer: { select: { id: true, name: true, customerCode: true } },
+          supplier: { select: { id: true, name: true, supplierCode: true } },
         },
         orderBy: [{ paymentDate: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit,
@@ -361,11 +428,16 @@ export class PaymentsService {
       }),
       this.prisma.payment.count({ where }),
     ]);
+    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
     return {
       data: data.map((row) => ({
         ...row,
+        currency: business?.currency || 'TZS',
         paymentMethodName: row.paymentMethod.name,
         locationName: row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
+        sourceType: row.invoiceId ? 'SALES_INVOICE' : row.poId ? 'PURCHASE_ORDER' : row.expenseId ? 'EXPENSE' : 'OTHER',
+        sourceReference: row.invoice?.invoiceNumber || row.po?.poNumber || row.expense?.expenseNumber || row.referenceId || null,
+        counterpartyName: row.customer?.name || row.supplier?.name || null,
       })),
       total,
       page,
@@ -388,6 +460,7 @@ export class PaymentsService {
           reconciledBy: userId,
           reconciledAt: new Date(),
           bankStatementReference: dto.bankStatementReference,
+          ...(dto.notes?.trim() ? { notes: [payment.notes, dto.notes.trim()].filter(Boolean).join('\n\n') } : {}),
         },
       });
       await this.audit(tx, businessId, userId, 'Payment', id, 'RECONCILE', payment, updated);
@@ -665,12 +738,17 @@ export class PaymentsService {
               })
             : null;
           if (!method) throw new NotFoundException('Active payment method not found');
+          if (method.requiresReference && !dto?.transactionReference?.trim())
+            throw new BadRequestException(`${method.name} requires a transaction reference`);
           const paid = await tx.payment.aggregate({
             where: { businessId, expenseId: id, status: { in: ACTIVE_PAYMENT_STATUSES } },
             _sum: { amount: true },
           });
           const remaining = roundMoney(expense.amount - (paid._sum.amount || 0));
           if (remaining <= 0) throw new ConflictException('Expense is already fully paid');
+          const amount = roundMoney(dto?.amount ?? remaining);
+          if (amount <= 0 || amount > remaining)
+            throw new BadRequestException('Payment amount must be greater than zero and no more than the remaining expense balance');
           const paymentNumber = await this.nextPaymentNumber(tx, businessId, new Date());
           const payment = await tx.payment.create({
             data: {
@@ -681,7 +759,7 @@ export class PaymentsService {
               referenceId: id,
               direction: 'OUTFLOW',
               expenseId: id,
-              amount: remaining,
+              amount,
               paymentMethodId: method.id,
               status: 'RECORDED',
               createdBy: userId,
@@ -690,13 +768,13 @@ export class PaymentsService {
               notes: dto?.notes,
             },
           });
+          const fullyPaid = amount >= remaining - 0.000001;
           const updated = await tx.expense.update({
             where: { id },
             data: {
-              status: 'PAID',
-              isPaid: true,
-              paidBy: userId,
-              paidAt: new Date(),
+              status: fullyPaid ? 'PAID' : 'APPROVED',
+              isPaid: fullyPaid,
+              ...(fullyPaid ? { paidBy: userId, paidAt: new Date() } : {}),
               paymentMethodId: method.id,
               paymentReference: dto?.transactionReference ?? null,
             },

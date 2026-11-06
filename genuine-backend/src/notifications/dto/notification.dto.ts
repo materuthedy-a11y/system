@@ -217,11 +217,29 @@ export class InboxQueryDto {
   unreadOnly = false;
 
   @IsOptional()
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  archivedOnly = false;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
+  search?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
   limit = 20;
+}
+
+export class UpdateInAppPreferenceDto {
+  @IsEnum(NotificationEventType)
+  eventType: NotificationEventType;
+
+  @IsBoolean()
+  inAppEnabled: boolean;
 }
 
 export class EmailConfigDto {

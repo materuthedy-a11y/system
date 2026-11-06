@@ -360,11 +360,22 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   async getInAppNotifications(
     businessId: string,
     userId: string,
-    filter: { unreadOnly?: boolean; page?: number; limit?: number },
+    filter: { unreadOnly?: boolean; archivedOnly?: boolean; search?: string; page?: number; limit?: number },
   ) {
-    const page = filter.page ?? 1;
-    const limit = filter.limit ?? 20;
-    const where = { userId, user: { businessId }, ...(filter.unreadOnly && { isRead: false }) };
+    const page = Math.max(1, filter.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filter.limit ?? 20));
+    const search = filter.search?.trim();
+    const where: Prisma.InAppNotificationWhereInput = {
+      userId,
+      user: { businessId },
+      isArchived: filter.archivedOnly === true,
+      ...(filter.unreadOnly && { isRead: false }),
+      ...(search && { notification: { is: { OR: [
+        { subject: { contains: search, mode: 'insensitive' } },
+        { body: { contains: search, mode: 'insensitive' } },
+        { eventType: { contains: search, mode: 'insensitive' } },
+      ] } } }),
+    };
     const [data, total, unreadCount] = await Promise.all([
       this.prisma.inAppNotification.findMany({
         where,
@@ -388,7 +399,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       }),
       this.prisma.inAppNotification.count({ where }),
       this.prisma.inAppNotification.count({
-        where: { userId, user: { businessId }, isRead: false },
+        where: { userId, user: { businessId }, isRead: false, isArchived: false },
       }),
     ]);
     return {
@@ -398,6 +409,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         notificationId: entry.notificationId,
         isRead: entry.isRead,
         readAt: entry.readAt,
+        isArchived: entry.isArchived,
+        archivedAt: entry.archivedAt,
         createdAt: entry.createdAt,
       })),
       unreadCount,
@@ -406,6 +419,32 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  async getInAppPreferences(businessId: string, userId: string) {
+    await this.assertBusinessUsers(businessId, [userId]);
+    const values = Object.values(NotificationEventType);
+    const saved = await this.prisma.notificationPreference.findMany({
+      where: { userId, eventType: { in: values } },
+      select: { eventType: true, inAppEnabled: true },
+    });
+    const byType = new Map(saved.map((item) => [item.eventType, item.inAppEnabled]));
+    return values.map((eventType) => ({ eventType, inAppEnabled: byType.get(eventType) ?? true }));
+  }
+
+  async updateInAppPreference(
+    businessId: string,
+    userId: string,
+    dto: { eventType: NotificationEventType; inAppEnabled: boolean },
+  ) {
+    await this.assertBusinessUsers(businessId, [userId]);
+    const preference = await this.prisma.notificationPreference.upsert({
+      where: { userId_eventType: { userId, eventType: dto.eventType } },
+      create: { userId, eventType: dto.eventType, inAppEnabled: dto.inAppEnabled },
+      update: { inAppEnabled: dto.inAppEnabled },
+      select: { eventType: true, inAppEnabled: true },
+    });
+    return preference;
   }
 
   async markAsRead(businessId: string, userId: string, inboxId: string) {
@@ -420,6 +459,47 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
     if (!existing) throw new NotFoundException('In-app notification not found');
     return existing;
+  }
+
+  async markAllAsRead(businessId: string, userId: string) {
+    const result = await this.prisma.inAppNotification.updateMany({
+      where: { userId, user: { businessId }, isRead: false, isArchived: false },
+      data: { isRead: true, readAt: new Date() },
+    });
+    return { updated: result.count };
+  }
+
+  async archiveInAppNotification(businessId: string, userId: string, inboxId: string) {
+    const result = await this.prisma.inAppNotification.updateMany({
+      where: { id: inboxId, userId, user: { businessId }, isArchived: false },
+      data: { isArchived: true, archivedAt: new Date() },
+    });
+    if (result.count) return { id: inboxId, isArchived: true };
+    const existing = await this.prisma.inAppNotification.findFirst({
+      where: { id: inboxId, userId, user: { businessId } }, select: { id: true, isArchived: true },
+    });
+    if (!existing) throw new NotFoundException('In-app notification not found');
+    return existing;
+  }
+
+  async restoreInAppNotification(businessId: string, userId: string, inboxId: string) {
+    const result = await this.prisma.inAppNotification.updateMany({
+      where: { id: inboxId, userId, user: { businessId }, isArchived: true },
+      data: { isArchived: false, archivedAt: null },
+    });
+    if (result.count) return { id: inboxId, isArchived: false };
+    const existing = await this.prisma.inAppNotification.findFirst({
+      where: { id: inboxId, userId, user: { businessId } }, select: { id: true, isArchived: true },
+    });
+    if (!existing) throw new NotFoundException('In-app notification not found');
+    return existing;
+  }
+
+  async deleteInAppInboxEntry(businessId: string, userId: string, inboxId: string) {
+    const result = await this.prisma.inAppNotification.deleteMany({
+      where: { id: inboxId, userId, user: { businessId } },
+    });
+    if (!result.count) throw new NotFoundException('In-app notification not found');
   }
 
   async setEmailConfig(businessId: string, dto: EmailConfigDto) {
@@ -516,7 +596,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async persistEvent(input: EventInput) {
-    const targets = await this.findEventUsers(input.businessId, input.eventType);
+    const candidates = await this.findEventUsers(input.businessId, input.eventType);
+    const preferences = candidates.length ? await this.prisma.notificationPreference.findMany({
+      where: { userId: { in: candidates.map((user) => user.id) }, eventType: input.eventType },
+      select: { userId: true, inAppEnabled: true },
+    }) : [];
+    const disabled = new Set(preferences.filter((preference) => !preference.inAppEnabled).map((preference) => preference.userId));
+    const targets = candidates.filter((user) => !disabled.has(user.id));
     const defaultMessage = this.defaultEventMessage(input.eventType, input.variables || {});
     const internalMessage =
       input.subject && input.body

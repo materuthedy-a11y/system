@@ -79,7 +79,7 @@ export class UpdateSupplierDto {
   @IsOptional()
   @ValidateNested()
   @Type(() => SupplierAddressUpdateDto)
-  address?: SupplierAddressUpdateDto;
+  address?: SupplierAddressUpdateDto | null;
 
   @IsOptional()
   @ValidateNested({ each: true })

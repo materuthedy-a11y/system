@@ -34,8 +34,14 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [x] Change the purchase-order prefix to `PH25-PO-`; saved a draft and confirmed `PH25-PO-202611-00001` (user confirmed, 5 Nov 2026).
 - [x] Change the GRN prefix to `PH25-GRN-`; receive and accept 1 unit for `PH25-PO-202611-00001`; confirmed GRN `PH25-GRN-202611-00001`, status `ACCEPTED`, PO `FULLY RECEIVED`, and UI confirmed stock updated (5 Nov 2026).
 - [x] Payment reference prefix: recorded supplier payment for TZS 1,200; Dashboard Recent activity shows generated payment number `PAY-202611-93CE34B0` (6 Nov 2026), confirming the `PAY-` prefix is applied.
-- [ ] Change currency, tax percentage, costing method, financial-year setting and low-stock threshold; save and verify the stored values.
-- [ ] Confirm a new invoice and purchase order use the configured default tax when no override is supplied; existing documents retain their original totals.
+- [x] Change the low-stock threshold from `0` to `5`; save, refresh and confirm `5` persisted (user confirmed, 6 Nov 2026).
+- [x] Change General settings tax from `18%` to `16%`; invoice and purchase-order forms both loaded `16%` after the integration fix (user confirmed, 6 Nov 2026).
+- [x] Change currency from `TZS` to `USD`, save/refresh, then restore `TZS`; user confirmed green (6 Nov 2026).
+- [x] Change costing method from `Weighted average` to `FIFO`, save/refresh, then restore `Weighted average`; user confirmed green (6 Nov 2026).
+- [x] Change financial year to `July to June`; Dashboard **This year** showed `2026-07-01` to `2026-11-07` (user confirmed, 7 Nov 2026). Restore to `Calendar year` after the verification.
+- [x] Confirm a new invoice uses the General settings default tax rate after saving; user confirmed green after the integration fix (6 Nov 2026).
+- [x] Confirm a new purchase order loads the effective default purchase tax rate; user confirmed 16% in percentage mode (6 Nov 2026).
+- [x] Confirm existing invoices and purchase orders retain their recorded tax amounts after changing defaults: invoice `PH25-INV-202611-00001` remained TZS 3,540 with TZS 540 tax; PO `PH25-PO-202611-00001` remained TZS 1,200 with TZS 0 tax (user confirmed, 6 Nov 2026).
 - [ ] Change date/time format, timezone, and week-start; confirm dates use the selected format/timezone on sales, customer, purchase, product, inventory, dashboard, and support screens. Confirm the week period uses the selected start day.
 - [ ] Set financial year to July or April; select **This year** on the dashboard and confirm its start date follows the configured financial year.
 - [ ] Set business language to Kiswahili or English; confirm the dashboard figures guide defaults to the selected language (the rest of the UI is not globally translated yet).

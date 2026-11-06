@@ -101,7 +101,7 @@ export function MetricCard({
 
   return (
     <Link href={href} aria-label={`View details for ${metric.label || metric.name}`} className="group block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-emerald-400 dark:focus-visible:ring-offset-[#090b09]">
-    <article className="rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm shadow-emerald-950/[0.03] transition hover:-translate-y-0.5 hover:shadow-md group-hover:border-emerald-300 dark:border-emerald-900/70 dark:bg-[#10251b] dark:shadow-black/20 dark:group-hover:border-emerald-800 sm:p-5">
+    <article className="flex h-full min-h-[168px] flex-col rounded-2xl border border-emerald-200/80 bg-emerald-50/80 p-4 shadow-sm shadow-emerald-950/[0.03] transition hover:-translate-y-0.5 hover:shadow-md group-hover:border-emerald-300 dark:border-[#343b33] dark:bg-[#191d19] dark:shadow-black/20 dark:group-hover:border-[#465047] sm:min-h-[176px] sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-xs font-medium text-[#777b73]">{metric.label || metric.name}</p>
@@ -120,8 +120,7 @@ export function MetricCard({
           </>
         )}
       </div>
-      {metric.name === 'Inventory Value' ? <p className="mt-2 text-[11px] leading-4 text-[#95988f]">Current stock valuation snapshot</p> : null}
-      <span className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">View details <span aria-hidden="true">→</span></span>
+      <span className="mt-auto pt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">View details <span aria-hidden="true">→</span></span>
     </article>
     </Link>
   );

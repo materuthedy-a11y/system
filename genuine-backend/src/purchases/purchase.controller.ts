@@ -45,6 +45,13 @@ export class PurchaseController {
   // PURCHASE ORDERS
   // ============================================================
 
+  @Get('options')
+  @RequirePermission('purchases.create')
+  @ApiOperation({ summary: 'Get defaults for a new purchase order' })
+  async getPurchaseOrderOptions(@Business() businessId: string) {
+    return this.purchaseService.getPurchaseOrderOptions(businessId);
+  }
+
   @Post('orders')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('purchases.create')

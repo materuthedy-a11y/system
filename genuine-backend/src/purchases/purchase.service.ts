@@ -56,6 +56,18 @@ export class PurchaseService {
   // PURCHASE ORDERS
   // ============================================================
 
+  async getPurchaseOrderOptions(businessId: string) {
+    const [business, defaultPurchaseTax] = await Promise.all([
+      this.prisma.business.findUnique({ where: { id: businessId }, select: { taxPercentage: true } }),
+      this.prisma.taxRate.findFirst({
+        where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['PURCHASES', 'BOTH'] } },
+        select: { rate: true },
+      }),
+    ]);
+    if (!business) throw new NotFoundException('Business not found');
+    return { taxPercentage: defaultPurchaseTax?.rate ?? business.taxPercentage };
+  }
+
   /**
    * CREATE PURCHASE ORDER
    */

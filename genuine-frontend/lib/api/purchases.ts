@@ -163,8 +163,14 @@ export interface CreatePurchaseOrderInput {
   notes?: string;
   referenceNumber?: string;
 }
+export interface PurchaseOrderOptions {
+  taxPercentage: number;
+}
 
 export const purchasesAPI = {
+  async orderOptions() {
+    return unwrap<PurchaseOrderOptions>(await apiClient.get('/purchases/options'));
+  },
   async orders(
     filters: {
       search?: string;

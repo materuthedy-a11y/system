@@ -728,6 +728,14 @@ export class BusinessService {
     if (!before) throw new NotFoundException('Business not found');
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.taxPercentage !== undefined) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:SALES`}, 0)) IS NULL AS locked`;
+      }
+      const salesDefaultRatesBefore = dto.taxPercentage === undefined
+        ? []
+        : await tx.taxRate.findMany({
+            where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } },
+          });
       const row = await tx.business.update({
         where: { id: businessId },
         data: {
@@ -771,6 +779,27 @@ export class BusinessService {
           description: 'UPDATE Business settings',
         },
       });
+      if (dto.taxPercentage !== undefined && salesDefaultRatesBefore.length) {
+        await tx.taxRate.updateMany({
+          where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } },
+          data: { rate: dto.taxPercentage },
+        });
+        for (const beforeRate of salesDefaultRatesBefore) {
+          const afterRate = { ...beforeRate, rate: dto.taxPercentage };
+          await tx.auditLog.create({
+            data: {
+              businessId,
+              userId,
+              entityType: 'TaxRate',
+              entityId: beforeRate.id,
+              action: 'UPDATE',
+              beforeData: JSON.stringify(beforeRate),
+              afterData: JSON.stringify(afterRate),
+              description: 'SYNC default sales tax rate from General settings',
+            },
+          });
+        }
+      }
       return row;
     });
 

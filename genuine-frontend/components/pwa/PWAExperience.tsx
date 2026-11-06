@@ -213,7 +213,7 @@ export function PWAExperience() {
     {waitingWorker ? <div role="status" aria-live="polite" className="fixed right-3 top-[78px] z-[84] flex max-w-[min(390px,calc(100vw-1.5rem))] items-center gap-3 rounded-2xl border border-[#d8b454]/35 bg-white/90 p-3.5 text-[#30342e] shadow-[0_18px_50px_rgba(20,30,15,0.2)] backdrop-blur-xl dark:bg-[#141714]/90 dark:text-[#e1e5de] sm:right-5">
       <RefreshCw size={18} className="shrink-0 text-[#70820f] dark:text-[#d8f04b]" />
       <p className="flex-1 text-xs leading-5">A Mizania update is ready.</p>
-      <button type="button" onClick={updateApp} disabled={isUpdating} className="min-h-9 rounded-lg bg-[#20211f] px-3 text-xs font-semibold text-white hover:bg-[#353832] disabled:opacity-60 dark:bg-[#d8f04b] dark:text-[#20211f]">{isUpdating ? 'Updating…' : 'Update'}</button>
+      <button type="button" onClick={updateApp} disabled={isUpdating} className="min-h-10 rounded-lg border border-[#7a6415] bg-[#20211f] px-4 text-sm font-bold text-white transition-colors hover:bg-[#353832] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9dbb16] focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-wait disabled:opacity-70 dark:border-[#efff83] dark:bg-[#d8f04b] dark:text-[#10130b] dark:hover:bg-[#e6fa67] dark:focus-visible:ring-offset-[#141714] dark:disabled:bg-[#879928] dark:disabled:text-[#10130b]">{isUpdating ? 'Updating…' : 'Update'}</button>
     </div> : null}
   </>;
 }

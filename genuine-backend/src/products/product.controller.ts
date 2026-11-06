@@ -63,7 +63,7 @@ export class ProductController {
 
   @Get('categories')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view', 'settings.view')
+  @RequirePermission('products.view', 'products.create', 'settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all product categories' })
   @ApiResponse({ status: 200, type: [CategoryResponseDto] })
   async getCategories(@Business() businessId: string, @Query('includeInactive') includeInactive?: string): Promise<CategoryResponseDto[]> {
@@ -72,7 +72,7 @@ export class ProductController {
 
   @Get('categories/hierarchy')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view', 'settings.view')
+  @RequirePermission('products.view', 'products.create', 'settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get category hierarchy' })
   @ApiResponse({ status: 200 })
   async getCategoryHierarchy(@Business() businessId: string) {
@@ -81,7 +81,7 @@ export class ProductController {
 
   @Get('units')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view', 'settings.view')
+  @RequirePermission('products.view', 'products.create', 'settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get active standard and business-specific product units' })
   async getUnits(@Business() businessId: string, @Query('includeInactive') includeInactive?: string) {
     return this.productService.getUnits(businessId, includeInactive === 'true');
@@ -157,7 +157,7 @@ export class ProductController {
 
   @Get('brands')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('products.view')
+  @RequirePermission('products.view', 'products.create')
   @ApiOperation({ summary: 'Get all product brands' })
   @ApiResponse({ status: 200, type: [BrandResponseDto] })
   async getBrands(@Business() businessId: string): Promise<BrandResponseDto[]> {

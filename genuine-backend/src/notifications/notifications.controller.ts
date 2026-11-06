@@ -46,13 +46,13 @@ export class NotificationsController {
   }
 
   @Get('templates')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getTemplates(@Business() businessId: string, @Query() filter: NotificationTemplateQueryDto) {
     return this.notifications.getAllTemplates(businessId, filter);
   }
 
   @Get('templates/:id')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getTemplate(@Business() businessId: string, @Param('id') id: string) {
     return this.notifications.getTemplateById(businessId, id);
   }
@@ -144,13 +144,13 @@ export class NotificationsController {
   }
 
   @Get('config/email')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getEmailConfig(@Business() businessId: string) {
     return this.notifications.getEmailConfig(businessId);
   }
 
   @Get('config/sms')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getSmsConfig(@Business() businessId: string) {
     return this.notifications.getSmsConfig(businessId);
   }

@@ -2,7 +2,7 @@
 
 **Code state:** Implementation is present for the items marked `[x]` under implementation. **Browser/device acceptance has not started.** No acceptance check in this file is green until it is observed with the application and recorded below.
 
-**Order:** Finish the user's currently paused Phase 25 acceptance, then Phase 24, then Phase 23 as previously agreed. After those, test Phases 27, 28, 29 and 30 in sequence. Phase 28's detailed combined checklist is [PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md](PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md). Phase 30's detailed PWA matrix is [PHASE30-PWA-CHECKLIST.md](genuine-frontend/docs/PHASE30-PWA-CHECKLIST.md).
+**Order:** Finish the user's currently paused Phase 25 acceptance, then Phase 24, then Phase 23 as previously agreed. After those, test Phases 27, 28, 29, 30 and 31 in sequence. Phase 28's detailed combined checklist is [PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md](PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md). Phase 30's detailed PWA matrix is [PHASE30-PWA-CHECKLIST.md](genuine-frontend/docs/PHASE30-PWA-CHECKLIST.md). Phase 31's role and authorization matrix is [PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md).
 
 ## Rules for acceptance
 
@@ -99,10 +99,16 @@
 - [ ] Confirm the final dark-mode PWA chrome/safe-area bars are charcoal on the actual installed app, and light mode remains readable; browser-chrome color is not inferred from the page background alone.
 - [ ] Confirm the browser-PWA does not claim push notifications, automatic/background sync or offline business-data access unless those features are separately specified, implemented and accepted.
 
+## Phase 31 — Permissions and authorization
+
+- [x] Keep Phase 31 after Phase 30 PWA in the phase plan; its rules apply as security criteria to earlier modules as well.
+- [x] Add the complete role, direct-route, API, delegation, session-revocation, and create-only/view-only acceptance matrix in [PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md).
+- [ ] Run the Phase 31 matrix after the user completes Phases 25, 24, 23, 27, 28, 29 and 30; record results in that checklist.
+
 ## Cross-phase checks and sign-off
 
 - [ ] Run the acceptance sequence for Phase 25 first, then Phase 24, then Phase 23, respecting each existing numbered checklist.
-- [ ] Run Phase 27, Phase 28, Phase 29, and Phase 30 acceptance in that order, stopping and fixing on the first failure.
+- [ ] Run Phase 27, Phase 28, Phase 29, Phase 30, and Phase 31 acceptance in that order, stopping and fixing on the first failure.
 - [ ] Review cross-links: supplier → purchase order/payment/return statement; notification → linked source; provider/outbox → notification delivery status; PWA draft → purchase order DRAFT only.
 - [ ] Verify all protected routes enforce backend permissions and business tenancy; hidden frontend controls alone are insufficient evidence.
 - [ ] Check browser console/network, database effects, audit trail, calculations, refresh persistence and mobile/dark-mode layout for every flow that mutates data.

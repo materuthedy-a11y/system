@@ -216,9 +216,10 @@ export class AuthController {
       businessName: user.business?.name || '',
       avatar: profile.avatar ? `/api/v1/auth/profile/avatar?v=${Date.now()}` : null,
       roles: user.userRoles?.map((ur: any) => ur.role?.name || ur.role) || [],
-      permissions:
-        user.userRoles?.flatMap((ur: any) => ur.role?.permissions || []).map((p: any) => p.key) ||
-        [],
+      permissions: [...new Set([
+        ...(user.userRoles?.flatMap((ur: any) => ur.role?.permissions || []).map((p: any) => p.key) || []),
+        ...(user.permissions?.map((p: any) => p.key) || []),
+      ])],
     };
   }
 

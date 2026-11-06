@@ -4,6 +4,8 @@
 
 This is one shared Phase 28 checklist for Expense Management and Payments & Finance. Expense records and all source payments must stay connected to sales invoices, purchase orders, and approved expenses. The payment register is a transaction register, not a general ledger. Financial statements and reports remain in Reports & Analytics.
 
+Role and route authorization for these modules is tracked in [Phase 31 — Permissions and authorization](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md), including the Settings-versus-Finance boundary and create-only access.
+
 ## Audit decisions and scope
 
 - [x] Audit Claude's supplied Phase 28 expense UI against the repository's real API and workflow.

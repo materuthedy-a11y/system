@@ -98,13 +98,13 @@ export class PaymentsController {
   }
 
   @Get('periods')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   listPeriods(@Business() businessId: string) {
     return this.payments.listAccountingPeriods(businessId);
   }
 
   @Get('periods/:id')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getPeriod(@Business() businessId: string, @Param('id') id: string) {
     return this.payments.getAccountingPeriodById(businessId, id);
   }

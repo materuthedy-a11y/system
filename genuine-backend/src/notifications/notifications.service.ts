@@ -301,6 +301,9 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       include: { recipients: true, logs: { orderBy: { timestamp: 'desc' } } },
     });
     if (!row) throw new NotFoundException('Notification not found');
+    // Password reset messages contain a live bearer link. Never return it
+    // through settings/admin notification APIs, even while the outbox retries.
+    if (row.eventType === 'PASSWORD_RESET') return { ...row, body: '[redacted]' };
     return row;
   }
 
@@ -513,7 +516,9 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         smtpPort: dto.smtpPort,
         smtpUsername: dto.smtpUsername,
         smtpPassword: dto.smtpPassword,
-        secure: dto.secure ?? dto.smtpPort === 465,
+        // Nodemailer uses implicit TLS only on port 465. Port 587 upgrades
+        // with STARTTLS after connecting and must start with secure=false.
+        secure: dto.smtpPort === 465 ? true : dto.smtpPort === 587 ? false : (dto.secure ?? false),
       });
     } else {
       if (!dto.apiKey?.trim()) throw new BadRequestException('SendGrid API key is required');

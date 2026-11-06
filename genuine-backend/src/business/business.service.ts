@@ -66,6 +66,7 @@ export class BusinessService {
     const email = dto.email.trim().toLowerCase();
     const role = await this.prisma.role.findFirst({ where: { id: dto.roleId, businessId } });
     if (!role) throw new BadRequestException('Choose a role from this business');
+    await this.assertRoleDelegable(businessId, actorId, role.id);
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) throw new ConflictException('This email address is already registered');
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -88,9 +89,14 @@ export class BusinessService {
   async updateManagedUser(businessId: string, actorId: string, id: string, dto: UpdateManagedUserDto) {
     const before = await this.prisma.user.findFirst({ where: { id, businessId }, include: { userRoles: { include: { role: true } } } });
     if (!before) throw new NotFoundException('User not found');
+    const actorIsOwner = await this.isBusinessOwner(businessId, actorId);
+    if (before.userRoles.some(({ role }) => role.name === 'Owner' && role.isSystem) && !actorIsOwner) {
+      throw new ForbiddenException('Only an Owner can manage the Owner account');
+    }
     if (actorId === id && dto.isActive === false) throw new BadRequestException('You cannot deactivate your own account');
     const nextRole = dto.roleId ? await this.prisma.role.findFirst({ where: { id: dto.roleId, businessId } }) : null;
     if (dto.roleId && !nextRole) throw new BadRequestException('Choose a role from this business');
+    if (nextRole) await this.assertRoleDelegable(businessId, actorId, nextRole.id);
     const hadOwnerRole = before.userRoles.some(({ role }) => role.name === 'Owner');
     const removesOwner = hadOwnerRole && (dto.isActive === false || (nextRole && nextRole.name !== 'Owner'));
     const normalizedEmail = dto.email?.trim().toLowerCase();
@@ -140,20 +146,63 @@ export class BusinessService {
     return { message: 'Password updated; the user must sign in again.' };
   }
 
-  async listRoles(businessId: string) {
+  async listRoles(businessId: string, actorId: string) {
     const roles = await this.prisma.role.findMany({ where: { businessId }, include: { permissions: { select: { key: true } }, _count: { select: { userRoles: true } } }, orderBy: [{ isSystem: 'desc' }, { name: 'asc' }] });
-    return roles.map(({ permissions, _count, ...role }) => ({ ...role, permissions: permissions.map(({ key }) => key), usersCount: _count.userRoles }));
+    const actor = await this.prisma.user.findFirst({
+      where: { id: actorId, businessId, isActive: true },
+      include: { userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } }, permissions: { select: { key: true } } },
+    });
+    if (!actor) throw new ForbiddenException('Your account cannot view team roles');
+    const actorPermissionKeys = new Set([...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)), ...actor.permissions.map(({ key }) => key)]);
+    const canManage = actorPermissionKeys.has('roles.manage');
+    const isOwner = actor.userRoles.some(({ role }) => role.name === 'Owner' && role.isSystem);
+    return roles
+      .filter((role) => (isOwner || role.name !== 'Owner') && (canManage || role.permissions.every(({ key }) => actorPermissionKeys.has(key))))
+      .map(({ permissions, _count, ...role }) => ({
+        ...role,
+        // Only role managers need the grant matrix; user managers receive safe assignment options.
+        permissions: canManage ? permissions.map(({ key }) => key) : [],
+        usersCount: _count.userRoles,
+        ...((role.name === 'Owner' && isOwner) ? { permissions: permissions.map(({ key }) => key) } : {}),
+      }));
   }
 
   async listPermissions(businessId: string) {
     return this.prisma.permission.findMany({ where: { businessId }, orderBy: [{ category: 'asc' }, { name: 'asc' }], select: { id: true, key: true, name: true, description: true, category: true, action: true } });
   }
 
+  private assertPermissionDependencies(permissionKeys: string[]) {
+    const granted = new Set(permissionKeys);
+    const allOf: Record<string, string[]> = {
+      'products.edit': ['products.view'], 'products.delete': ['products.view'],
+      'suppliers.edit': ['suppliers.view'], 'suppliers.delete': ['suppliers.view'],
+      'customers.edit': ['customers.view'], 'customers.delete': ['customers.view'],
+      'users.edit': ['users.view'], 'users.delete': ['users.view'],
+      'purchases.create': ['products.view', 'suppliers.view'],
+      'purchases.edit': ['purchases.view'], 'purchases.approve': ['purchases.view'], 'purchases.cancel': ['purchases.view'],
+      'sales.create': ['products.view', 'customers.view'],
+      'sales.edit': ['sales.view'], 'sales.discount': ['sales.view'], 'sales.approve': ['sales.view'], 'sales.cancel': ['sales.view'],
+      'inventory.adjust': ['inventory.view'], 'inventory.transfer': ['inventory.view'],
+      'expenses.edit': ['expenses.view'], 'expenses.delete': ['expenses.view'], 'expenses.approve': ['expenses.view'], 'expenses.pay': ['expenses.view'],
+      'reports.export': ['reports.view'],
+    };
+    const missing = new Set<string>();
+    for (const [permission, dependencies] of Object.entries(allOf)) {
+      if (granted.has(permission)) for (const dependency of dependencies) if (!granted.has(dependency)) missing.add(dependency);
+    }
+    if (granted.has('payments.create') && !['sales.view', 'purchases.view', 'expenses.view'].some((key) => granted.has(key))) {
+      missing.add('sales.view or purchases.view or expenses.view');
+    }
+    if (missing.size) throw new BadRequestException(`These permissions need their related view access: ${[...missing].join(', ')}`);
+  }
+
   async createRole(businessId: string, actorId: string, dto: CreateRoleDto) {
     const name = dto.name.trim();
-    if (['owner', 'admin'].includes(name.toLowerCase())) throw new BadRequestException('Owner and Admin role names are reserved');
+    if (['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('Built-in role names are reserved');
     const permissions = await this.prisma.permission.findMany({ where: { businessId, key: { in: [...new Set(dto.permissions)] } } });
     if (permissions.length !== new Set(dto.permissions).size) throw new BadRequestException('One or more permissions are not available in this business');
+    this.assertPermissionDependencies(permissions.map(({ key }) => key));
+    await this.assertPermissionsDelegable(businessId, actorId, permissions.map(({ key }) => key));
     try {
       return await this.prisma.$transaction(async (tx) => {
         const role = await tx.role.create({ data: { id: uuid(), businessId, name, description: dto.description?.trim() || null, isSystem: false, permissions: { connect: permissions.map(({ id }) => ({ id })) } }, include: { permissions: { select: { key: true } } } });
@@ -174,21 +223,59 @@ export class BusinessService {
     if (dto.permissions) {
       const permissions = await this.prisma.permission.findMany({ where: { businessId, key: { in: [...new Set(dto.permissions)] } }, select: { id: true } });
       if (permissions.length !== new Set(dto.permissions).size) throw new BadRequestException('One or more permissions are not available in this business');
+      this.assertPermissionDependencies(dto.permissions);
+      await this.assertPermissionsDelegable(businessId, actorId, dto.permissions);
       permissionIds = permissions.map(({ id: permissionId }) => permissionId);
     }
     const name = dto.name?.trim();
-    if (name && ['owner', 'admin'].includes(name.toLowerCase())) throw new BadRequestException('Owner and Admin role names are reserved');
+    if (name && ['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('Built-in role names are reserved');
     try {
       return await this.prisma.$transaction(async (tx) => {
         if (permissionIds) await tx.role.update({ where: { id }, data: { permissions: { set: permissionIds.map((permissionId) => ({ id: permissionId })) } } });
         const role = await tx.role.update({ where: { id }, data: { ...(name && { name }), ...(dto.description !== undefined && { description: dto.description.trim() || null }) }, include: { permissions: { select: { key: true } }, _count: { select: { userRoles: true } } } });
         await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'Role', entityId: id, action: 'UPDATE', beforeData: JSON.stringify(before), afterData: JSON.stringify(role), description: 'UPDATE role' } });
+        if (permissionIds) {
+          const assigned = await tx.userRole.findMany({ where: { roleId: id }, select: { userId: true } });
+          if (assigned.length) await tx.userSession.deleteMany({ where: { userId: { in: assigned.map(({ userId }) => userId) } } });
+        }
         return { ...role, permissions: role.permissions.map(({ key }) => key), usersCount: role._count.userRoles };
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('A role with this name already exists');
       throw error;
     }
+  }
+
+  private async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {
+    const assignment = await this.prisma.userRole.findFirst({
+      where: { userId, role: { businessId, name: 'Owner', isSystem: true } },
+      select: { userId: true },
+    });
+    return Boolean(assignment);
+  }
+
+  private async assertRoleDelegable(businessId: string, actorId: string, roleId: string) {
+    const role = await this.prisma.role.findFirst({
+      where: { id: roleId, businessId },
+      include: { permissions: { select: { key: true } } },
+    });
+    if (!role) throw new BadRequestException('Choose a role from this business');
+    if (role.name === 'Owner' && role.isSystem && !(await this.isBusinessOwner(businessId, actorId))) {
+      throw new ForbiddenException('Only an Owner can assign the Owner role');
+    }
+    await this.assertPermissionsDelegable(businessId, actorId, role.permissions.map(({ key }) => key));
+  }
+
+  private async assertPermissionsDelegable(businessId: string, actorId: string, requested: string[]) {
+    if (await this.isBusinessOwner(businessId, actorId)) return;
+    const actor = await this.prisma.user.findFirst({
+      where: { id: actorId, businessId, isActive: true },
+      include: { userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } }, permissions: { select: { key: true } } },
+    });
+    if (!actor) throw new ForbiddenException('Your account cannot delegate permissions');
+    const available = new Set([...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)), ...actor.permissions.map(({ key }) => key)]);
+    const denied = requested.filter((key) => !available.has(key));
+    if (denied.length) throw new ForbiddenException(`You cannot grant permissions you do not hold: ${denied.join(', ')}`);
   }
 
   async deleteRole(businessId: string, actorId: string, id: string) {

@@ -84,6 +84,9 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 
 ## 25.9 Users and roles
 
+Cross-system authorization cleanup and role-by-role verification has its own Phase 31 checklist: [Phase 31 — Permissions and authorization](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md). The code changes are in place; manual role checks remain pending until the Phase 31 acceptance stage.
+
+- [x] Confirm the Forgot Password flow sends a reset email through the SMTP provider configured for the same business as the account. User confirmed green after correcting the Gmail SMTP username to the account email and saving a valid App Password (6 Nov 2026).
 - [ ] Open `/dashboard/settings/users`; confirm the user list, role filter and active/inactive filter load.
 - [ ] Create a user with a unique email and role; confirm it appears with no password/hash exposed.
 - [ ] Edit user identity, role and active state; confirm sessions are revoked when role/email changes or the user is deactivated.

@@ -1,8 +1,10 @@
 /* Mizania app shell worker. Business/API responses and mutations are never cached or replayed. */
 const CACHE_PREFIX = 'mizania-shell-';
 const LEGACY_CACHE_PREFIXES = ['genuine-shell-'];
-const CACHE_NAME = `${CACHE_PREFIX}v2`;
-const OFFLINE_URL = '/offline';
+const CACHE_NAME = `${CACHE_PREFIX}v3`;
+// Keep the fallback as a self-contained static document. The Next.js /offline
+// page depends on hashed CSS and image assets that may not be cached yet.
+const OFFLINE_URL = '/offline.html';
 const PRECACHE_URLS = [
   OFFLINE_URL,
   '/manifest.webmanifest',

@@ -23,6 +23,12 @@ export interface NotificationLogPage {
   data: Array<{ id: string; type: NotificationType; eventType: NotificationEventType; status: string; subject: string; attemptCount: number; createdAt: string; recipientCount: number; sentCount: number; failedCount: number }>;
   total: number; page: number; limit: number; totalPages: number;
 }
+export interface NotificationLogDetail {
+  id: string; type: NotificationType; eventType: NotificationEventType | 'PASSWORD_RESET'; status: string;
+  subject: string; body: string; attemptCount: number;
+  recipients: Array<{ status: string; failureReason?: string | null }>;
+  logs: Array<{ status: string; message: string; timestamp: string; responseCode?: number | null }>;
+}
 export interface EmailProviderConfig { provider: 'SMTP' | 'SENDGRID'; fromEmail: string; fromName: string; configured: true; }
 export interface SmsProviderConfig { provider: 'TWILIO' | 'AFRICAS_TALKING'; fromNumber: string; configured: true; }
 
@@ -59,6 +65,9 @@ export const notificationsAPI = {
   },
   async deliveryLog(filters: { status?: string; type?: NotificationType; eventType?: NotificationEventType; page?: number; limit?: number } = {}) {
     return unwrap<NotificationLogPage>(await apiClient.get('/notifications', { params: filters }));
+  },
+  async deliveryDetail(id: string) {
+    return unwrap<NotificationLogDetail>(await apiClient.get(`/notifications/${encodeURIComponent(id)}`));
   },
   async emailConfig() { return unwrap<EmailProviderConfig>(await apiClient.get('/notifications/config/email')); },
   async saveEmailConfig(input: { provider: 'SMTP' | 'SENDGRID'; fromEmail: string; fromName: string; smtpHost?: string; smtpPort?: number; smtpUsername?: string; smtpPassword?: string; secure?: boolean; apiKey?: string }) {

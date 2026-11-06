@@ -4,7 +4,9 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   compress: true,
-  output: 'standalone',
+  // Keep standalone packaging for deployments, but allow local Windows builds
+  // to skip symlink-based tracing when the OS does not permit creating symlinks.
+  output: process.env.NEXT_OUTPUT_MODE === 'standard' ? undefined : 'standalone',
 
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api/v1';

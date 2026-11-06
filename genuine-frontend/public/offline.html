@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101210">
+  <title>Offline · Mizania</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #090a09; color: #f2f2ed; }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; min-height: 100dvh; margin: 0; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(ellipse at 50% 0%, #24231d 0, #111310 44%, #090a09 78%); }
+    main { width: min(100%, 560px); border: 1px solid #393a32; border-radius: 26px; background: rgba(23, 25, 22, .96); padding: clamp(22px, 6vw, 38px); box-shadow: 0 24px 80px #0009; }
+    header, .brand, .badge, .actions { display: flex; align-items: center; }
+    header, .actions { justify-content: space-between; gap: 12px; }
+    .brand { gap: 11px; font-weight: 750; letter-spacing: -.03em; font-size: 20px; }
+    .mark { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid #79652d; border-radius: 12px; color: #e7c75d; background: #272317; }
+    .badge { gap: 7px; border: 1px solid #62532c; border-radius: 999px; padding: 7px 11px; color: #f0d98f; background: #2c271b; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #e7c75d; }
+    .message { display: flex; align-items: flex-start; gap: 17px; margin-top: 38px; }
+    .wifi { flex: 0 0 54px; height: 54px; display: grid; place-items: center; border: 1px solid #67552d; border-radius: 16px; color: #f0d98f; background: linear-gradient(145deg, #3b321f, #28241b); }
+    .eyebrow { margin: 2px 0 0; color: #e3c76c; font-size: 11px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 8px 0 0; font-size: clamp(28px, 7vw, 36px); line-height: 1.1; letter-spacing: -.04em; }
+    .copy { margin: 11px 0 0; color: #b8b9b2; font-size: 14px; line-height: 1.7; }
+    .saved { margin-top: 24px; border: 1px solid #4b422a; border-radius: 16px; padding: 15px 16px; background: #211f18; }
+    .saved strong { color: #eee5c9; font-size: 12px; }
+    .saved p { margin: 6px 0 0; color: #bdb7a6; font-size: 12px; line-height: 1.65; }
+    .actions { margin-top: 25px; }
+    a { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 11px; padding: 0 17px; color: #e1e5de; border: 1px solid #45473f; background: #20221f; text-decoration: none; font-size: 13px; font-weight: 700; }
+    a.primary { color: #161714; border-color: #d7ae45; background: #d7ae45; }
+    a:hover { filter: brightness(1.08); }
+    a:focus-visible { outline: 2px solid #f0d98f; outline-offset: 3px; }
+    footer { margin-top: 20px; color: #85867f; text-align: center; font-size: 11px; }
+    @media (max-width: 420px) { header { align-items: flex-start; } .actions { align-items: stretch; flex-direction: column; } a { width: 100%; } .message { gap: 13px; } }
+  </style>
+</head>
+<body>
+  <main role="alert" aria-labelledby="offline-title">
+    <header>
+      <div class="brand"><span class="mark" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M3 5.5c3.5-1.7 6.4-1.2 9 1.1v13c-2.6-2.3-5.5-2.8-9-1.1v-13Zm18 0c-3.5-1.7-6.4-1.2-9 1.1v13c2.6-2.3 5.5-2.8 9-1.1v-13Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 9h3m-3 3h3m6-3h3m-3 3h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span><span>Mizania</span></div>
+      <span class="badge"><span class="dot"></span>Offline</span>
+    </header>
+    <section class="message">
+      <span class="wifi" aria-hidden="true"><svg width="25" height="25" viewBox="0 0 24 24" fill="none"><path d="M2 8.8a15.6 15.6 0 0 1 15.5-3.1M5.3 12.2a10.7 10.7 0 0 1 9.3-2.5M8.8 15.7a5.4 5.4 0 0 1 3.9-1.3M12 19h.01M3 3l18 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div><p class="eyebrow">Connection interrupted</p><h1 id="offline-title">You’re offline</h1><p class="copy">Mizania needs an internet connection to load current workspace data and send changes. Reconnect, then try again.</p></div>
+    </section>
+    <section class="saved"><strong>About saved work</strong><p>Only purchase-order drafts that you explicitly save are kept on this device. Approvals, receipts, payments, returns, and stock changes need a connection and are not queued.</p></section>
+    <nav class="actions" aria-label="Offline actions"><a class="primary" href="/dashboard"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4.8 9A7.5 7.5 0 0 1 18 6.5L20 12M4 17v-5h5m10.2 3A7.5 7.5 0 0 1 6 17.5L4 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Try again</a><a href="/login">Go to sign in</a></nav>
+    <footer>Your records stay protected while you reconnect.</footer>
+  </main>
+</body>
+</html>

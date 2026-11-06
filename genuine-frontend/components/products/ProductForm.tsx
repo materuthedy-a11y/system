@@ -78,6 +78,7 @@ export function ProductForm({
 }) {
   const permissions = useAuthStore((state) => state.user?.permissions ?? []);
   const canViewSuppliers = permissions.includes('suppliers.view');
+  const productHome = permissions.includes('products.view') ? '/dashboard/products' : '/dashboard';
   const canCreate = permissions.includes('products.create');
   const canEdit = permissions.includes('products.edit');
   const [form, setForm] = useState<FormState>(blank);
@@ -361,8 +362,14 @@ export function ProductForm({
       const saved = productId
         ? await productsAPI.update(productId, updateInput)
         : await productsAPI.create(input);
-      notify.success(productId ? 'Product updated.' : 'Product created.');
+      notify.success(productId ? 'Product updated.' : permissions.includes('products.view') ? 'Product created.' : 'Product created. Saved products remain hidden without products.view.');
       onSuccess(saved);
+      if (!productId && !permissions.includes('products.view')) {
+        const firstUnit = units[0];
+        setForm({ ...blank, defaultUnitId: firstUnit?.id || '' });
+        setUnitLines(firstUnit ? [{ unitId: firstUnit.id, conversionFactor: '1', isDefault: true }] : []);
+        setImages([]);
+      }
     } catch (error) {
       notify.error(getApiError(error, 'We could not save this product.'));
     } finally {
@@ -390,7 +397,7 @@ export function ProductForm({
           Your account is not allowed to {productId ? 'edit' : 'create'} products in this workspace.
         </p>
         <Link
-          href="/dashboard/products"
+          href={productHome}
           className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-[#20211f] px-4 text-sm font-bold text-white"
         >
           Back to products
@@ -419,7 +426,7 @@ export function ProductForm({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link
-            href="/dashboard/products"
+            href={productHome}
             className="inline-flex items-center gap-2 text-sm font-semibold text-[#65705c] hover:text-[#20211f]"
           >
             <ArrowLeft size={16} />
@@ -819,7 +826,7 @@ export function ProductForm({
       </section>
       <div className="flex flex-wrap justify-end gap-3">
         <Link
-          href="/dashboard/products"
+          href={productHome}
           className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#dfe5d3] px-5 text-sm font-semibold text-[#4e5549] hover:bg-white"
         >
           Cancel

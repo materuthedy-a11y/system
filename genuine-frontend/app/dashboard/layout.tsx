@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShoppingCart, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShoppingCart, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { authAPI, getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
@@ -22,8 +22,13 @@ import { useBusinessProfileStore } from '@/store/businessProfileStore';
 import { NotificationBadge } from '@/components/notifications/NotificationBadge';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={null}><DashboardLayoutContent>{children}</DashboardLayoutContent></Suspense>;
+}
+
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
   const initialize = useAuthStore((state) => state.initialize);
@@ -68,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const compactSidebar = isDesktop && sidebarCollapsed;
 
   useEffect(() => {
-    if (!user?.businessId || !user.permissions.includes('settings.view')) return;
+    if (!user?.businessId || (!user.permissions.includes('settings.view') && !user.permissions.includes('settings.edit'))) return;
     // Load business date/time preferences every time; apply business theme only when the user has no local override.
     let live = true;
     Promise.all([settingsAPI.getGeneral(), settingsAPI.getProfile()]).then(([settings, profile]) => {
@@ -307,26 +312,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return <AuthLoadingOverlay message="Verifying your secure session…" />;
   }
 
-  const navItems = [
-    { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, active: pathname === '/dashboard' },
-    { label: 'Sales', href: user.permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/sales/invoices/new', icon: ShoppingCart, active: pathname.startsWith('/dashboard/sales'), comingSoon: !user.permissions.some((permission) => permission === 'sales.view' || permission === 'sales.create') },
-    { label: 'Products', href: '/dashboard/products', icon: Package, active: pathname.startsWith('/dashboard/products') },
-    { label: 'Inventory', href: user.permissions.includes('inventory.view') ? '/dashboard/inventory' : '#', icon: Warehouse, active: pathname.startsWith('/dashboard/inventory'), comingSoon: !user.permissions.includes('inventory.view') },
-    { label: 'Purchases', href: '/dashboard/purchases', icon: Truck, active: pathname.startsWith('/dashboard/purchases') },
-    { label: 'Customers', href: user.permissions.includes('customers.view') ? '/dashboard/customers' : '#', icon: UsersRound, active: pathname.startsWith('/dashboard/customers'), comingSoon: !user.permissions.includes('customers.view') },
-    { label: 'Suppliers', href: user.permissions.includes('suppliers.view') ? '/dashboard/suppliers' : '#', icon: UserRound, active: pathname.startsWith('/dashboard/suppliers'), comingSoon: !user.permissions.includes('suppliers.view') },
-    { label: 'Payments & Finance', href: user.permissions.some((permission) => ['payments.view', 'settings.view'].includes(permission)) ? '/dashboard/finance' : '#', icon: CircleDollarSign, active: pathname.startsWith('/dashboard/finance'), comingSoon: !user.permissions.some((permission) => ['payments.view', 'settings.view'].includes(permission)) },
-    { label: 'Expenses', href: user.permissions.some((permission) => ['expenses.view', 'expenses.create', 'expenses.edit', 'expenses.approve', 'expenses.pay'].includes(permission)) ? '/dashboard/expenses' : '#', icon: Receipt, active: pathname.startsWith('/dashboard/expenses'), comingSoon: !user.permissions.some((permission) => ['expenses.view', 'expenses.create', 'expenses.edit', 'expenses.approve', 'expenses.pay'].includes(permission)) },
-    { label: 'Reports & Analytics', href: user.permissions.includes('reports.view') ? '/dashboard/reports' : '#', icon: FileBarChart2, active: pathname.startsWith('/dashboard/reports'), comingSoon: !user.permissions.includes('reports.view') },
-    { label: 'Settings', href: user.permissions.includes('settings.view') ? '/dashboard/settings' : '/dashboard/security', icon: Settings2, active: pathname.startsWith('/dashboard/settings') || pathname.startsWith('/dashboard/security'), comingSoon: !user.permissions.includes('settings.view') },
+  const has = (...keys: string[]) => keys.some((key) => user.permissions.includes(key));
+  const navItems: Array<{ label: string; href: string; icon: LucideIcon; active: boolean; comingSoon?: boolean }> = [
+    ...(has('reports.view') ? [{ label: 'Overview', href: '/dashboard', icon: LayoutDashboard, active: pathname === '/dashboard' }] : []),
+    ...(has('sales.view', 'sales.create') ? [{ label: 'Sales', href: has('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/sales/invoices/new', icon: ShoppingCart, active: pathname.startsWith('/dashboard/sales') }] : []),
+    ...(has('products.view', 'products.create') ? [{ label: 'Products', href: has('products.view') ? '/dashboard/products' : '/dashboard/products/new', icon: Package, active: pathname.startsWith('/dashboard/products') }] : []),
+    ...(has('inventory.view', 'inventory.adjust', 'inventory.transfer') ? [{ label: 'Inventory', href: has('inventory.view') ? '/dashboard/inventory' : has('inventory.adjust') ? '/dashboard/inventory/adjustments/new' : '/dashboard/inventory/transfers/new', icon: Warehouse, active: pathname.startsWith('/dashboard/inventory') }] : []),
+    ...(has('purchases.view', 'purchases.create') ? [{ label: 'Purchases', href: has('purchases.view') ? '/dashboard/purchases' : '/dashboard/purchases/orders/new', icon: Truck, active: pathname.startsWith('/dashboard/purchases') }] : []),
+    ...(has('customers.view', 'customers.create') ? [{ label: 'Customers', href: has('customers.view') ? '/dashboard/customers' : '/dashboard/customers/new', icon: UsersRound, active: pathname.startsWith('/dashboard/customers') }] : []),
+    ...(has('suppliers.view', 'suppliers.create') ? [{ label: 'Suppliers', href: has('suppliers.view') ? '/dashboard/suppliers' : '/dashboard/suppliers/new', icon: UserRound, active: pathname.startsWith('/dashboard/suppliers') }] : []),
+    ...(has('payments.view') ? [{ label: 'Payments & Finance', href: '/dashboard/finance', icon: CircleDollarSign, active: pathname.startsWith('/dashboard/finance') && searchParams.get('tab') !== 'periods' }] : []),
+    ...(has('settings.view', 'settings.edit') ? [{ label: 'Accounting periods', href: '/dashboard/finance?tab=periods', icon: CalendarDays, active: pathname.startsWith('/dashboard/finance') && searchParams.get('tab') === 'periods' }] : []),
+    ...(has('expenses.view', 'expenses.create') ? [{ label: 'Expenses', href: has('expenses.view') ? '/dashboard/expenses' : '/dashboard/expenses/new', icon: Receipt, active: pathname.startsWith('/dashboard/expenses') }] : []),
+    ...(has('reports.view') ? [{ label: 'Reports & Analytics', href: '/dashboard/reports', icon: FileBarChart2, active: pathname.startsWith('/dashboard/reports') }] : []),
+    ...(has('settings.view', 'settings.edit') ? [{ label: 'Settings', href: '/dashboard/settings', icon: Settings2, active: pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/users') && !pathname.startsWith('/dashboard/settings/roles') }] : []),
+    ...(has('users.view', 'users.create', 'users.edit', 'users.delete', 'roles.manage') ? [{ label: 'Team access', href: has('users.view', 'users.create', 'users.edit', 'users.delete') ? '/dashboard/settings/users' : '/dashboard/settings/roles', icon: UsersRound, active: pathname.startsWith('/dashboard/settings/users') || pathname.startsWith('/dashboard/settings/roles') }] : []),
+    { label: 'Password & security', href: '/dashboard/security', icon: Settings2, active: pathname.startsWith('/dashboard/security') },
     { label: 'Help & feedback', href: '/dashboard/help-feedback', icon: LifeBuoy, active: pathname.startsWith('/dashboard/help-feedback') },
   ];
   const navGroups = [
     { label: 'Workspace', items: navItems.filter(({ label }) => label === 'Overview') },
     { label: 'Operations', items: navItems.filter(({ label }) => ['Sales', 'Products', 'Inventory', 'Purchases', 'Customers', 'Suppliers'].includes(label)) },
-    { label: 'Finance', items: navItems.filter(({ label }) => ['Payments & Finance', 'Expenses'].includes(label)) },
+    { label: 'Finance', items: navItems.filter(({ label }) => ['Payments & Finance', 'Accounting periods', 'Expenses'].includes(label)) },
     { label: 'Insights', items: navItems.filter(({ label }) => label === 'Reports & Analytics') },
-    { label: 'Account', items: navItems.filter(({ label }) => ['Settings', 'Help & feedback'].includes(label)) },
+    { label: 'Account', items: navItems.filter(({ label }) => ['Settings', 'Team access', 'Password & security', 'Help & feedback'].includes(label)) },
   ];
   const currentNavItem = navItems.find(({ active }) => active);
   const currentNavGroup = navGroups.find(({ items }) => items.some(({ active }) => active))?.label || 'Workspace';
@@ -356,7 +365,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>, document.body)}
         </div>
         <nav aria-label="Main navigation" className="dashboard-sidebar-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pb-3">
-          {navGroups.map(({ label: groupLabel, items }, groupIndex) => (
+          {navGroups.filter(({ items }) => items.length > 0).map(({ label: groupLabel, items }, groupIndex) => (
             <section key={groupLabel} aria-label={`${groupLabel} navigation`}>
               {compactSidebar ? (
                 groupIndex > 0 ? <div aria-hidden="true" className="mx-2 mb-2 border-t border-slate-200 dark:border-[#d8b454]/20" /> : null

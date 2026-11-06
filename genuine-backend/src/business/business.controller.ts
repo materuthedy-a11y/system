@@ -70,7 +70,7 @@ export class BusinessController {
 
   @Get('profile')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get business profile' })
   @ApiResponse({ status: 200, type: BusinessProfileResponseDto })
   async getBusinessProfile(@Business() businessId: string): Promise<BusinessProfileResponseDto> {
@@ -92,7 +92,7 @@ export class BusinessController {
 
   @Get('setup-status')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get setup status' })
   @ApiResponse({ status: 200 })
   async getSetupStatus(@Business() businessId: string) {
@@ -100,7 +100,7 @@ export class BusinessController {
   }
 
   @Get('settings')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   getBusinessSettings(@Business() businessId: string) {
     return this.businessService.getBusinessSettings(businessId);
   }
@@ -112,7 +112,7 @@ export class BusinessController {
   }
 
   @Get('users')
-  @RequirePermission('users.view', 'roles.manage')
+  @RequirePermission('users.view', 'users.edit', 'users.delete')
   listManagedUsers(@Business() businessId: string, @Query('roleId') roleId?: string, @Query('status') status?: string) {
     return this.businessService.listManagedUsers(businessId, roleId, status);
   }
@@ -143,9 +143,9 @@ export class BusinessController {
   }
 
   @Get('roles')
-  @RequirePermission('roles.manage', 'users.view')
-  listRoles(@Business() businessId: string) {
-    return this.businessService.listRoles(businessId);
+  @RequirePermission('roles.manage', 'users.view', 'users.create', 'users.edit')
+  listRoles(@Business() businessId: string, @UserId() userId: string) {
+    return this.businessService.listRoles(businessId, userId);
   }
 
   @Get('permissions')
@@ -174,7 +174,7 @@ export class BusinessController {
   }
 
   @Get('tax-rates')
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   listTaxRates(@Business() businessId: string) {
     return this.businessService.listTaxRates(businessId);
   }
@@ -213,7 +213,7 @@ export class BusinessController {
 
   @Get('locations')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all locations' })
   @ApiResponse({ status: 200, type: [LocationResponseDto] })
   async getLocations(
@@ -228,7 +228,7 @@ export class BusinessController {
   @RequirePermission(
     'sales.view', 'sales.create', 'sales.edit',
     'purchases.view', 'purchases.create',
-    'inventory.view', 'products.view', 'settings.view',
+    'inventory.view', 'products.view', 'settings.view', 'settings.edit',
     'payments.view', 'expenses.view', 'expenses.create',
   )
   @ApiOperation({ summary: 'Get active locations for the current workspace' })
@@ -266,7 +266,7 @@ export class BusinessController {
 
   @Get('payment-methods')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all payment methods' })
   @ApiResponse({ status: 200, type: [PaymentMethodResponseDto] })
   async getPaymentMethods(
@@ -304,7 +304,7 @@ export class BusinessController {
 
   @Get('expense-categories')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all expense categories' })
   @ApiResponse({ status: 200, type: [ExpenseCategoryResponseDto] })
   async getExpenseCategories(
@@ -316,7 +316,7 @@ export class BusinessController {
 
   @Get('units')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('settings.view')
+  @RequirePermission('settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all units' })
   @ApiResponse({ status: 200 })
   async getUnits(@Business() businessId: string) {

@@ -9,6 +9,7 @@ import { getApiError } from '@/lib/api';
 import { customersAPI, type Customer, type CustomerInput, type CustomerType } from '@/lib/api/customers';
 import { CustomerPhotoField } from '@/components/customers/CustomerPhoto';
 import { notify } from '@/components/ui/AppToaster';
+import { useAuthStore } from '@/store/authStore';
 
 const inputClass = 'min-h-10 w-full rounded-lg border border-[#d8ddd3] bg-white px-3 text-sm text-[#20231f] outline-none transition placeholder:text-[#858d82] focus-visible:ring-2 focus-visible:ring-emerald-600/70 dark:border-white/15 dark:bg-[#111411] dark:text-white dark:placeholder:text-white/40 dark:focus-visible:ring-emerald-400/70';
 const labelClass = 'block text-xs font-semibold text-[#485247] dark:text-white/75';
@@ -60,6 +61,7 @@ function PhoneInput({ label, value, onChange, required = false, error, inputRef 
 
 export function CustomerForm({ customerId }: { customerId?: string }) {
   const router = useRouter();
+  const canViewCustomers = useAuthStore((state) => state.user?.permissions?.includes('customers.view') ?? false);
   const editing = !!customerId;
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(editing);
@@ -150,8 +152,15 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
       delete updateInput.customerCode;
       delete updateInput.openingBalance;
       const saved = editing ? await customersAPI.update(customerId!, updateInput) : await customersAPI.create(input);
-      notify.success(editing ? 'Customer changes saved.' : 'Customer created.');
-      router.push(`/dashboard/customers/${saved.id}`);
+      notify.success(editing ? 'Customer changes saved.' : canViewCustomers ? 'Customer created.' : 'Customer created. Saved customers remain hidden without customers.view.');
+      if (editing || canViewCustomers) {
+        router.push(`/dashboard/customers/${saved.id}`);
+      } else {
+        setName(''); setCustomerCode(''); setCustomerType('RETAIL'); setEmail(''); setEmailError('');
+        setPhone(''); setPhoneError(''); setSecondaryPhone(''); setSecondaryPhoneError(''); setTaxId('');
+        setDescription(''); setCreditLimit('0'); setOpeningBalance('0'); setPaymentTerms('COD'); setStatus('ACTIVE');
+        setPhoto(undefined); setContacts([]); setStreet(''); setCity(''); setRegion(''); setPostalCode(''); setCountry('Tanzania');
+      }
     } catch (cause) {
       const message = getApiError(cause, 'Could not save this customer.');
       if (/secondaryPhone must be a valid phone number/i.test(message)) {
@@ -205,6 +214,6 @@ export function CustomerForm({ customerId }: { customerId?: string }) {
       <h2 className="text-sm font-bold text-[#87600a] dark:text-amber-300">Business address</h2><div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className={labelClass}>Street<input maxLength={160} className={`${inputClass} mt-1.5`} value={street} onChange={(e) => setStreet(e.target.value)} /></label><label className={labelClass}>City<input maxLength={100} className={`${inputClass} mt-1.5`} value={city} onChange={(e) => setCity(e.target.value)} /></label><label className={labelClass}>Region<input maxLength={100} className={`${inputClass} mt-1.5`} value={region} onChange={(e) => setRegion(e.target.value)} /></label><label className={labelClass}>Postal code<input maxLength={30} className={`${inputClass} mt-1.5`} value={postalCode} onChange={(e) => setPostalCode(e.target.value)} /></label><label className={labelClass}>Country<input maxLength={80} className={`${inputClass} mt-1.5`} value={country} onChange={(e) => setCountry(e.target.value)} /></label>
       </div></section>
-    <div className="flex flex-wrap justify-end gap-2"><Link href={customerId ? `/dashboard/customers/${customerId}` : '/dashboard/customers'} className="inline-flex min-h-10 items-center rounded-md border border-[#d4d9ce] px-4 text-sm font-semibold text-[#414a40] hover:bg-white dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5">Cancel</Link><button disabled={saving} aria-busy={saving} className="inline-flex min-h-10 items-center rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500">{saving ? 'Saving…' : editing ? 'Save customer' : 'Create customer'}</button></div>
+    <div className="flex flex-wrap justify-end gap-2"><Link href={customerId ? `/dashboard/customers/${customerId}` : canViewCustomers ? '/dashboard/customers' : '/dashboard'} className="inline-flex min-h-10 items-center rounded-md border border-[#d4d9ce] px-4 text-sm font-semibold text-[#414a40] hover:bg-white dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5">Cancel</Link><button disabled={saving} aria-busy={saving} className="inline-flex min-h-10 items-center rounded-md bg-emerald-700 px-5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70 dark:bg-emerald-600 dark:hover:bg-emerald-500">{saving ? 'Saving…' : editing ? 'Save customer' : 'Create customer'}</button></div>
   </form>;
 }

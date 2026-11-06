@@ -107,7 +107,6 @@ async function main() {
     { key: 'purchases.edit', category: 'purchases', action: 'edit' },
     { key: 'purchases.approve', category: 'purchases', action: 'approve' },
     { key: 'purchases.cancel', category: 'purchases', action: 'cancel' },
-    { key: 'purchases.delete', category: 'purchases', action: 'delete' },
 
     // Payments
     { key: 'payments.view', category: 'payments', action: 'view' },
@@ -121,9 +120,14 @@ async function main() {
     // Expenses
     { key: 'expenses.view', category: 'expenses', action: 'view' },
     { key: 'expenses.create', category: 'expenses', action: 'create' },
+    { key: 'expenses.edit', category: 'expenses', action: 'edit' },
+    { key: 'expenses.delete', category: 'expenses', action: 'delete' },
+    { key: 'expenses.approve', category: 'expenses', action: 'approve' },
+    { key: 'expenses.pay', category: 'expenses', action: 'pay' },
 
     // Reports
     { key: 'reports.view', category: 'reports', action: 'view' },
+    { key: 'reports.export', category: 'reports', action: 'export' },
 
     // Suppliers
     { key: 'suppliers.view', category: 'suppliers', action: 'view' },
@@ -138,7 +142,12 @@ async function main() {
     { key: 'customers.delete', category: 'customers', action: 'delete' },
 
     // Admin
-    { key: 'users.manage', category: 'users', action: 'manage' },
+    { key: 'users.view', category: 'users', action: 'view' },
+    { key: 'users.create', category: 'users', action: 'create' },
+    { key: 'users.edit', category: 'users', action: 'edit' },
+    { key: 'users.delete', category: 'users', action: 'delete' },
+    { key: 'roles.manage', category: 'roles', action: 'manage' },
+    { key: 'settings.view', category: 'settings', action: 'view' },
     { key: 'settings.edit', category: 'settings', action: 'edit' },
     { key: 'audit.view', category: 'audit', action: 'view' },
   ];

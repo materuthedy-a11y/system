@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle, Clock3, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -59,12 +60,29 @@ function dateRangeLabel(filter: DashboardFilter) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const activeLocation = useWorkspaceStore((state) => state.activeLocation);
   const permissions = user?.permissions ?? EMPTY_PERMISSIONS;
   const canViewReports = permissions.includes('reports.view');
   const canViewInventory = permissions.includes('inventory.view');
   const canViewProducts = permissions.includes('products.view');
+
+  useEffect(() => {
+    if (!user || canViewReports) return;
+    const destination = permissions.includes('sales.view') || permissions.includes('sales.create') ? (permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/sales/invoices/new')
+      : permissions.includes('products.view') || permissions.includes('products.create') ? (permissions.includes('products.view') ? '/dashboard/products' : '/dashboard/products/new')
+      : permissions.includes('inventory.view') || permissions.includes('inventory.adjust') || permissions.includes('inventory.transfer') ? '/dashboard/inventory'
+      : permissions.includes('purchases.view') || permissions.includes('purchases.create') ? (permissions.includes('purchases.view') ? '/dashboard/purchases' : '/dashboard/purchases/orders/new')
+      : permissions.includes('customers.view') || permissions.includes('customers.create') ? (permissions.includes('customers.view') ? '/dashboard/customers' : '/dashboard/customers/new')
+      : permissions.includes('suppliers.view') || permissions.includes('suppliers.create') ? (permissions.includes('suppliers.view') ? '/dashboard/suppliers' : '/dashboard/suppliers/new')
+      : permissions.includes('expenses.view') || permissions.includes('expenses.create') ? (permissions.includes('expenses.view') ? '/dashboard/expenses' : '/dashboard/expenses/new')
+      : permissions.includes('payments.view') ? '/dashboard/finance'
+      : permissions.includes('settings.view') || permissions.includes('settings.edit') ? '/dashboard/settings'
+      : permissions.some((permission) => permission.startsWith('users.') || permission === 'roles.manage') ? '/dashboard/settings/users'
+      : '/dashboard/security';
+    router.replace(destination);
+  }, [user, canViewReports, permissions, router]);
   const [period, setPeriod] = useState<PeriodKey>('month');
   const [definitionsLanguage, setDefinitionsLanguage] = useState<'sw' | 'en'>('sw');
   const [businessSettingsVersion, setBusinessSettingsVersion] = useState(0);

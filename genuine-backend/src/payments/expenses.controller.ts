@@ -51,13 +51,13 @@ export class ExpensesController {
   }
 
   @Get('categories')
-  @RequirePermission('expenses.view', 'expenses.create', 'settings.view')
+  @RequirePermission('expenses.view', 'expenses.create')
   listCategories(@Business() businessId: string, @Query('activeOnly') activeOnly?: string) {
     return this.expenses.listCategories(businessId, activeOnly === 'true');
   }
 
   @Get('categories/:id')
-  @RequirePermission('expenses.view', 'settings.view')
+  @RequirePermission('expenses.view')
   getCategory(@Business() businessId: string, @Param('id') id: string) {
     return this.expenses.getCategory(businessId, id);
   }

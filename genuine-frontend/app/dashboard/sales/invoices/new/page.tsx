@@ -111,13 +111,23 @@ export default function NewSalesInvoicePage() {
     if (!Number.isFinite(Number(discountAmount)) || Number(discountAmount) < 0 || Number(discountAmount) > subtotal || hasMoreThanDecimals(Number(discountAmount), 2)) { setError('Invoice discount must be nonnegative, no more than the discounted subtotal, and use at most two decimal places.'); return; }
     const payload: CreateSalesInvoiceInput = { customerId, locationId, invoiceDate, dueDate: dueDate || undefined, paymentTerms, items: cleanLines, discountAmount: Number(discountAmount), ...(permissions.canEditSettings ? { taxPercentage: Number(taxPercentage) } : {}), notes: notes.trim() || undefined };
     setSaving(true);
-    try { const created = await createInvoice(payload); notify.success(`Draft invoice ${created.invoiceNumber} created.`); router.push(`/dashboard/sales/invoices/${encodeURIComponent(created.id)}`); }
+    try {
+      const created = await createInvoice(payload);
+      notify.success(`Draft invoice ${created.invoiceNumber} created.`);
+      if (permissions.canView) router.push(`/dashboard/sales/invoices/${encodeURIComponent(created.id)}`);
+      else {
+        setCustomerId(''); setInvoiceDate(localDay()); setDueDate(''); setPaymentTerms('COD');
+        setDiscountAmount('0'); setNotes(''); setLines([blankLine()]);
+        setError('Draft created. Your role can create invoices but cannot open saved invoices; ask an administrator for sales.view if you need to review them.');
+      }
+    }
     catch (cause) { const message = getApiError(cause, 'Could not create the invoice.'); setError(message); notify.error(message); }
     finally { setSaving(false); }
   }
 
   if (!permissions.canCreate) return <div className="mx-auto max-w-5xl p-5"><SalesNotice>Your account does not have permission to create sales invoices.</SalesNotice></div>;
   return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+    <Link href={permissions.canView ? '/dashboard/sales/invoices' : '/dashboard'} className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-semibold text-[#5b6554] hover:text-[#20231f]"><span aria-hidden="true">←</span>{permissions.canView ? 'All invoices' : 'Back to workspace'}</Link>
     <SalesHeading title="New invoice" description="Create a draft. Stock changes only after an authorized user issues it." />
     {error || storeError ? <SalesNotice>{error || storeError}</SalesNotice> : null}
     {loadingOptions ? <p role="status" className="mb-4 text-sm text-[#747a68]">Loading customers, products and locations…</p> : null}

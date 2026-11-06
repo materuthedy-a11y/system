@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
@@ -18,6 +18,10 @@ const reasons: Array<{ value: ReturnReason; label: string }> = [
 type Line = { quantity: string; reason: ReturnReason | '' };
 
 export default function NewSalesReturnPage() {
+  return <Suspense fallback={<p role="status" className="p-6 text-center text-sm text-[#747a68]">Loading return form…</p>}><NewSalesReturnContent /></Suspense>;
+}
+
+function NewSalesReturnContent() {
   const router = useRouter(); const search = useSearchParams(); const invoiceId = search.get('salesInvoiceId') || '';
   const createReturn = useSalesStore((state) => state.createReturn); const permissions = useSalesPermissions();
   const [invoice, setInvoice] = useState<SalesInvoice | null>(null); const [lines, setLines] = useState<Record<string, Line>>({});

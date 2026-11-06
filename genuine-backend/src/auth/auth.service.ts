@@ -241,12 +241,14 @@ export class AuthService {
     }
 
     if (!user.isActive) {
+      await this.recordLoginFailure(user.businessId, user.id, ipAddress, userAgent, 'Inactive account');
       throw new UnauthorizedException('User account is deactivated');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       this.logger.warn(`[AUTH] Invalid password for ${normalizedEmail}`);
+      await this.recordLoginFailure(user.businessId, user.id, ipAddress, userAgent, 'Invalid credentials');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -273,17 +275,31 @@ export class AuthService {
     const refreshTokenHash = await bcrypt.hash(tokens.refreshToken, 10);
     const now = new Date();
     const absoluteExpiresAt = this._sessionAbsoluteExpiry(now);
-    await this.prisma.userSession.create({
-      data: {
-        id: sessionId,
-        userId: user.id,
-        refreshTokenHash,
-        ipAddress,
-        userAgent,
-        expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
-        absoluteExpiresAt,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.userSession.create({
+        data: {
+          id: sessionId,
+          userId: user.id,
+          refreshTokenHash,
+          ipAddress,
+          userAgent,
+          expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
+          absoluteExpiresAt,
+        },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          businessId: user.businessId,
+          userId: user.id,
+          entityType: 'UserSession',
+          entityId: sessionId,
+          action: 'LOGIN',
+          ipAddress,
+          userAgent: userAgent?.slice(0, 500),
+          description: 'User signed in successfully',
+        },
+      }),
+    ]);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -562,6 +578,14 @@ export class AuthService {
       if (consumed.count !== 1) {
         throw new UnauthorizedException('Invalid or expired reset token');
       }
+      await tx.auditLog.create({ data: {
+        businessId: user.businessId,
+        userId: user.id,
+        entityType: 'User',
+        entityId: user.id,
+        action: 'PASSWORD_RESET',
+        description: 'User reset their password using the account recovery flow',
+      } });
       await tx.userSession.deleteMany({ where: { userId: user.id } });
     });
 
@@ -598,6 +622,14 @@ export class AuthService {
         where: { id: userId },
         data: { passwordHash: hashedPassword },
       });
+      await tx.auditLog.create({ data: {
+        businessId: user.businessId,
+        userId,
+        entityType: 'User',
+        entityId: userId,
+        action: 'PASSWORD_CHANGE',
+        description: 'User changed their password',
+      } });
       await tx.userSession.deleteMany({ where: { userId } });
     });
 
@@ -608,10 +640,27 @@ export class AuthService {
 
   async logout(userId: string, sessionId: string): Promise<{ message: string }> {
     this.logger.log(`[AUTH] Logout for user: ${userId}`);
-
-    await this.prisma.userSession.deleteMany({
+    const session = await this.prisma.userSession.findFirst({
       where: { userId, id: sessionId },
+      include: { user: { select: { businessId: true } } },
     });
+    if (session) {
+      await this.prisma.$transaction([
+        this.prisma.auditLog.create({
+          data: {
+            businessId: session.user.businessId,
+            userId,
+            entityType: 'UserSession',
+            entityId: sessionId,
+            action: 'LOGOUT',
+            ipAddress: session.ipAddress,
+            userAgent: session.userAgent?.slice(0, 500),
+            description: 'User signed out',
+          },
+        }),
+        this.prisma.userSession.deleteMany({ where: { userId, id: sessionId } }),
+      ]);
+    }
 
     this.logger.log(`[AUTH] Logout successful: ${userId}`);
 
@@ -782,6 +831,7 @@ export class AuthService {
       { key: 'settings.view', category: 'Settings', action: 'view' },
       { key: 'settings.edit', category: 'Settings', action: 'edit' },
       { key: 'audit.view', category: 'Audit', action: 'view' },
+      { key: 'audit.export', category: 'Audit', action: 'export' },
     ];
 
     const existingPermissions = await client.permission.findMany({
@@ -972,6 +1022,7 @@ export class AuthService {
       'inventory.adjust': ['inventory.view'], 'inventory.transfer': ['inventory.view'],
       'expenses.edit': ['expenses.view'], 'expenses.delete': ['expenses.view'], 'expenses.approve': ['expenses.view'], 'expenses.pay': ['expenses.view'],
       'reports.export': ['reports.view'],
+      'audit.export': ['audit.view'],
     };
     const normalizeGrants = (keys: string[]) => {
       const normalized = new Set(keys);
@@ -1015,6 +1066,29 @@ export class AuthService {
     this.logger.log(`[AUTH] Default roles & permissions created for business: ${businessId}`);
 
     return roles;
+  }
+
+  private async recordLoginFailure(
+    businessId: string,
+    userId: string,
+    ipAddress: string,
+    userAgent: string | undefined,
+    reason: string,
+  ) {
+    try {
+      await this.prisma.auditLog.create({ data: {
+        businessId,
+        userId,
+        entityType: 'UserSession',
+        entityId: userId,
+        action: 'LOGIN_FAILED',
+        ipAddress,
+        userAgent: userAgent?.slice(0, 500),
+        description: `Sign-in attempt rejected: ${reason}`,
+      } });
+    } catch {
+      // Never turn an authentication rejection into a server error because the audit store failed.
+    }
   }
 
   private async _sendPasswordResetEmail(

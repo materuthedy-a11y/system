@@ -2,6 +2,8 @@
 
 Scope: permissions across the dashboard, Settings, API, and all business modules. Phase 31 follows Phase 30 (PWA) in the numbered phase plan. Its authorization rules also apply while testing Phase 25 (Settings and team access), Phase 27 (Suppliers), Phase 28 (Expenses and Payments & Finance), and Phase 29 (Notifications).
 
+The Audit log itself is Phase 32: [PHASE32-AUDIT-TRAIL-CHECKLIST.md](PHASE32-AUDIT-TRAIL-CHECKLIST.md). Phase 31 verifies permission assignment and enforcement; Phase 32 verifies audit records, redaction, retention and export.
+
 Status: permission implementation has been updated; browser/API verification is still pending. Do not mark manual checks green until the named outcome is observed with the named role.
 
 ## Implementation completed in code

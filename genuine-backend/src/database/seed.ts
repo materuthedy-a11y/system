@@ -150,6 +150,7 @@ async function main() {
     { key: 'settings.view', category: 'settings', action: 'view' },
     { key: 'settings.edit', category: 'settings', action: 'edit' },
     { key: 'audit.view', category: 'audit', action: 'view' },
+    { key: 'audit.export', category: 'audit', action: 'export' },
   ];
 
   const createdPermissions = [];

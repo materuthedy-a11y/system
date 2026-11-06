@@ -185,6 +185,7 @@ export class BusinessService {
       'inventory.adjust': ['inventory.view'], 'inventory.transfer': ['inventory.view'],
       'expenses.edit': ['expenses.view'], 'expenses.delete': ['expenses.view'], 'expenses.approve': ['expenses.view'], 'expenses.pay': ['expenses.view'],
       'reports.export': ['reports.view'],
+      'audit.export': ['audit.view'],
     };
     const missing = new Set<string>();
     for (const [permission, dependencies] of Object.entries(allOf)) {

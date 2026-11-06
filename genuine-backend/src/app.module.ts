@@ -33,6 +33,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
+import { AuditModule } from './audit/audit.module';
 import { validateEnv } from './env';
 
 // Controllers
@@ -58,6 +59,7 @@ import { AppController } from './app.controller';
     AnalyticsModule,
     NotificationsModule,
     SupportModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [

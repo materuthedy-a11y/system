@@ -1232,7 +1232,9 @@ model AccountingPeriod {
 model AuditLog {
   id          String   @id @default(cuid())
   businessId  String
-  userId      String
+  userId      String?
+  actorName   String?
+  actorEmail  String?
   action      String
   entityType  String
   entityId    String
@@ -1243,13 +1245,16 @@ model AuditLog {
   description String?
   createdAt   DateTime @default(now())
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  user        User     @relation("AuditCreatedBy", fields: [userId], references: [id], onDelete: Cascade)
+  user        User?    @relation("AuditCreatedBy", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([userId])
   @@index([entityType])
   @@index([action])
   @@index([createdAt])
+  @@index([businessId, createdAt])
+  @@index([businessId, action, createdAt])
+  @@index([businessId, entityType, createdAt])
 }
 
 model UserSession {

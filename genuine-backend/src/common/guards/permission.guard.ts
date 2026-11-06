@@ -1,12 +1,13 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PERMISSION_KEY } from '../decorators';
+import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector, private prisma: PrismaService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.get<string[]>(PERMISSION_KEY, context.getHandler());
 
     // If no permissions are required, allow access
@@ -48,6 +49,24 @@ export class PermissionGuard implements CanActivate {
     );
 
     if (!hasPermission) {
+      const request = context.switchToHttp().getRequest();
+      if (request.method !== 'GET' && user.id && user.businessId) {
+        try {
+          await this.prisma.auditLog.create({ data: {
+            businessId: user.businessId,
+            userId: user.id,
+            entityType: 'Authorization',
+            entityId: String(request.originalUrl || request.path || 'unknown').split('?')[0].slice(0, 180),
+            action: 'ACCESS_DENIED',
+            ipAddress: request.ip || null,
+            userAgent: request.get?.('user-agent')?.slice(0, 500) || null,
+            description: `Blocked ${request.method} request; missing required permission`,
+            afterData: JSON.stringify({ method: request.method, requiredPermissions }),
+          } });
+        } catch {
+          // Authorization must still reject the request even if the audit store is unavailable.
+        }
+      }
       throw new ForbiddenException(
         `Missing required permissions: ${requiredPermissions.join(', ')}`,
       );

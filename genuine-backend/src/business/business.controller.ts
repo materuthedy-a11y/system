@@ -38,6 +38,8 @@ import {
   ResetManagedUserPasswordDto,
   CreateRoleDto,
   UpdateRoleDto,
+  CreateExchangeRateDto,
+  ConvertCurrencyDto,
 } from './dto';
 
 @ApiTags('Business Setup')
@@ -196,6 +198,25 @@ export class BusinessController {
   @RequirePermission('settings.edit')
   deleteTaxRate(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
     return this.businessService.deleteTaxRate(businessId, userId, id);
+  }
+
+  @Get('exchange-rates')
+  @RequirePermission('settings.view', 'settings.edit')
+  listExchangeRates(@Business() businessId: string) {
+    return this.businessService.listExchangeRates(businessId);
+  }
+
+  @Post('exchange-rates')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('settings.edit')
+  createExchangeRate(@Business() businessId: string, @UserId() userId: string, @Body() dto: CreateExchangeRateDto) {
+    return this.businessService.createExchangeRate(businessId, userId, dto);
+  }
+
+  @Post('exchange-rates/convert')
+  @RequirePermission('settings.view', 'settings.edit')
+  convertCurrency(@Business() businessId: string, @Body() dto: ConvertCurrencyDto) {
+    return this.businessService.convertCurrency(businessId, dto);
   }
 
   @Post('locations')

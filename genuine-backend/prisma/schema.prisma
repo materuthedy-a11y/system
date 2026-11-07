@@ -38,6 +38,7 @@ model Business {
   website               String?
   settings              BusinessSettings?
   taxRates              TaxRate[]
+  exchangeRates         BusinessExchangeRate[]
   periods               AccountingPeriod[]
   auditLogs             AuditLog[]
   categories            Category[]
@@ -544,6 +545,22 @@ model TaxRate {
   @@unique([businessId, name])
   @@unique([businessId, code])
   @@index([businessId, isActive])
+}
+
+model BusinessExchangeRate {
+  id            String   @id @default(cuid())
+  businessId    String
+  baseCurrency  String
+  currencyCode  String
+  rateToBase    Float
+  effectiveFrom DateTime @db.Date
+  note          String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, baseCurrency, currencyCode, effectiveFrom])
+  @@index([businessId, currencyCode, effectiveFrom])
 }
 
 model BusinessSettings {

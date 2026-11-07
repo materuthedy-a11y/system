@@ -5,5 +5,6 @@ export * from './payment-method.dto';
 export * from './expense-category.dto';
 export * from './unit.dto';
 export * from './business-settings.dto';
+export * from './exchange-rate.dto';
 export * from './user-management.dto';
 export * from './setup-response.dto';

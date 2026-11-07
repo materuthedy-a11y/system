@@ -22,6 +22,8 @@ import {
   UpdatePaymentMethodDto,
   UpdateBusinessSettingsDto,
   TaxRateDto,
+  CreateExchangeRateDto,
+  ConvertCurrencyDto,
   PaymentMethodResponseDto,
   CreateExpenseCategoryDto,
   ExpenseCategoryResponseDto,
@@ -33,6 +35,14 @@ import {
   CreateRoleDto,
   UpdateRoleDto,
 } from './dto';
+
+function assertSupportedCurrency(currency: string) {
+  try {
+    new Intl.NumberFormat('en', { style: 'currency', currency }).format(1);
+  } catch {
+    throw new BadRequestException('Enter a supported three-letter ISO currency code');
+  }
+}
 
 @Injectable()
 export class BusinessService {
@@ -329,6 +339,81 @@ export class BusinessService {
 
   async listTaxRates(businessId: string) {
     return this.prisma.taxRate.findMany({ where: { businessId }, orderBy: [{ isDefault: 'desc' }, { name: 'asc' }] });
+  }
+
+  async listExchangeRates(businessId: string) {
+    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    if (!business) throw new NotFoundException('Business not found');
+    const rates = await this.prisma.businessExchangeRate.findMany({
+      where: { businessId, baseCurrency: business.currency },
+      orderBy: [{ currencyCode: 'asc' }, { effectiveFrom: 'desc' }, { createdAt: 'desc' }],
+    });
+    return { baseCurrency: business.currency, rates };
+  }
+
+  async createExchangeRate(businessId: string, userId: string, dto: CreateExchangeRateDto) {
+    assertSupportedCurrency(dto.currencyCode);
+    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    if (!business) throw new NotFoundException('Business not found');
+    if (dto.currencyCode === business.currency) throw new BadRequestException('Choose a currency different from the business base currency');
+    const effectiveFrom = new Date(`${dto.effectiveFrom.slice(0, 10)}T00:00:00.000Z`);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const row = await tx.businessExchangeRate.create({
+          data: {
+            businessId,
+            baseCurrency: business.currency,
+            currencyCode: dto.currencyCode,
+            rateToBase: dto.rateToBase,
+            effectiveFrom,
+            note: dto.note?.trim() || null,
+            createdBy: userId,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId,
+            entityType: 'BusinessExchangeRate',
+            entityId: row.id,
+            action: 'CREATE',
+            afterData: JSON.stringify(row),
+            description: `CREATE exchange rate 1 ${row.currencyCode} = ${row.rateToBase} ${row.baseCurrency}`,
+          },
+        });
+        return row;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('A rate for this currency and effective date already exists. Add a new effective date to change it without altering history.');
+      }
+      throw error;
+    }
+  }
+
+  async convertCurrency(businessId: string, dto: ConvertCurrencyDto) {
+    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    if (!business) throw new NotFoundException('Business not found');
+    if (dto.currencyCode === business.currency) {
+      return { amount: dto.amount, result: dto.amount, currencyCode: dto.currencyCode, baseCurrency: business.currency, rateToBase: 1, effectiveFrom: dto.asOf.slice(0, 10), direction: dto.direction };
+    }
+    const asOf = new Date(`${dto.asOf.slice(0, 10)}T23:59:59.999Z`);
+    const rate = await this.prisma.businessExchangeRate.findFirst({
+      where: { businessId, baseCurrency: business.currency, currencyCode: dto.currencyCode, effectiveFrom: { lte: asOf } },
+      orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (!rate) throw new NotFoundException(`No ${dto.currencyCode} exchange rate is configured for ${dto.asOf.slice(0, 10)}`);
+    const converted = dto.direction === 'TO_BASE' ? dto.amount * rate.rateToBase : dto.amount / rate.rateToBase;
+    const result = Math.round((converted + Number.EPSILON) * 100) / 100;
+    return {
+      amount: dto.amount,
+      result,
+      currencyCode: dto.direction === 'TO_BASE' ? business.currency : dto.currencyCode,
+      baseCurrency: business.currency,
+      rateToBase: rate.rateToBase,
+      effectiveFrom: rate.effectiveFrom.toISOString().slice(0, 10),
+      direction: dto.direction,
+    };
   }
 
   async createTaxRate(businessId: string, userId: string, dto: TaxRateDto) {
@@ -687,6 +772,7 @@ export class BusinessService {
     dto: UpdateBusinessProfileDto,
   ): Promise<BusinessProfileResponseDto> {
     this.logger.log(`[BUSINESS] Updating profile for business: ${businessId}`);
+    if (dto.currency) assertSupportedCurrency(dto.currency);
 
     if (dto.logoUrl) {
       if (dto.logoUrl.startsWith('data:')) {
@@ -728,6 +814,30 @@ export class BusinessService {
     if (!before) throw new NotFoundException('Business not found');
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (dto.currency && dto.currency !== before.currency) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`business-currency:${businessId}`}, 0)) IS NULL AS locked`;
+        const [products, sales, purchases, payments, expenses, salesReturns, purchaseReturns, customerBalances, supplierBalances, exchangeRates, stockMovements, stockAdjustments, stockTransfers, physicalCounts, financialSummaries, accountingPeriods] = await Promise.all([
+          tx.product.count({ where: { businessId } }),
+          tx.salesInvoice.count({ where: { businessId } }),
+          tx.purchaseOrder.count({ where: { businessId } }),
+          tx.payment.count({ where: { businessId } }),
+          tx.expense.count({ where: { businessId } }),
+          tx.salesReturn.count({ where: { businessId } }),
+          tx.purchaseReturn.count({ where: { businessId } }),
+          tx.customer.count({ where: { businessId, OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }] } }),
+          tx.supplier.count({ where: { businessId, OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }] } }),
+          tx.businessExchangeRate.count({ where: { businessId } }),
+          tx.inventoryMovement.count({ where: { businessId } }),
+          tx.stockAdjustment.count({ where: { businessId } }),
+          tx.stockTransfer.count({ where: { businessId } }),
+          tx.physicalCount.count({ where: { businessId } }),
+          tx.financialSummary.count({ where: { businessId } }),
+          tx.accountingPeriod.count({ where: { businessId } }),
+        ]);
+        if (products || sales || purchases || payments || expenses || salesReturns || purchaseReturns || customerBalances || supplierBalances || exchangeRates || stockMovements || stockAdjustments || stockTransfers || physicalCounts || financialSummaries || accountingPeriods) {
+          throw new ConflictException('Business base currency cannot be changed after products, balances, stock activity, exchange rates or financial records exist. Existing amounts are not converted. Keep the original currency or create a new business workspace.');
+        }
+      }
       if (dto.taxPercentage !== undefined) {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:SALES`}, 0)) IS NULL AS locked`;
       }

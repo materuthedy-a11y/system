@@ -104,6 +104,8 @@ export class UpdateBusinessProfileDto {
 
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+  @Matches(/^[A-Z]{3}$/, { message: 'Currency must be a three-letter ISO code' })
   currency?: string;
 
   @IsOptional()

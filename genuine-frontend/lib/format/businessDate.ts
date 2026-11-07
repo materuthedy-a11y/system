@@ -15,6 +15,10 @@ export function getBusinessLanguage() {
   return language === 'sw' || language === 'kiswahili' ? 'sw' : 'en';
 }
 
+export function getBusinessTimezone() {
+  return safeTimeZone(readSettings().timezone);
+}
+
 export function getBusinessFinancialYear() {
   return readSettings().financialYear || 'CALENDAR';
 }

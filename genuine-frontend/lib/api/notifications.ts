@@ -30,7 +30,8 @@ export interface NotificationLogDetail {
   logs: Array<{ status: string; message: string; timestamp: string; responseCode?: number | null }>;
 }
 export interface EmailProviderConfig { provider: 'SMTP' | 'SENDGRID'; fromEmail: string; fromName: string; configured: true; }
-export interface SmsProviderConfig { provider: 'TWILIO' | 'AFRICAS_TALKING'; fromNumber: string; configured: true; }
+export type SmsProvider = 'TWILIO' | 'AFRICAS_TALKING' | 'SASISMS' | 'DARSMS' | 'EHUB' | 'SAKURA';
+export interface SmsProviderConfig { provider: SmsProvider; fromNumber: string; configured: true; }
 
 export const notificationEventLabels: Record<NotificationEventType, string> = {
   PAYMENT_RECEIVED: 'Payment received', INVOICE_CREATED: 'Invoice created', PAYMENT_DUE: 'Payment due',
@@ -74,7 +75,8 @@ export const notificationsAPI = {
     return unwrap<{ message: string }>(await apiClient.post('/notifications/config/email', input));
   },
   async smsConfig() { return unwrap<SmsProviderConfig>(await apiClient.get('/notifications/config/sms')); },
-  async saveSmsConfig(input: { provider: 'TWILIO' | 'AFRICAS_TALKING'; fromNumber: string; accountSid?: string; apiKey?: string; username?: string; apiSecret?: string }) {
+  async saveSmsConfig(input: { provider: SmsProvider; fromNumber: string; accountSid?: string; apiKey?: string; username?: string; apiSecret?: string }) {
     return unwrap<{ message: string }>(await apiClient.post('/notifications/config/sms', input));
   },
+  async testSms(to: string) { return unwrap<{ message: string; providerId?: string }>(await apiClient.post('/notifications/config/sms/test', { to })); },
 };

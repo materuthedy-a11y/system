@@ -18,6 +18,8 @@ export interface Location { id: string; name: string; code: string; type: string
 export interface PaymentMethod { id: string; name: string; description?: string | null; code?: string | null; methodType: string; requiresReference: boolean; bankDetails?: string | null; isActive: boolean; }
 export interface ExpenseCategory { id: string; name: string; code: string; description?: string | null; budgetLimit?: number | null; budgetPeriod?: string | null; isActive: boolean; }
 export interface TaxRate { id: string; name: string; code: string; rate: number; description?: string | null; appliesTo: string; isDefault: boolean; isActive: boolean; }
+export interface BusinessExchangeRate { id: string; baseCurrency: string; currencyCode: string; rateToBase: number; effectiveFrom: string; note?: string | null; createdBy?: string | null; createdAt: string; }
+export interface ExchangeRateConversion { amount: number; result: number; currencyCode: string; baseCurrency: string; rateToBase: number; effectiveFrom: string; direction: 'TO_BASE' | 'FROM_BASE'; }
 export interface ManagedUser { id: string; email: string; firstName: string; lastName: string; phone?: string | null; isActive: boolean; status: 'ACTIVE' | 'INACTIVE'; roles: Array<{id:string;name:string}>; roleId: string | null; roleName: string; createdAt: string; lastLogin?: string | null; }
 export interface ManagedRole { id: string; name: string; description?: string | null; isDefault: boolean; isSystem: boolean; permissions: string[]; usersCount: number; createdAt: string; }
 export interface Permission { id: string; key: string; name: string; description?: string | null; category: string; action: string; }
@@ -40,6 +42,9 @@ export const settingsAPI = {
   async taxRates() { return unwrap<TaxRate[]>(await apiClient.get('/business/tax-rates')); },
   async createTaxRate(input: Partial<TaxRate>) { return unwrap<TaxRate>(await apiClient.post('/business/tax-rates', input)); },
   async updateTaxRate(id: string, input: Partial<TaxRate>) { return unwrap<TaxRate>(await apiClient.patch(`/business/tax-rates/${encodeURIComponent(id)}`, input)); },
+  async exchangeRates() { return unwrap<{baseCurrency:string;rates:BusinessExchangeRate[]}>(await apiClient.get('/business/exchange-rates')); },
+  async createExchangeRate(input: {currencyCode:string;rateToBase:number;effectiveFrom:string;note?:string}) { return unwrap<BusinessExchangeRate>(await apiClient.post('/business/exchange-rates',input)); },
+  async convertCurrency(input:{currencyCode:string;amount:number;asOf:string;direction:'TO_BASE'|'FROM_BASE'}) { return unwrap<ExchangeRateConversion>(await apiClient.post('/business/exchange-rates/convert',input)); },
   async users(filters?: {roleId?:string;status?:string}) { return unwrap<ManagedUser[]>(await apiClient.get('/business/users', { params: filters })); },
   async createUser(input: {email:string;firstName:string;lastName:string;phone?:string;password:string;roleId:string}) { return unwrap<ManagedUser>(await apiClient.post('/business/users', input)); },
   async updateUser(id:string,input:Partial<Pick<ManagedUser,'email'|'firstName'|'lastName'|'phone'|'roleId'|'isActive'>>) { return unwrap<ManagedUser>(await apiClient.patch(`/business/users/${encodeURIComponent(id)}`,input)); },

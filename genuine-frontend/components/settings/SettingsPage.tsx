@@ -3,23 +3,24 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { Building2, CreditCard, ImagePlus, MapPin, Package, Percent, ReceiptText, RefreshCw, Save, Settings2, Plus, Power, Loader2, Pencil, X, Users, Shield } from 'lucide-react';
+import { Building2, CreditCard, ImagePlus, MapPin, Package, Percent, ReceiptText, RefreshCw, Save, Settings2, Plus, Power, Loader2, Pencil, X, Users, Shield, ArrowRightLeft } from 'lucide-react';
 import { getApiError } from '@/lib/api';
 import { settingsAPI, BusinessProfile, BusinessSettings, Location, PaymentMethod, ExpenseCategory, TaxRate } from '@/lib/api/settings';
 import { productsAPI, Category, Unit } from '@/lib/api/products';
 import { useAuthStore } from '@/store/authStore';
 import { cacheBusinessDateSettings } from '@/lib/format/businessDate';
 import AccessManagement from '@/components/settings/AccessManagement';
+import ExchangeRatesPanel from '@/components/settings/ExchangeRatesPanel';
 import { notify } from '@/components/ui/AppToaster';
 import { useBusinessProfileStore } from '@/store/businessProfileStore';
 
-type Section = 'profile' | 'general' | 'users' | 'roles' | 'locations' | 'payments' | 'tax' | 'expense-categories' | 'product-categories' | 'units';
+type Section = 'profile' | 'general' | 'users' | 'roles' | 'locations' | 'payments' | 'tax' | 'exchange-rates' | 'expense-categories' | 'product-categories' | 'units';
 type EditableKind = 'location' | 'payment' | 'expense' | 'category' | 'unit' | 'tax';
 const sections: Array<{ id: Section; title: string; icon: typeof Settings2 }> = [
   { id: 'profile', title: 'Business profile', icon: Building2 }, { id: 'general', title: 'General settings', icon: Settings2 },
   { id: 'users', title: 'Users', icon: Users }, { id: 'roles', title: 'Roles & permissions', icon: Shield },
   { id: 'locations', title: 'Locations', icon: MapPin }, { id: 'payments', title: 'Payment methods', icon: CreditCard },
-  { id: 'tax', title: 'Tax rates', icon: Percent }, { id: 'expense-categories', title: 'Expense categories', icon: ReceiptText },
+  { id: 'tax', title: 'Tax rates', icon: Percent }, { id: 'exchange-rates', title: 'Exchange rates', icon: ArrowRightLeft }, { id: 'expense-categories', title: 'Expense categories', icon: ReceiptText },
   { id: 'product-categories', title: 'Product categories', icon: Package }, { id: 'units', title: 'Units', icon: Package },
 ];
 const field = 'mt-1 min-h-10 w-full rounded-xl border border-[#d8ddd4] bg-white px-3 py-2 text-sm text-[#20231f] outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/40 dark:border-white/10 dark:bg-[#171916] dark:text-white dark:focus:border-amber-400 dark:focus:ring-amber-300/30';
@@ -156,8 +157,9 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
           <div className="sm:col-span-2 flex justify-end"><button className={button} disabled={!canEdit||busy}><Save size={16}/>{busy?'Saving…':'Save profile'}</button></div>
         </form> : null}
         {activeSection === 'users' || activeSection === 'roles' ? <AccessManagement mode={activeSection!} /> : null}
+        {activeSection === 'exchange-rates' && profile ? <ExchangeRatesPanel canEdit={canEdit} currentBaseCurrency={profile.currency} /> : null}
         {activeSection === 'general' && general && profile ? <form className={`${card} grid gap-4 sm:grid-cols-2`} onSubmit={(event)=>submit(event, async()=>{ const profileKeys = ['currency','taxPercentage','costingMethod','financialYear','allowNegativeStock']; const g = Object.fromEntries(Object.entries(draft).filter(([key])=>!profileKeys.includes(key))); const p = Object.fromEntries(Object.entries(draft).filter(([key])=>profileKeys.includes(key))); await settingsAPI.updateGeneral(g as Partial<BusinessSettings>); if(Object.keys(p).length) await settingsAPI.updateProfile(p as Partial<BusinessProfile>); if(typeof draft.theme==='string') setTheme(draft.theme.toLowerCase()); })}>
-          <label className={label}>Currency<select className={field} disabled={!canEdit} value={String(draft.currency ?? profile.currency)} onChange={(e)=>setDraft({...draft,currency:e.target.value})}>{['TZS','USD','EUR','KES','UGX'].map((v)=><option key={v}>{v}</option>)}</select></label>
+          <label className={label}>Business base currency<input className={field} disabled={!canEdit} maxLength={3} pattern="[A-Za-z]{3}" value={String(draft.currency ?? profile.currency)} onChange={(e)=>setDraft({...draft,currency:e.target.value.toUpperCase()})} placeholder="TZS"/><span className="mt-1 block text-[11px] leading-4 text-[#687064] dark:text-white/55">Enter a supported three-letter ISO currency code, such as TZS, USD, EUR, KES or UGX. All saved prices and balances use this base currency. The system never converts existing records when this value changes.</span></label>
           <label className={label}>Default tax rate (%)<input type="number" min="0" max="100" step="0.01" className={field} disabled={!canEdit} value={String(draft.taxPercentage ?? profile.taxPercentage)} onChange={(e)=>setDraft({...draft,taxPercentage:Number(e.target.value)})}/></label>
           <label className={label}>Costing method<select className={field} disabled={!canEdit} value={String(draft.costingMethod ?? profile.costingMethod)} onChange={(e)=>setDraft({...draft,costingMethod:e.target.value})}><option value="WEIGHTED_AVERAGE">Weighted average</option><option value="FIFO">FIFO</option></select></label>
           <label className={label}>Financial year<select className={field} disabled={!canEdit} value={String(draft.financialYear ?? profile.financialYear)} onChange={(e)=>setDraft({...draft,financialYear:e.target.value})}><option value="CALENDAR">Calendar year</option><option value="JULY">July to June</option><option value="APRIL">April to March</option></select></label>

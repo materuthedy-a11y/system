@@ -36,13 +36,19 @@ Implementation is ready for manual UI verification. Do not mark a task green unt
 - [x] Payment reference prefix: recorded supplier payment for TZS 1,200; Dashboard Recent activity shows generated payment number `PAY-202611-93CE34B0` (6 Nov 2026), confirming the `PAY-` prefix is applied.
 - [x] Change the low-stock threshold from `0` to `5`; save, refresh and confirm `5` persisted (user confirmed, 6 Nov 2026).
 - [x] Change General settings tax from `18%` to `16%`; invoice and purchase-order forms both loaded `16%` after the integration fix (user confirmed, 6 Nov 2026).
-- [x] Change currency from `TZS` to `USD`, save/refresh, then restore `TZS`; user confirmed green (6 Nov 2026).
+- [x] Currency audit finding recorded: changing `TZS` to `USD` relabeled existing amounts without converting them (e.g. a TZS 3,000 invoice displayed US$3,000). The workspace uses a single base currency; historical and new operational documents remain denominated in that currency.
+- [ ] User restored `TZS`; refresh the old invoice and confirm it displays TZS again after the currency-lock implementation and migration.
 - [x] Change costing method from `Weighted average` to `FIFO`, save/refresh, then restore `Weighted average`; user confirmed green (6 Nov 2026).
-- [x] Change financial year to `July to June`; Dashboard **This year** showed `2026-07-01` to `2026-11-07` (user confirmed, 7 Nov 2026). Restore to `Calendar year` after the verification.
+- [x] Change financial year to `July to June`; Dashboard **This year** showed `2026-07-01` to `2026-11-07`, then restore `Calendar year` (user confirmed, 7 Nov 2026).
 - [x] Confirm a new invoice uses the General settings default tax rate after saving; user confirmed green after the integration fix (6 Nov 2026).
 - [x] Confirm a new purchase order loads the effective default purchase tax rate; user confirmed 16% in percentage mode (6 Nov 2026).
 - [x] Confirm existing invoices and purchase orders retain their recorded tax amounts after changing defaults: invoice `PH25-INV-202611-00001` remained TZS 3,540 with TZS 540 tax; PO `PH25-PO-202611-00001` remained TZS 1,200 with TZS 0 tax (user confirmed, 6 Nov 2026).
-- [ ] Change date/time format, timezone, and week-start; confirm dates use the selected format/timezone on sales, customer, purchase, product, inventory, dashboard, and support screens. Confirm the week period uses the selected start day.
+- [x] Change date format to `MM/DD/YYYY`; user confirmed Dashboard displays `11/01/2026 – 11/07/2026` (7 Nov 2026).
+- [x] Restore General settings date format to `DD/MM/YYYY`; user confirmed done (7 Nov 2026).
+- [x] Confirm sales invoice date and due date use `DD/MM/YYYY`; invoice `PH25-INV-202611-00001` displays `05/11/2026` for both (user confirmed, 7 Nov 2026).
+- [ ] Confirm the selected date format appears consistently on customer, purchase, product, inventory, and support screens.
+- [ ] Change business timezone; confirm displayed timestamps and dashboard period boundaries follow that timezone.
+- [ ] Change week start to Sunday; confirm Dashboard **This week** starts Sunday, then restore Monday.
 - [ ] Set financial year to July or April; select **This year** on the dashboard and confirm its start date follows the configured financial year.
 - [ ] Set business language to Kiswahili or English; confirm the dashboard figures guide defaults to the selected language (the rest of the UI is not globally translated yet).
 
@@ -148,6 +154,10 @@ Cross-system authorization cleanup and role-by-role verification has its own Pha
 
 ## 25.14 Dashboard data navigation
 
+- [x] Confirm dashboard greeting shows the signed-in user's first name, follows the business language and timezone, changes with the time of day, and leaves business-wide period/location context clear; user confirmed “Good morning, Admin” (7 Nov 2026).
+- [x] Confirm dashboard period range uses configured business date format; user confirmed `11/01/2026 – 11/07/2026` (7 Nov 2026).
+- [ ] Confirm dashboard period boundaries and timestamps follow configured business timezone.
+
 **Implementation:** KPI cards link to invoice lists, finance/sales/inventory reports or inventory according to the metric and the user's permissions. Recent sales and purchase rows open their source documents; payment rows open their linked invoice or purchase order when permitted, otherwise the finance report; expenses open the finance report because there is no expense detail route. Reorder-watch rows open product detail for users with `products.view`, and Inventory otherwise. Finance and inventory report deep links select their requested report tab.
 
 - [x] Click Total Revenue and confirm it opens sales invoices (or Sales report when the user lacks `sales.view`). User confirmed it opened `/dashboard/sales/invoices` (5 Nov 2026).
@@ -172,6 +182,48 @@ Cross-system authorization cleanup and role-by-role verification has its own Pha
 **Audit findings / implementation notes (5 Nov 2026):** Executive dashboard and combined analytics are currently queried by business ID, so changing the active location does not alter their scope; this is intentional business-wide behavior. Inventory summary is also business-wide, but stock/movement tables were initialized from the active location, which made the page internally inconsistent. The inventory dashboard now defaults both tables to all locations and lets the user filter explicitly. Dashboard/report labels and workspace-switcher copy now make the two scopes visible. Per-location user authorization is not represented by a user-location grant model in the current schema; verify the product policy and enforce it before claiming restricted staff visibility.
 
 **Mobile QA note (5 Nov 2026):** Reviewed the executive dashboard in Chrome's responsive device mode at 390 px wide. The header, KPI cards, charts, spending/cash-flow panels, reorder rows and recent-activity rows remain within the viewport; KPI cards stack into one column and the stock/recent rows retain readable labels and visible arrow affordances. User confirmed the mobile layout looked good. This marks the responsive layout check green; permission-based destinations remain subject to the separate access-fallback check above.
+
+## 25.15 Base currency and exchange rates
+
+**Audit finding:** General settings previously treated `Business.currency` as a display label. Changing TZS to USD left amounts unchanged, making an invoice of TZS 3,000 appear as US$3,000. The current schema stores operational monetary values as amounts in one business base currency; it does not store transaction currency, captured FX rate, or converted base amount per invoice/payment/purchase. Automatically changing existing documents or claiming foreign-currency transactions would therefore be financially unsafe.
+
+**Implemented contract:** each workspace keeps one base currency for all saved prices, balances, inventory valuation and financial records. The base currency is locked once products, stock activity, balances, financial summaries/periods, saved exchange rates or financial transactions exist. Settings now includes an exchange-rate registry and converter: a permitted editor enters the quote and its effective date; the API stores an immutable dated quote and audit event, and converts using the most recent rate effective on the requested date. No built-in market rate is assumed. These quotes are reference/conversion inputs; they do not change the currency of an invoice, receipt or other saved record. Full foreign-currency source documents require transaction-level currency and FX snapshots and remain outside this settings-only feature.
+
+- [x] Apply migration `20261107100000_phase25_currency_rates` to local PostgreSQL; Prisma reported all migrations applied successfully (7 Nov 2026). Migration creates the exchange-rate table without updating monetary records.
+- [ ] Refresh `/dashboard/settings/general`; confirm the base currency remains TZS and the old invoice still displays TZS 3,540 (not US$3,540).
+- [ ] Attempt to change the existing business base currency to USD; confirm the API rejects it with a clear explanation and saved values remain unchanged. Restore/leave TZS.
+- [ ] Open `/dashboard/settings` → **Exchange rates** as a `settings.view` user; confirm they can view the rate list and use the converter, but cannot save a rate.
+- [ ] As a `settings.edit` user, save the current market quote for `1 USD = [current quote] TZS` with today’s effective date and a source/note; confirm a success toast, row in history and matching Audit log event. Do not use an invented/stale rate.
+- [ ] Save a new quote for a later effective date; confirm the older quote remains visible and is not overwritten. Try saving a duplicate currency/date and confirm a readable conflict error.
+- [ ] Convert a known USD amount to TZS and a known TZS amount to USD for the saved rate date; independently verify both arithmetic directions and cent rounding.
+- [ ] Request conversion before the first effective date or for an unconfigured currency; confirm a readable “no rate for date” error and no guessed/default rate.
+- [ ] Confirm invalid currency codes, zero/negative rates, same-as-base currency, and malformed dates are rejected by the API; confirm data and audit log remain unchanged.
+- [ ] Confirm rates and conversion are isolated by business/workspace; a user cannot read or convert another business’s rates.
+- [ ] Confirm this phase does not show a foreign-currency invoice/payment as supported: all saved operational records continue to use the single locked base currency until transaction-level FX snapshots are designed and implemented.
+
+**Build status for this addition:** Prisma schema validation and local migration deployment passed. Normal Prisma Client generation hit Windows `EPERM` replacing `query_engine-windows.dll.node`; client generation with `--no-engine`, backend TypeScript and Nest build passed. Frontend TypeScript passes. Frontend production build was attempted with the real API URL configured, but Next.js hit `EPERM` while creating generated route directories under `.next`; UI, role and arithmetic checks remain pending. Do not mark them green until verified.
+
+## 25.16 SMS delivery providers
+
+**Audit finding:** SMS settings only supported Twilio and Africa's Talking. There was no built-in provider connection test or user-facing guide for provider-specific credentials. SMS credentials remain encrypted on the backend and must never be returned to the browser.
+
+**Implemented providers:** Twilio, Africa's Talking, SasiSMS, DARSMS, eHUB SMS and Sakura SMS. The selected provider controls the credential fields and backend request format. SasiSMS needs an API key and optional approved sender ID; DARSMS needs an API key and optional sender ID/default sender; eHUB needs API key, API secret and approved sender UUID; Sakura needs API key and optional approved sender ID. Twilio needs Account SID, Auth Token and verified E.164 From number. Africa's Talking needs username and API key; sender ID is optional. Credentials are encrypted at rest and never returned after saving. **Send test** sends a real, potentially billable SMS and records an audit event.
+
+- [x] Extend the SMS provider config API and UI to support SasiSMS, DARSMS, eHUB SMS and Sakura SMS alongside Twilio and Africa's Talking; backend supports provider-specific API payloads, credential validation and SasiSMS idempotency keys.
+- [x] Add a permission-protected real SMS test action and audit records for SMS provider configuration changes and connection-test outcomes. Browser/provider tests remain pending.
+
+- [ ] Open Notifications → Providers as `settings.edit`; confirm all six providers appear and provider-specific credential fields switch correctly.
+- [ ] For SasiSMS, create an account and API key, leave sender ID empty for the default sender or enter an approved sender, save, and confirm configured status. SasiSMS currently advertises 10 signup credits; check the live account balance before sending.
+- [ ] Send a test SMS to a phone you control; confirm success, provider message ID and delivery/provider log outcome. Confirm credits are debited once.
+- [ ] Trigger an SMS notification event; confirm recipient, attempts and readable provider errors show in Delivery log without exposing API credentials or reset tokens.
+- [ ] Force provider rejection (invalid API key/sender or no credits); confirm a safe failure, bounded retries and logs without secrets.
+- [ ] Confirm retrying a SasiSMS delivery uses the same notification/recipient idempotency key and does not duplicate a message after an ambiguous timeout.
+- [ ] Confirm API keys/secrets are not returned by GET config, are encrypted in `SMSConfig.config`, and are required again before replacing provider configuration.
+- [ ] Confirm `settings.view` can view provider status but cannot save config or send a test; only `settings.edit` can mutate/test.
+- [ ] Verify each provider credential format and sender behavior with a real authorized account before production traffic. Trial credits, sender approval, pricing and delivery are controlled by the provider and can change.
+- [ ] Verify provider configuration and delivery are isolated by business; direct API access cannot read or overwrite another workspace's credentials.
+
+**Provider setup docs:** [SasiSMS](https://sms.sasidigital.co.tz/docs) uses a bearer API key and optional approved sender; [DARSMS](https://www.darsms.co.tz/blog/sms-api-integration-guide-tanzania) uses an API key and sender ID; [eHUB SMS](https://sms.ehub.co.tz/api-docs) requires an API key, API secret/HMAC signing and approved sender UUID; [Sakura SMS](https://billing.sakurahost.co.tz/knowledgebase/48/SMS-API-Integration-Guide-Connect-Your-App-to-Sakura-SMS.html) uses a bearer API key and optional sender ID.
 
 ## Implementation checks completed
 

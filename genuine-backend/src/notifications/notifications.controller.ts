@@ -25,6 +25,7 @@ import {
   NotificationTemplateQueryDto,
   RetryNotificationDto,
   SMSConfigDto,
+  TestSMSConfigDto,
   UpdateNotificationTemplateDto,
   UpdateInAppPreferenceDto,
 } from './dto';
@@ -175,7 +176,13 @@ export class NotificationsController {
 
   @Post('config/sms')
   @RequirePermission('settings.edit')
-  setSmsConfig(@Business() businessId: string, @Body() dto: SMSConfigDto) {
-    return this.notifications.setSmsConfig(businessId, dto);
+  setSmsConfig(@Business() businessId: string, @UserId() userId: string, @Body() dto: SMSConfigDto) {
+    return this.notifications.setSmsConfig(businessId, userId, dto);
+  }
+
+  @Post('config/sms/test')
+  @RequirePermission('settings.edit')
+  testSmsConfig(@Business() businessId: string, @UserId() userId: string, @Body() dto: TestSMSConfigDto) {
+    return this.notifications.sendTestSms(businessId, userId, dto);
   }
 }

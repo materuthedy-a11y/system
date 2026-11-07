@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import nodemailer from 'nodemailer';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service';
 import { LoggerService } from '../common/logger/logger.service';
 import {
@@ -20,6 +20,7 @@ import {
   NotificationRecipientDto,
   NotificationType,
   SMSConfigDto,
+  TestSMSConfigDto,
   UpdateNotificationTemplateDto,
 } from './dto';
 
@@ -554,34 +555,42 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async setSmsConfig(businessId: string, dto: SMSConfigDto) {
-    const secret: SmsSecret = {};
+  async setSmsConfig(businessId: string, userId: string, dto: SMSConfigDto) {
+    const secret: SmsSecret = { apiKey: dto.apiKey?.trim() };
+    const sender = dto.fromNumber?.trim() || '';
     if (dto.provider === 'TWILIO') {
-      if (!dto.accountSid?.trim() || !dto.apiKey?.trim()) {
-        throw new BadRequestException('Twilio account SID and auth token are required');
-      }
-      secret.accountSid = dto.accountSid;
-      secret.apiKey = dto.apiKey;
+      if (!dto.accountSid?.trim() || !secret.apiKey || !/^\+[1-9]\d{6,14}$/.test(sender)) throw new BadRequestException('Twilio requires Account SID, auth token and a verified E.164 From phone number');
+      secret.accountSid = dto.accountSid.trim();
+    } else if (dto.provider === 'AFRICAS_TALKING') {
+      if (!dto.username?.trim() || !secret.apiKey) throw new BadRequestException("Africa's Talking requires a username and API key");
+      secret.username = dto.username.trim();
+    } else if (dto.provider === 'EHUB') {
+      if (!secret.apiKey || !dto.apiSecret?.trim() || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sender)) throw new BadRequestException('eHUB requires an API key, API secret and approved sender ID UUID');
+      secret.apiSecret = dto.apiSecret.trim();
     } else {
-      if (!dto.username?.trim() || !dto.apiKey?.trim()) {
-        throw new BadRequestException("Africa's Talking username and API key are required");
-      }
-      secret.username = dto.username;
-      secret.apiKey = dto.apiKey;
+      if (!secret.apiKey) throw new BadRequestException('This SMS provider requires an API key');
+      if (dto.provider === 'DARSMS' && !sender) dto.fromNumber = 'DARSMS';
     }
-    await this.prisma.sMSConfig.upsert({
-      where: { businessId },
-      create: {
-        businessId,
-        provider: dto.provider,
-        fromNumber: dto.fromNumber.trim(),
-        config: this.encrypt(secret),
-      },
-      update: {
-        provider: dto.provider,
-        fromNumber: dto.fromNumber.trim(),
-        config: this.encrypt(secret),
-      },
+    const fromNumber = dto.fromNumber?.trim() || '';
+    await this.prisma.$transaction(async (tx) => {
+      const before = await tx.sMSConfig.findUnique({ where: { businessId }, select: { provider: true, fromNumber: true } });
+      await tx.sMSConfig.upsert({
+        where: { businessId },
+        create: { businessId, provider: dto.provider, fromNumber, config: this.encrypt(secret) },
+        update: { provider: dto.provider, fromNumber, config: this.encrypt(secret) },
+      });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          entityType: 'SMSConfig',
+          entityId: businessId,
+          action: before ? 'UPDATE' : 'CREATE',
+          beforeData: before ? JSON.stringify(before) : undefined,
+          afterData: JSON.stringify({ provider: dto.provider, fromNumber }),
+          description: `${before ? 'UPDATE' : 'CREATE'} SMS provider configuration`,
+        },
+      });
     });
     return { message: 'SMS configuration saved' };
   }
@@ -590,6 +599,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const row = await this.prisma.sMSConfig.findUnique({ where: { businessId } });
     if (!row) throw new NotFoundException('SMS configuration not found');
     return { provider: row.provider, fromNumber: row.fromNumber, configured: true };
+  }
+
+  async sendTestSms(businessId: string, userId: string, dto: TestSMSConfigDto) {
+    try {
+      const providerId = await this.sendSms(businessId, dto.to.trim(), 'Mizania SMS delivery test. If you received this message, your SMS provider is connected.', `test-${randomBytes(12).toString('hex')}`);
+      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST', description: 'TEST SMS provider connection accepted' } });
+      return { message: 'Test SMS accepted by the provider', providerId };
+    } catch (error) {
+      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST_FAILED', description: 'TEST SMS provider connection failed' } });
+      throw error;
+    }
   }
 
   async publishEvent(input: EventInput) {
@@ -1159,7 +1179,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
                 notification.subject,
                 notification.body,
               )
-            : await this.sendSms(businessId, recipient.phoneNumber, notification.body);
+            : await this.sendSms(businessId, recipient.phoneNumber, notification.body, `${notificationId}:${recipient.id}`);
         await this.prisma.$transaction([
           this.prisma.notificationRecipient.update({
             where: { id: recipient.id },
@@ -1294,12 +1314,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     return response.headers.get('x-message-id') || undefined;
   }
 
-  private async sendSms(businessId: string, to: string | null, body: string) {
+  private async sendSms(businessId: string, to: string | null, body: string, idempotencyKey?: string) {
     if (!to) throw new BadRequestException('Recipient phone number is missing');
     const config = await this.prisma.sMSConfig.findUnique({ where: { businessId } });
     if (!config) throw new BadRequestException('Configure an SMS provider before sending SMS');
     const secret = this.decrypt<SmsSecret>(config.config);
     if (config.provider === 'TWILIO') {
+      if (!secret.accountSid || !secret.apiKey) throw new ConflictException('Twilio credentials are incomplete; save the provider settings again');
       const auth = Buffer.from(`${secret.accountSid}:${secret.apiKey}`).toString('base64');
       const form = new URLSearchParams({ To: to, From: config.fromNumber, Body: body });
       const response = await fetch(
@@ -1321,34 +1342,58 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         );
       return data.sid;
     }
-    const form = new URLSearchParams({
-      username: secret.username || '',
-      to,
-      message: body,
-      from: config.fromNumber,
-    });
-    const response = await fetch('https://api.africastalking.com/version1/messaging', {
-      method: 'POST',
-      headers: {
-        apiKey: secret.apiKey || '',
-        Accept: 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form,
-      signal: AbortSignal.timeout(15000),
-    });
-    const data = (await response.json().catch(() => ({}))) as {
-      SMSMessageData?: {
-        Recipients?: Array<{ status?: string; messageId?: string; statusCode?: number }>;
-      };
-    };
-    const recipient = data.SMSMessageData?.Recipients?.[0];
-    if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101)) {
-      throw new Error(
-        `Africa's Talking request failed (${response.status}): ${(recipient?.status || 'provider error').slice(0, 300)}`,
-      );
+    if (config.provider === 'AFRICAS_TALKING') {
+      if (!secret.username || !secret.apiKey) throw new ConflictException("Africa's Talking credentials are incomplete; save the provider settings again");
+      const form = new URLSearchParams({ username: secret.username, to, message: body });
+      if (config.fromNumber) form.set('from', config.fromNumber);
+      const response = await fetch('https://api.africastalking.com/version1/messaging', { method: 'POST', headers: { apiKey: secret.apiKey || '', Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(15000) });
+      const data = (await response.json().catch(() => ({}))) as { SMSMessageData?: { Recipients?: Array<{ status?: string; messageId?: string; statusCode?: number }> } };
+      const recipient = data.SMSMessageData?.Recipients?.[0];
+      if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101)) throw new Error(`Africa's Talking request failed (${response.status}): ${(recipient?.status || 'provider error').slice(0, 300)}`);
+      return recipient?.messageId;
     }
-    return recipient?.messageId;
+
+    if (config.provider === 'SASISMS') {
+      if (!secret.apiKey) throw new ConflictException('SasiSMS API key is missing; save the provider settings again');
+      const path = '/v1/messages';
+      const headers: Record<string, string> = { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' };
+      if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+      const response = await fetch(`https://sms.sasidigital.co.tz${path}`, { method: 'POST', headers, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
+      const data = await response.json().catch(() => ({})) as { success?: boolean; data?: { id?: string; status?: string }; error?: { message?: string } };
+      if (!response.ok || data.success === false) throw new Error(`SasiSMS request failed (${response.status}): ${(data.error?.message || 'provider rejected the message').slice(0, 300)}`);
+      return data.data?.id;
+    }
+
+    if (config.provider === 'DARSMS') {
+      if (!secret.apiKey) throw new ConflictException('DARSMS API key is missing; save the provider settings again');
+      const response = await fetch('https://dev.darsms.co.tz/api/v1/integrations/sms/send', { method: 'POST', headers: { 'X-API-Key': secret.apiKey || '', 'Content-Type': 'application/json' }, body: JSON.stringify({ senderId: config.fromNumber || 'DARSMS', to: [to], message: body }), signal: AbortSignal.timeout(15000) });
+      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { messageIds?: string[]; batchId?: string } };
+      if (!response.ok || data.success === false) throw new Error(`DARSMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      return data.data?.messageIds?.[0] || data.data?.batchId;
+    }
+
+    if (config.provider === 'EHUB') {
+      if (!secret.apiKey || !secret.apiSecret || !config.fromNumber) throw new ConflictException('eHUB credentials or approved sender UUID are missing; save the provider settings again');
+      const path = '/api/v1/sms/send';
+      const rawBody = JSON.stringify({ to, message: body, sender_id: config.fromNumber });
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const payload = `${timestamp}\nPOST\n${path}\n${rawBody}`;
+      const signature = createHmac('sha256', secret.apiSecret || '').update(payload).digest('hex');
+      const response = await fetch(`https://sms.ehub.co.tz${path}`, { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'X-Timestamp': timestamp, 'X-Signature': signature, 'Content-Type': 'application/json' }, body: rawBody, signal: AbortSignal.timeout(15000) });
+      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { message_id?: string } };
+      if (!response.ok || data.success === false) throw new Error(`eHUB SMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      return data.data?.message_id;
+    }
+
+    if (config.provider === 'SAKURA') {
+      if (!secret.apiKey) throw new ConflictException('Sakura SMS API key is missing; save the provider settings again');
+      const response = await fetch('https://sms.sakuragroup.co.tz/api/v1/sms/send', { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
+      const data = await response.json().catch(() => ({})) as { status?: string; message?: string; message_id?: string };
+      if (!response.ok || (data.status && data.status !== 'success' && data.status !== 'queued')) throw new Error(`Sakura SMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      return data.message_id;
+    }
+
+    throw new BadRequestException(`Unsupported SMS provider: ${config.provider}`);
   }
 
   private encrypt(value: unknown) {

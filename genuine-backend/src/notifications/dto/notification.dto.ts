@@ -13,10 +13,10 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
-  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -283,14 +283,14 @@ export class EmailConfigDto {
 }
 
 export class SMSConfigDto {
-  @IsIn(['TWILIO', 'AFRICAS_TALKING'])
-  provider: 'TWILIO' | 'AFRICAS_TALKING';
+  @IsIn(['TWILIO', 'AFRICAS_TALKING', 'SASISMS', 'DARSMS', 'EHUB', 'SAKURA'])
+  provider: 'TWILIO' | 'AFRICAS_TALKING' | 'SASISMS' | 'DARSMS' | 'EHUB' | 'SAKURA';
 
-  @IsNotEmpty()
   @IsString()
   @MaxLength(80)
-  @ValidateIf((dto: SMSConfigDto) => dto.provider === 'TWILIO')
-  @IsPhoneNumber()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
   fromNumber: string;
 
   @IsOptional()
@@ -308,6 +308,14 @@ export class SMSConfigDto {
   @IsOptional()
   @IsString()
   apiSecret?: string;
+}
+
+export class TestSMSConfigDto {
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(30)
+  @Matches(/^\+?[0-9][0-9\s()-]{6,28}$/, { message: 'Enter a valid phone number, including country code when needed' })
+  to: string;
 }
 
 export class RetryNotificationDto {

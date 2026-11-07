@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Clock3, RefreshCw } from 'lucide-react';
+import { AlertCircle, Clock3, Moon, RefreshCw, Sun, Sunrise, Sunset } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import { formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessWeekStart } from '@/lib/format/businessDate';
+import { formatBusinessCalendarDate, formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessTimezone, getBusinessWeekStart } from '@/lib/format/businessDate';
 import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type DashboardMetric, type DashboardTransaction, type ExpenseBreakdownRow, type LowStockRow } from '@/lib/api/dashboard';
 import { getApiError } from '@/lib/api';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
@@ -23,40 +23,55 @@ const periods: Array<{ value: PeriodKey; label: string }> = [
 ];
 
 function dateInput(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 function periodFilter(period: PeriodKey, asOfTime: number): DashboardFilter {
   const now = new Date(asOfTime || Date.now());
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dateParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: getBusinessTimezone(), year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now);
+  const part = (type: string) => Number(dateParts.find((item) => item.type === type)?.value || 0);
+  const year = part('year');
+  const month = part('month');
+  const day = part('day');
+  const start = new Date(Date.UTC(year, month - 1, day));
   let groupBy: DashboardFilter['groupBy'] = 'DAILY';
 
   if (period === 'week') {
     const firstDay = getBusinessWeekStart() === 'SUNDAY' ? 0 : 1;
-    const daysSinceStart = (start.getDay() - firstDay + 7) % 7;
-    start.setDate(start.getDate() - daysSinceStart);
+    const daysSinceStart = (start.getUTCDay() - firstDay + 7) % 7;
+    start.setUTCDate(start.getUTCDate() - daysSinceStart);
   } else if (period === 'month') {
-    start.setDate(1);
+    start.setUTCDate(1);
   } else if (period === 'quarter') {
-    start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1);
+    start.setUTCMonth(Math.floor((month - 1) / 3) * 3, 1);
     groupBy = 'WEEKLY';
   } else {
     const financialYear = getBusinessFinancialYear();
     const startMonth = financialYear === 'JULY' ? 6 : financialYear === 'APRIL' ? 3 : 0;
-    const year = now.getMonth() < startMonth ? now.getFullYear() - 1 : now.getFullYear();
-    start.setFullYear(year, startMonth, 1);
+    const startYear = month - 1 < startMonth ? year - 1 : year;
+    start.setUTCFullYear(startYear, startMonth, 1);
     groupBy = 'MONTHLY';
   }
 
-  return { dateFrom: dateInput(start), dateTo: dateInput(now), groupBy };
+  return { dateFrom: dateInput(start), dateTo: dateInput(new Date(Date.UTC(year, month - 1, day))), groupBy };
 }
 
 function dateRangeLabel(filter: DashboardFilter) {
-  const format = (value: string) => new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
-  return `${format(filter.dateFrom)} – ${format(filter.dateTo)}`;
+  return `${formatBusinessCalendarDate(filter.dateFrom)} – ${formatBusinessCalendarDate(filter.dateTo)}`;
+}
+
+function greetingFor(timestamp: number, language: 'sw' | 'en', timezone: string) {
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date(timestamp)));
+  const period = hour >= 5 && hour < 11 ? 'morning' : hour >= 11 && hour < 16 ? 'afternoon' : hour >= 16 && hour < 21 ? 'evening' : 'night';
+  const Icon = period === 'morning' ? Sunrise : period === 'afternoon' ? Sun : period === 'evening' ? Sunset : Moon;
+  const swahili = { morning: 'Habari za asubuhi', afternoon: 'Habari za mchana', evening: 'Habari za jioni', night: 'Habari za usiku' };
+  const english = { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening', night: 'Welcome back tonight' };
+  return { text: (language === 'sw' ? swahili : english)[period], Icon };
 }
 
 export default function DashboardPage() {
@@ -86,6 +101,7 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState<PeriodKey>('month');
   const [definitionsLanguage, setDefinitionsLanguage] = useState<'sw' | 'en'>('sw');
   const [businessSettingsVersion, setBusinessSettingsVersion] = useState(0);
+  const [greetingTime, setGreetingTime] = useState(0);
   const [asOfTime, setAsOfTime] = useState(0);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [executive, setExecutive] = useState<DashboardExecutiveData | null>(null);
@@ -107,12 +123,19 @@ export default function DashboardPage() {
     window.addEventListener('mizania-business-settings-updated', syncLanguage);
     return () => window.removeEventListener('mizania-business-settings-updated', syncLanguage);
   }, [user?.businessId]);
+  useEffect(() => {
+    setGreetingTime(Date.now());
+    const timer = window.setInterval(() => setGreetingTime(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasData = useRef(false);
   const manualRefreshPending = useRef(false);
   const filter = useMemo(() => periodFilter(period, asOfTime), [period, asOfTime, businessSettingsVersion]);
+  const greeting = greetingTime ? greetingFor(greetingTime, definitionsLanguage, getBusinessTimezone()) : null;
+  const firstName = user?.firstName?.trim() || user?.name?.trim().split(/\s+/)[0] || '';
 
   useEffect(() => {
     let active = true;
@@ -220,7 +243,7 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
       <section className="flex flex-col gap-5 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-5 shadow-sm shadow-amber-950/[0.03] sm:flex-row sm:items-end sm:justify-between sm:p-7 dark:border-amber-900/60 dark:bg-[#282317] dark:shadow-black/20">
-        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#527000]">Executive overview · all locations</p><h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">Business at a glance</h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">Business-wide totals across locations. Active location for new activity: <span className="font-semibold text-[#315c45]">{activeLocation?.name || 'Choose a location'}</span>.</p></div>
+        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#527000]">Mizania · {definitionsLanguage === 'sw' ? 'muhtasari wa biashara' : 'business pulse'}</p><h1 className="mt-1.5 flex flex-wrap items-center gap-x-2.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">{greeting ? <greeting.Icon aria-hidden="true" size={25} className="shrink-0 text-amber-600 dark:text-amber-300" /> : null}<span>{greeting?.text || (definitionsLanguage === 'sw' ? 'Karibu' : 'Welcome')}{firstName ? `, ${firstName}` : ''}</span></h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">{definitionsLanguage === 'sw' ? 'Takwimu za biashara nzima. Location ya shughuli mpya:' : 'Business-wide totals across locations. Active location for new activity:'} <span className="font-semibold text-[#315c45]">{activeLocation?.name || (definitionsLanguage === 'sw' ? 'Chagua location' : 'Choose a location')}</span>.</p></div>
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="dashboard-period" className="sr-only">Dashboard date range</label>
           <select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">

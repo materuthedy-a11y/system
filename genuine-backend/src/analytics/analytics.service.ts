@@ -189,7 +189,9 @@ export class AnalyticsService {
 
     return {
       period: range.periodName,
-      asOf: range.endDate,
+      // The period end is already represented by the requested date range.
+      // This timestamp labels when the dashboard calculation completed.
+      asOf: new Date(),
       inventoryAsOf: new Date(),
       currency,
       summary,

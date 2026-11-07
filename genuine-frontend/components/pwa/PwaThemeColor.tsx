@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 
-const LIGHT_THEME_COLOR = '#f3efe6';
-const DARK_THEME_COLOR = '#20211f';
+const LIGHT_THEME_COLOR = '#f0f2ee';
+const DARK_THEME_COLOR = '#111719';
 
 /** Keep browser and installed-PWA chrome aligned with the user's app theme. */
 export function PwaThemeColor() {

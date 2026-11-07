@@ -58,7 +58,7 @@ export function NotificationProviders() {
   async function sendTestSms(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving('sms-test'); setError('');
     try { await notificationsAPI.testSms(testPhone.trim()); notify.success('Test SMS accepted. Check the recipient phone.'); }
-    catch (cause) { setError(getApiError(cause, 'Test SMS could not be sent.')); }
+    catch (cause) { const message = getApiError(cause, 'Test SMS could not be sent.'); setError(message); notify.error(message); }
     finally { setSaving(''); }
   }
 
@@ -82,7 +82,7 @@ export function NotificationProviders() {
       <button type="submit" disabled={saving === 'sms'} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-600">{saving === 'sms' ? <Loader2 size={15} className="animate-spin"/> : <Save size={15}/>}Save SMS settings</button>
     </form>
 
-    {smsReady ? <form onSubmit={(event) => void sendTestSms(event)} className="rounded-xl border border-[#d8dfd5] p-4 dark:border-white/10"><h3 className="text-sm font-bold">Test SMS connection</h3><p className="mt-1 text-xs leading-5 text-[#687368] dark:text-white/55">This sends one real SMS and may use provider credits.</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><label className="min-w-0 flex-1 text-xs font-semibold">Recipient phone number<input required value={testPhone} onChange={(event) => setTestPhone(event.target.value)} placeholder="+2557…" className={field}/></label><button type="submit" disabled={saving === 'sms-test'} className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-600">{saving === 'sms-test' ? <Loader2 size={15} className="animate-spin"/> : <Send size={15}/>}Send test</button></div></form> : null}
+    {smsReady ? <form onSubmit={(event) => void sendTestSms(event)} className="rounded-xl border border-[#d8dfd5] p-4 dark:border-white/10"><h3 className="text-sm font-bold">Test SMS connection</h3><p className="mt-1 text-xs leading-5 text-[#687368] dark:text-white/55">This sends one real SMS and may use provider credits.</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><label className="min-w-0 flex-1 text-xs font-semibold">Recipient phone number<input required value={testPhone} onChange={(event) => setTestPhone(event.target.value)} placeholder={smsProvider === 'SASISMS' ? '2557… (no +) or 07…' : '+2557…'} className={field}/></label><button type="submit" disabled={saving === 'sms-test'} className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-600">{saving === 'sms-test' ? <Loader2 size={15} className="animate-spin"/> : <Send size={15}/>}Send test</button></div></form> : null}
     <p className="text-[11px] leading-5 text-[#687368] dark:text-white/50">The configured provider handles password reset and notification SMS. Delivery is asynchronous; check the notification delivery log for accepted or failed attempts.</p>
   </div>;
 }

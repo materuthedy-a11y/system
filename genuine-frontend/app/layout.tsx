@@ -47,7 +47,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="referrer" content="no-referrer" />
-        <meta name="theme-color" content="#f3efe6" />
+        <meta name="theme-color" content="#f0f2ee" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Mizania" />
       </head>

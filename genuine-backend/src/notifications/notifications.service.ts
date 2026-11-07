@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -1358,9 +1359,35 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const path = '/v1/messages';
       const headers: Record<string, string> = { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' };
       if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
-      const response = await fetch(`https://sms.sasidigital.co.tz${path}`, { method: 'POST', headers, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
-      const data = await response.json().catch(() => ({})) as { success?: boolean; data?: { id?: string; status?: string }; error?: { message?: string } };
-      if (!response.ok || data.success === false) throw new Error(`SasiSMS request failed (${response.status}): ${(data.error?.message || 'provider rejected the message').slice(0, 300)}`);
+      let response: Response;
+      try {
+        response = await fetch(`https://sms.sasidigital.co.tz${path}`, { method: 'POST', headers, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
+      } catch (error) {
+        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        throw new BadGatewayException(timedOut
+          ? 'SasiSMS did not respond before the request timed out. Check provider status and try again later.'
+          : 'Mizania could not connect to SasiSMS. Check backend outbound internet access and provider status.');
+      }
+      const data = await response.json().catch(() => ({})) as { success?: boolean; data?: { id?: string; status?: string }; error?: { code?: string; message?: string } };
+      if (!response.ok || data.success === false) {
+        const code = data.error?.code || `http_${response.status}`;
+        const providerMessage = data.error?.message?.replace(/[\r\n\t]+/g, ' ').replace(/\bsk_(?:live|test)_[A-Za-z0-9_-]+\b/gi, '[redacted API key]').slice(0, 240);
+        const sourceAddressMismatch = /source_address filter mismatch/i.test(data.error?.message || '');
+        const reason: Record<string, string> = {
+          unauthorized: 'The SasiSMS API key is invalid, revoked or not authorized.',
+          insufficient_credits: 'The SasiSMS account does not have enough credits.',
+          sender_id_not_allowed: 'The sender ID is not approved for this SasiSMS account.',
+          validation_error: 'SasiSMS rejected the recipient or message. Use a local number (07…) or international digits without + (255…).',
+          send_failed: sourceAddressMismatch
+            ? `SasiSMS rejected the sender: ${providerMessage || 'source_address filter mismatch'}. Wait for your Sender ID approval or ask SasiSMS support to allow the sender on this account, then save that approved sender ID here.`
+            : providerMessage
+              ? `SasiSMS could not submit the message: ${providerMessage}`
+              : 'SasiSMS could not submit this message. Check the SasiSMS message log and account balance for the provider-side reason; this code is not explained in their public API reference.',
+          rate_limit_exceeded: 'The SasiSMS request limit was reached. Wait before trying again.',
+          service_unavailable: 'SasiSMS is temporarily unavailable. Try again later.',
+        };
+        throw new BadGatewayException(`SasiSMS rejected the test (${response.status}, ${code}): ${reason[code] || 'Check the API key, recipient format and account status in SasiSMS.'}`);
+      }
       return data.data?.id;
     }
 

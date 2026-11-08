@@ -3,6 +3,14 @@ import { authAPI, AuthUser, getApiError, RegisterRequest, tokenStorage } from '@
 
 type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
 
+function resetDashboardWelcome() {
+  try {
+    window.sessionStorage.removeItem('mizania.dashboard.welcome.v2.shown');
+  } catch {
+    // The dashboard can still load if browser storage is unavailable.
+  }
+}
+
 interface AuthState {
   status: AuthStatus;
   user: AuthUser | null;
@@ -63,6 +71,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const result = await authAPI.login({ email: email.trim(), password });
       tokenStorage.save(result.accessToken, result.user, result);
+      resetDashboardWelcome();
       set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, idleExpiresAt: result.idleExpiresAt, absoluteExpiresAt: result.absoluteExpiresAt, idleTimeoutSeconds: result.idleTimeoutSeconds, error: null });
     } catch (error) {
       const message = getApiError(error, 'Sign in failed. Check your details and try again.');
@@ -76,6 +85,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const result = await authAPI.register(input);
       tokenStorage.save(result.accessToken, result.user, result);
+      resetDashboardWelcome();
       set({ status: 'authenticated', user: result.user, accessToken: result.accessToken, idleExpiresAt: result.idleExpiresAt, absoluteExpiresAt: result.absoluteExpiresAt, idleTimeoutSeconds: result.idleTimeoutSeconds, error: null });
     } catch (error) {
       const message = getApiError(error, 'We could not create your account. Please try again.');
@@ -90,6 +100,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch {
       // Local sign out still completes if the API is unavailable or the session expired.
     } finally {
+      resetDashboardWelcome();
       tokenStorage.notifySessionEnded();
       tokenStorage.clear();
       set({ status: 'anonymous', user: null, accessToken: null, idleExpiresAt: null, absoluteExpiresAt: null, idleTimeoutSeconds: 30 * 60, error: null });

@@ -63,21 +63,21 @@ Use the task IDs below when reporting results. Keep each unchecked item pending 
 
 - [x] 25.4.1 Create `PH25 QA Bank Transfer` (`PH25-QA-BANK`, `BANK`, reference required), then edit description to `QA test bank updated`; after refresh, confirm the method and edited detail persist (user confirmed, 7 Nov 2026).
 - [x] 25.4.2 Deactivate `PH25 QA Bank Transfer` and confirm it is absent from the invoice payment-method selector; confirm historical Cash payment history on `PH25-PO-202611-00001` remains readable; reactivate and confirm the QA method returns to the selector. User confirmed green, 7 Nov 2026.
-- [ ] 25.4.3 Make a method the default and verify new payment forms select it.
-- [ ] 25.4.4 For a method requiring a reference, submit a payment without one and confirm validation; add a reference and confirm the request succeeds.
+- [x] 25.4.3 Set `PH25 QA Bank Transfer` as the default and open the customer-payment form for an unpaid invoice; it displayed `PH25 QA Bank Transfer · Default` selected. User confirmed green, 7 Nov 2026.
+- [x] 25.4.4 For a method requiring a reference, submit a payment without one and confirm validation; add `PH25-REF-TEST-001` and confirm the request succeeds. Browser blocked the blank reference (`Please fill out this field.`); after submission invoice `INV-202611-00030` showed Paid TZS 1 and balance TZS 3,539. User confirmed by browser output, 8 Nov 2026.
 
 ## 25.5 Tax rates
 
-- [ ] 25.5.1 Create a tax rate for sales, purchases or both; edit its name, code, percentage and applicability.
-- [ ] 25.5.2 Set it as default and confirm the previous default is unset for the same scope.
-- [ ] 25.5.3 Deactivate a nondefault rate and reactivate it.
-- [ ] 25.5.4 Confirm the active default rate reaches new sales/purchase documents and that existing documents are unchanged.
-- [ ] 25.5.5 Confirm the current default cannot be deactivated until another default is selected.
+- [x] 25.5.1 Create a nondefault QA tax rate and edit its name, code, percentage and applicability; user confirmed `PH25 QA Test Tax edited · 2.25%`, code `PH25-QA-TAX-2`, scope `BOTH`, active (8 Nov 2026).
+- [x] 25.5.2 Set the QA tax rate as default and confirm the previous default is unset for the matching scope; restore the previous default afterward. User confirmed green, 8 Nov 2026.
+- [x] 25.5.3 Deactivate and reactivate the nondefault `PH25 QA Test Tax edited` rate; user confirmed green, 8 Nov 2026.
+- [x] 25.5.4 With `PH25 QA Test Tax edited` (2.25%, BOTH) marked DEFAULT, new sales invoice and purchase-order forms both auto-filled 2.25%; old invoice `INV-202611-00030` remained at TZS 540 tax and old PO `PH25-PO-202611-00001` remained at TZS 0 tax. User confirmed, 8 Nov 2026.
+- [x] 25.5.5 Confirm the current default tax rate cannot be deactivated from the UI; `PH25 QA Test Tax edited` showed no Deactivate control while marked DEFAULT. Backend also rejects deactivating a current default. User confirmed, 8 Nov 2026.
 
 ## 25.6 Expense categories
 
-- [ ] 25.6.1 Create and edit an expense category; deactivate/reactivate it.
-- [ ] 25.6.2 Confirm active categories appear in expense entry and inactive ones cannot be selected for new expenses.
+- [x] 25.6.1 Create `PH25 QA Expense`, edit it to `PH25 QA Expense edited` (`PH25_QA_EXP_2`), then deactivate/reactivate it. User confirmed green, 8 Nov 2026.
+- [x] 25.6.2 Confirm active categories appear in expense entry and inactive ones cannot be selected for new expenses. User confirmed green, 8 Nov 2026.
 - [ ] 25.6.3 Confirm existing expense history still displays its category.
 
 ## 25.7 Product categories

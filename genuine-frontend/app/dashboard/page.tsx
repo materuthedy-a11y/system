@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, Clock3, Moon, RefreshCw, Sun, Sunrise, Sunset } from 'lucide-react';
+import Image from 'next/image';
+import { AlertCircle, ArrowRight, Clock3, Moon, RefreshCw, Sun, Sunrise, Sunset, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatBusinessCalendarDate, formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessTimezone, getBusinessWeekStart } from '@/lib/format/businessDate';
@@ -102,6 +104,8 @@ export default function DashboardPage() {
   const [definitionsLanguage, setDefinitionsLanguage] = useState<'sw' | 'en'>('sw');
   const [businessSettingsVersion, setBusinessSettingsVersion] = useState(0);
   const [greetingTime, setGreetingTime] = useState(0);
+  const [showWelcomePrompt, setShowWelcomePrompt] = useState(false);
+  const welcomeButtonRef = useRef<HTMLButtonElement>(null);
   const [asOfTime, setAsOfTime] = useState(0);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [executive, setExecutive] = useState<DashboardExecutiveData | null>(null);
@@ -136,6 +140,74 @@ export default function DashboardPage() {
   const filter = useMemo(() => periodFilter(period, asOfTime), [period, asOfTime, businessSettingsVersion]);
   const greeting = greetingTime ? greetingFor(greetingTime, definitionsLanguage, getBusinessTimezone()) : null;
   const firstName = user?.firstName?.trim() || user?.name?.trim().split(/\s+/)[0] || '';
+
+  useEffect(() => {
+    if (!user || !executive || isLoading || error) return;
+    const welcomeKey = 'mizania.dashboard.welcome.v2.shown';
+    try {
+      if (window.sessionStorage.getItem(welcomeKey) === 'yes') return;
+    } catch {
+      // Show the dialog even when browser storage is unavailable.
+    }
+    setShowWelcomePrompt(true);
+    try {
+      window.sessionStorage.setItem(welcomeKey, 'yes');
+    } catch {
+      // The dialog can still be dismissed for the current render.
+    }
+  }, [user, executive, isLoading, error]);
+
+  const welcomeLanguage = definitionsLanguage;
+  const welcomeSalutation = greeting?.text || (welcomeLanguage === 'sw' ? 'Karibu' : 'Welcome');
+  const welcomeName = firstName ? `, ${firstName}` : '';
+  const hasReceivables = !!executive && executive.summary.outstandingReceivables.value > 0
+    && (permissions.includes('sales.view') || permissions.includes('customers.view'));
+  const hasStockAttention = canViewInventory && lowStockTotal > 0;
+  const hasSales = !!executive && executive.summary.totalRevenue.value > 0;
+  const currencyAmount = (value: number) => new Intl.NumberFormat(welcomeLanguage === 'sw' ? 'sw-TZ' : 'en-TZ', { maximumFractionDigits: 2 }).format(value);
+  const welcomeDetail = welcomeLanguage === 'sw'
+    ? hasReceivables && executive
+      ? `Kuna salio la wateja la ${executive.currency} ${currencyAmount(executive.summary.outstandingReceivables.value)} linaloweza kufuatiliwa.`
+      : hasStockAttention
+        ? `Bidhaa ${lowStockTotal} zinahitaji uangalizi wa stock.`
+        : hasSales && executive
+          ? `Mapato ya kipindi hiki ni ${currencyAmount(executive.summary.totalRevenue.value)} ${executive.currency}. Endelea kufuatilia mwenendo wake.`
+          : 'Rekodi mauzo, manunuzi na stock hapa ili uone biashara yako ikikua.'
+    : hasReceivables && executive
+      ? `Customer balances of ${executive.currency} ${currencyAmount(executive.summary.outstandingReceivables.value)} are ready for follow-up.`
+      : hasStockAttention
+        ? `${lowStockTotal} products need stock attention.`
+        : hasSales && executive
+          ? `Revenue for this period is ${executive.currency} ${currencyAmount(executive.summary.totalRevenue.value)}. Keep tracking its progress.`
+          : 'Record sales, purchases and stock here to see your business take shape.';
+  const welcomeAction = hasReceivables
+    ? { href: permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/customers', label: welcomeLanguage === 'sw' ? 'Fuatilia salio' : 'Follow up balances' }
+    : hasStockAttention
+      ? { href: '/dashboard/inventory', label: welcomeLanguage === 'sw' ? 'Angalia stock' : 'Review stock' }
+      : hasSales
+        ? { href: '/dashboard/reports?tab=sales', label: welcomeLanguage === 'sw' ? 'Angalia mwenendo' : 'View performance' }
+        : permissions.includes('sales.create')
+          ? { href: '/dashboard/sales/invoices/new', label: welcomeLanguage === 'sw' ? 'Anza mauzo' : 'Start a sale' }
+          : permissions.includes('products.create')
+            ? { href: '/dashboard/products/new', label: welcomeLanguage === 'sw' ? 'Ongeza bidhaa' : 'Add a product' }
+            : permissions.includes('purchases.create')
+              ? { href: '/dashboard/purchases/orders/new', label: welcomeLanguage === 'sw' ? 'Rekodi manunuzi' : 'Record a purchase' }
+              : null;
+
+  useEffect(() => {
+    if (!showWelcomePrompt) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    welcomeButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowWelcomePrompt(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showWelcomePrompt]);
 
   useEffect(() => {
     let active = true;
@@ -298,6 +370,35 @@ export default function DashboardPage() {
           </section>
         </section>
       </> : !error ? <AuthLoadingOverlay message="Loading your dashboard…" /> : null}
+      {showWelcomePrompt && executive && typeof document !== 'undefined' ? createPortal(<div role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowWelcomePrompt(false); }} className="fixed inset-0 z-[120] grid place-items-center overflow-y-auto bg-[#0b100d]/65 p-4 backdrop-blur-md sm:p-6">
+        <section role="dialog" aria-modal="true" aria-labelledby="welcome-prompt-title" aria-describedby="welcome-prompt-description" className="relative my-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-white/70 bg-[#fbfcf9] text-[#202720] shadow-[0_32px_100px_rgba(0,0,0,0.38)] dark:border-white/10 dark:bg-[#18211d] dark:text-[#f3f6f1]">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-emerald-300/15 blur-3xl dark:bg-emerald-500/10" />
+          <div className="relative p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Image src="/MIZANIA_BRAND_PACKAGE/logos/png/mizania-app-icon-64x64.png" alt="Mizania" width={48} height={48} priority className="h-12 w-12 rounded-xl" />
+                <div><p className="text-sm font-extrabold tracking-tight text-[#202720] dark:text-[#f3f6f1]">Mizania</p><p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-[#8a6920] dark:text-[#e0c16e]">REKODI · FUATILIA · ENDELEA</p></div>
+              </div>
+              <button type="button" onClick={() => setShowWelcomePrompt(false)} aria-label={welcomeLanguage === 'sw' ? 'Funga salamu' : 'Close welcome'} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[#647067] transition hover:bg-black/5 hover:text-[#202720] dark:text-white/65 dark:hover:bg-white/10 dark:hover:text-white"><X size={19} /></button>
+            </div>
+            <p className="mt-8 text-sm font-semibold text-emerald-800 dark:text-emerald-300">{welcomeSalutation}{welcomeName}</p>
+            <h2 id="welcome-prompt-title" className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{welcomeLanguage === 'sw' ? 'Karibu kwenye biashara yako.' : 'Welcome to your business.'}</h2>
+            <p id="welcome-prompt-description" className="mt-3 max-w-lg text-sm leading-6 text-[#59645b] dark:text-[#c0cbc2]">{welcomeLanguage === 'sw' ? `Muhtasari wa ${user?.businessName || 'biashara yako'} uko tayari.` : `The latest overview for ${user?.businessName || 'your business'} is ready.`}</p>
+
+            <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-white/75 p-4 dark:border-emerald-900/70 dark:bg-black/15">
+              <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-800 dark:text-emerald-300">{welcomeLanguage === 'sw' ? 'Cha kuangalia' : 'Worth a look'}</p>
+              <p className="mt-2 text-sm font-medium leading-6 text-[#354139] dark:text-[#e1e9e2]">{welcomeDetail}</p>
+              {activeLocation?.name ? <p className="mt-3 text-xs text-[#68756b] dark:text-[#aab7ad]">{welcomeLanguage === 'sw' ? 'Location ya shughuli mpya:' : 'Location for new activity:'} <span className="font-semibold text-[#40594a] dark:text-[#d6e3d8]">{activeLocation.name}</span></p> : null}
+            </div>
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button type="button" onClick={() => setShowWelcomePrompt(false)} className="min-h-11 rounded-xl px-4 text-sm font-semibold text-[#5d685f] transition hover:bg-black/5 dark:text-[#c1ccc2] dark:hover:bg-white/[0.06]">{welcomeLanguage === 'sw' ? 'Endelea kwenye dashboard' : 'Continue to dashboard'}</button>
+              {welcomeAction ? <button ref={welcomeButtonRef} type="button" onClick={() => { setShowWelcomePrompt(false); router.push(welcomeAction.href); }} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#16734a] px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/15 transition hover:bg-[#125e3d] focus:outline-none focus:ring-4 focus:ring-emerald-500/25">{welcomeAction.label}<ArrowRight size={17} /></button> : <button ref={welcomeButtonRef} type="button" onClick={() => setShowWelcomePrompt(false)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#16734a] px-5 text-sm font-bold text-white shadow-lg shadow-emerald-950/15 transition hover:bg-[#125e3d] focus:outline-none focus:ring-4 focus:ring-emerald-500/25">{welcomeLanguage === 'sw' ? 'Twende kazi' : 'Let’s get started'}<ArrowRight size={17} /></button>}
+            </div>
+            <p className="mt-5 text-center text-[11px] leading-5 text-[#849087] dark:text-[#87958a]">{welcomeLanguage === 'sw' ? 'Unaweza kufunga salamu hii na kuendelea na dashboard yako.' : 'You can close this welcome and continue to your dashboard.'}</p>
+          </div>
+        </section>
+      </div>, document.body) : null}
     </div>
   );
 }

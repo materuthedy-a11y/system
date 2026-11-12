@@ -367,6 +367,13 @@ export class PaymentsService {
   }
 
   async getAllPayments(businessId: string, query: PaymentListQueryDto) {
+    if (query.locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: query.locationId, businessId },
+        select: { id: true },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
     if (query.fromDate && query.toDate && query.fromDate > query.toDate)
       throw new BadRequestException('fromDate must be on or before toDate');
     const page = query.page || 1;

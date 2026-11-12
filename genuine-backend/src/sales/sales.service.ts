@@ -253,6 +253,13 @@ export class SalesService {
   }
 
   async getAllSalesInvoices(businessId: string, filter: SalesInvoiceFilterDto) {
+    if (filter.locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: filter.locationId, businessId },
+        select: { id: true },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
     const page = Math.max(1, Math.floor(Number(filter.page) || 1));
     const limit = Math.min(100, Math.max(1, Math.floor(Number(filter.limit) || 20)));
     const invoiceDate: Prisma.DateTimeFilter = {};

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn, IsNumber, Matches } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsNumber, Matches, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PurchaseOrderFilterDto {
@@ -9,6 +9,11 @@ export class PurchaseOrderFilterDto {
   @IsOptional()
   @IsString()
   supplierId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  locationId?: string;
 
   @IsOptional()
   @IsIn(['DRAFT', 'ORDERED', 'PARTIALLY_RECEIVED', 'FULLY_RECEIVED', 'CLOSED', 'CANCELLED'])

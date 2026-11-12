@@ -178,6 +178,7 @@ export const purchasesAPI = {
       search?: string;
       status?: string;
       supplierId?: string;
+      locationId?: string;
       dateFrom?: string;
       dateTo?: string;
       sortBy?: string;

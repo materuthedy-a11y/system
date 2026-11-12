@@ -241,6 +241,13 @@ export class ExpensesService {
   }
 
   async listExpenses(businessId: string, filter: ExpenseFilterDto) {
+    if (filter.locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: filter.locationId, businessId },
+        select: { id: true },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
     if (filter.fromDate && filter.toDate && filter.fromDate > filter.toDate)
       throw new BadRequestException('fromDate must be on or before toDate');
     if (filter.minAmount != null && filter.maxAmount != null && filter.minAmount > filter.maxAmount)

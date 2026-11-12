@@ -625,6 +625,13 @@ export class PurchaseService {
     businessId: string,
     filter: PurchaseOrderFilterDto,
   ): Promise<{ data: PurchaseOrderResponseDto[]; total: number; page: number; limit: number }> {
+    if (filter.locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: filter.locationId, businessId },
+        select: { id: true },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
     const page = Math.max(1, Math.floor(Number(filter.page) || 1));
     const limit = Math.min(100, Math.max(1, Math.floor(Number(filter.limit) || 20)));
     const skip = (page - 1) * limit;
@@ -654,6 +661,7 @@ export class PurchaseService {
 
     const where: Prisma.PurchaseOrderWhereInput = {
       businessId,
+      ...(filter.locationId && { locationId: filter.locationId }),
       ...(filter.status && { status: filter.status }),
       ...(filter.supplierId && { supplierId: filter.supplierId }),
       ...(filter.search && {

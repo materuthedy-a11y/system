@@ -7,7 +7,7 @@
   --ink: #151713;
   --muted: #73766f;
   --line: #e8e9e5;
-  --accent-lime: #c9e600;
+  --accent-orange: #ff7600;
   --brand-charcoal: #20211f;
   --light-sand: #f0f2ee;
   --app-canvas: #f0f2ee;
@@ -37,18 +37,18 @@ html:not(.dark) [class*="bg-[#f7f7f4"] {
 
 /* Unify the muted olive brand labels with the emerald workspace icon in
    light mode, while leaving dark-mode accents and semantic status colors alone. */
-html:not(.dark) [class*="text-[#527000"],
-html:not(.dark) [class*="text-[#637b12"],
-html:not(.dark) [class*="text-[#596b05"],
-html:not(.dark) [class*="text-[#617500"],
+html:not(.dark) [class*="text-[#a54100"],
+html:not(.dark) [class*="text-[#bd4b00"],
+html:not(.dark) [class*="text-[#c24e00"],
+html:not(.dark) [class*="text-[#A54100"],
 html:not(.dark) [class*="text-[#647500"],
-html:not(.dark) [class*="text-[#667b00"],
-html:not(.dark) [class*="text-[#70820f"],
-html:not(.dark) [class*="text-[#71840c"],
-html:not(.dark) [class*="text-[#718b11"],
-html:not(.dark) [class*="text-[#738900"],
-html:not(.dark) [class*="text-[#78930b"],
-html:not(.dark) [class*="text-[#829600"] {
+html:not(.dark) [class*="text-[#bd4b00"],
+html:not(.dark) [class*="text-[#bd4b00"],
+html:not(.dark) [class*="text-[#bd4b00"],
+html:not(.dark) [class*="text-[#bd4b00"],
+html:not(.dark) [class*="text-[#A54100"],
+html:not(.dark) [class*="text-[#c24e00"],
+html:not(.dark) [class*="text-[#A24C0F"] {
   color: #047857 !important;
 }
 
@@ -168,7 +168,7 @@ html.dark {
   --ink: #e1e5de;
   --muted: #aab2a6;
   --line: #343b33;
-  --accent-lime: #d8f04b;
+  --accent-orange: #ffad66;
   --brand-charcoal: #111719;
   --app-canvas: #111719;
   background: var(--app-canvas);
@@ -186,29 +186,29 @@ html.dark button:not(:disabled):hover {
 
 html.dark button.feedback-primary {
   background-color: #303630 !important;
-  border-color: #596347;
+  border-color: #6B452B;
   color: #ffffff !important;
 }
 
 html.dark button.feedback-primary:hover {
   background-color: #414941 !important;
-  border-color: #829600;
+  border-color: #A24C0F;
 }
 
 /* Charcoal action controls become near-black against the dark cards, with a
-   quiet lime edge so primary actions read as interactive across the app. */
+   quiet orange edge so primary actions read as interactive across the app. */
 html.dark button[class*="bg-[#20211f]"],
 html.dark a[href][class*="bg-[#20211f]"] {
   background-color: #050605 !important;
-  border: 1px solid #596347;
+  border: 1px solid #6B452B;
   color: #e7e9e3 !important;
 }
 
 html.dark button:not(:disabled)[class*="bg-[#20211f]"]:hover,
 html.dark a[href][class*="bg-[#20211f]"]:hover {
   background-color: #111510 !important;
-  border-color: #829600;
-  box-shadow: 0 0 18px rgb(216 240 75 / 12%);
+  border-color: #A24C0F;
+  box-shadow: 0 0 18px rgb(255 173 102 / 12%);
 }
 
 html.dark ::-webkit-scrollbar-thumb { background: #454d43; }
@@ -403,17 +403,17 @@ html.dark [class*="text-[#513276"] {
   color: #c8a8ee !important;
 }
 
-html.dark [class*="text-[#527000"],
-html.dark [class*="text-[#637b12"],
-html.dark [class*="text-[#596b05"],
-html.dark [class*="text-[#617500"],
-html.dark [class*="text-[#667b00"],
-html.dark [class*="text-[#70820f"],
-html.dark [class*="text-[#71840c"],
-html.dark [class*="text-[#738900"],
-html.dark [class*="text-[#d8f04b"],
-html.dark [class*="text-[#c9e600"] {
-  color: #d8f04b !important;
+html.dark [class*="text-[#a54100"],
+html.dark [class*="text-[#bd4b00"],
+html.dark [class*="text-[#c24e00"],
+html.dark [class*="text-[#A54100"],
+html.dark [class*="text-[#bd4b00"],
+html.dark [class*="text-[#bd4b00"],
+html.dark [class*="text-[#bd4b00"],
+html.dark [class*="text-[#A54100"],
+html.dark [class*="text-[#ffad66"],
+html.dark [class*="text-[#ff7600"] {
+  color: #ffad66 !important;
 }
 
 html.dark [class*="text-[#73766f"],
@@ -433,9 +433,9 @@ html.dark [class*="text-[#9a9f92"] {
   color: #aab2a6 !important;
 }
 
-html.dark [class*="bg-[#d8f04b"][class*="text-[#20211f"],
-html.dark [class*="bg-[#c9e600"][class*="text-[#20211f"],
-html.dark [class*="bg-[#b9e52e"][class*="text-[#20211f"] {
+html.dark [class*="bg-[#ffad66"][class*="text-[#20211f"],
+html.dark [class*="bg-[#ff7600"][class*="text-[#20211f"],
+html.dark [class*="bg-[#ff9a3d"][class*="text-[#20211f"] {
   color: #20211f !important;
 }
 
@@ -453,17 +453,17 @@ html.dark textarea::placeholder {
 html.dark svg circle[fill="white"] { fill: #191d19; }
 
 /* Keep soft status fills dark enough for their text, including the selected
-   Purchases tab that uses a pale lime fill in light mode. */
-html.dark [class*="bg-[#e8f2aa"],
-html.dark [class*="bg-[#c9ef9d"],
-html.dark [class*="bg-[#e4f58c"],
-html.dark [class*="bg-[#e4f28a"],
-html.dark [class*="bg-[#e7f49d"],
-html.dark [class*="bg-[#d8f04b"],
-html.dark [class*="bg-[#c9e600"],
-html.dark [class*="bg-[#b9e52e"] {
-  background-color: #2d3a1d !important;
-  color: #d8f04b !important;
+   Purchases tab that uses a pale orange fill in light mode. */
+html.dark [class*="bg-[#ffe4cc"],
+html.dark [class*="bg-[#ffe4cc"],
+html.dark [class*="bg-[#ffe4cc"],
+html.dark [class*="bg-[#ffe4cc"],
+html.dark [class*="bg-[#fff0e3"],
+html.dark [class*="bg-[#ffad66"],
+html.dark [class*="bg-[#ff7600"],
+html.dark [class*="bg-[#ff9a3d"] {
+  background-color: #3b2818 !important;
+  color: #ffad66 !important;
 }
 
 html.dark [class*="bg-[#ffe0b8"],

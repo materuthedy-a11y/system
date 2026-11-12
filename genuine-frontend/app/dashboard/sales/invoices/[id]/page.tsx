@@ -12,7 +12,7 @@ import { SalesHeading, SalesNotice, StatusBadge, calendarDateLabel, money, useSa
 import { useAuthStore } from '@/store/authStore';
 import { useBusinessProfileStore } from '@/store/businessProfileStore';
 
-const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
+const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#c24e00]/20';
 
 export default function SalesInvoiceDetailPage() {
   const params = useParams<{ id: string }>();
@@ -99,10 +99,10 @@ export default function SalesInvoiceDetailPage() {
           <h2 id="cancel-invoice-title" className="text-lg font-semibold text-[#30332e] dark:text-[#f0f1ed]">Cancel invoice</h2>
           <p className="mt-1 text-sm text-[#747a68] dark:text-[#bdc3b4]">Enter a reason. The invoice will only be cancelled after you confirm.</p>
           <label className="mt-4 block text-sm font-semibold text-[#9b3730] dark:text-[#ffaaa0]">Cancellation reason
-            <input autoFocus required minLength={1} className={`${input} mt-1 dark:border-[#41473f] dark:bg-[#111411] dark:text-[#f0f1ed] dark:focus:border-[#d8f04b] dark:focus:ring-[#d8f04b]/30`} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+            <input autoFocus required minLength={1} className={`${input} mt-1 dark:border-[#41473f] dark:bg-[#111411] dark:text-[#f0f1ed] dark:focus:border-[#ffad66] dark:focus:ring-[#ffad66]/30`} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
           </label>
           <div className="mt-4 flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => { setShowCancel(false); setCancelReason(''); }} className="min-h-10 rounded-lg border border-[#dfe2da] bg-white px-4 text-sm font-semibold text-[#30332e] transition hover:bg-[#f5f6f2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#738900] dark:border-[#41473f] dark:bg-[#171a17] dark:text-[#e1e4dc] dark:hover:bg-[#222622] dark:focus-visible:outline-[#d8f04b]">Keep invoice</button>
+            <button type="button" onClick={() => { setShowCancel(false); setCancelReason(''); }} className="min-h-10 rounded-lg border border-[#dfe2da] bg-white px-4 text-sm font-semibold text-[#30332e] transition hover:bg-[#f5f6f2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c24e00] dark:border-[#41473f] dark:bg-[#171a17] dark:text-[#e1e4dc] dark:hover:bg-[#222622] dark:focus-visible:outline-[#ffad66]">Keep invoice</button>
             <button disabled={busy || !cancelReason.trim()} className="min-h-10 rounded-lg bg-[#a63832] px-4 text-sm font-semibold text-white transition hover:bg-[#8f2d28] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a63832] disabled:cursor-not-allowed disabled:bg-[#ead0cd] disabled:text-[#20211f] dark:disabled:bg-[#49302d] dark:disabled:text-[#c9a6a1]">{busy ? 'Cancelling…' : 'Confirm cancellation'}</button>
           </div>
         </form>

@@ -43,7 +43,7 @@ export function AuthFrame({
           />
         </Link>
         <div className="mx-auto my-auto w-full max-w-sm py-7 sm:py-10">
-          <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#d8f04b]">{eyebrow}</p>
+          <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-[#ffad66]">{eyebrow}</p>
           <h2 className="text-[1.7rem] font-semibold leading-tight tracking-tight text-white min-[390px]:text-3xl sm:text-[2.1rem]">{title}</h2>
           <p className="mt-3 text-sm leading-6 text-white/75">{description}</p>
           <div className="mt-8">{children}</div>
@@ -102,7 +102,7 @@ export function AuthField({
           disabled={disabled}
           required={required}
           maxLength={maxLength}
-          className={`h-12 w-full rounded-xl border border-[#dfe1db] bg-white px-4 text-sm text-[#20231f] shadow-sm shadow-black/[0.02] transition placeholder:text-[#a4a69f] hover:border-[#c8cbc3] focus:border-[#8aa91a] focus:outline-none focus:ring-4 focus:ring-[#d8f04b]/15 disabled:cursor-not-allowed disabled:bg-[#f4f5f1] ${suffix ? 'pr-12' : ''}`}
+          className={`h-12 w-full rounded-xl border border-[#dfe1db] bg-white px-4 text-sm text-[#20231f] shadow-sm shadow-black/[0.02] transition placeholder:text-[#a4a69f] hover:border-[#c8cbc3] focus:border-[#c24e00] focus:outline-none focus:ring-4 focus:ring-[#ffad66]/15 disabled:cursor-not-allowed disabled:bg-[#f4f5f1] ${suffix ? 'pr-12' : ''}`}
         />
         {suffix}
       </div>

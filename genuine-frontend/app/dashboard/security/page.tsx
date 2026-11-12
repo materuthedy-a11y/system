@@ -87,7 +87,7 @@ export default function SecurityPage() {
     <div className="mx-auto max-w-2xl">
       <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-[#73766f] hover:text-[#20211f]"><ArrowLeft size={16} /> Back to overview</Link>
       <section className="mt-6 rounded-2xl border border-[#e8e9e5] bg-white p-5 shadow-sm sm:p-8">
-        <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#d8f04b] text-[#354900]"><KeyRound size={19} /></span>
+        <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#ffad66] text-[#693100]"><KeyRound size={19} /></span>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight text-[#20231f]">Change password</h1>
         <p className="mt-2 text-sm leading-6 text-[#73766f]">Changing your password signs out all active sessions. You will need to sign in again with the new password.</p>
         <form onSubmit={handleSubmit} className="mt-7 space-y-5" noValidate>

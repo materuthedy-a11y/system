@@ -244,8 +244,10 @@ export const productsAPI = {
       details: Array<{ productId: string; success: boolean; error?: string }>;
     }>(await apiClient.post('/products/bulk/prices', { items }));
   },
-  async categories() {
-    return unwrap<Category[]>(await apiClient.get('/products/categories'));
+  async categories(includeInactive = false) {
+    return unwrap<Category[]>(await apiClient.get('/products/categories', {
+      params: includeInactive ? { includeInactive: true } : undefined,
+    }));
   },
   async createCategory(input: { name: string; description?: string; parentCategoryId?: string }) {
     return unwrap<Category>(await apiClient.post('/products/categories', input));

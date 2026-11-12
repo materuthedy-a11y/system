@@ -13,10 +13,10 @@ import { useAuthStore } from '@/store/authStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { SalesHeading, SalesNotice, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
 
-const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
+const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#c24e00]/20';
 const terms: PaymentTerms[] = ['COD', 'PREPAID', 'NET-7', 'NET-14', 'NET-30', 'NET-45', 'NET-60'];
-type Line = { productId: string; quantity: string; unitPrice: string; discountPercentage: string };
-const blankLine = (): Line => ({ productId: '', quantity: '1', unitPrice: '', discountPercentage: '' });
+type Line = { productId: string; unitId: string; quantity: string; unitPrice: string; discountPercentage: string };
+const blankLine = (): Line => ({ productId: '', unitId: '', quantity: '1', unitPrice: '', discountPercentage: '' });
 function localDay() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function hasMoreThanDecimals(value: number, places: number) { const scale = 10 ** places; return Math.abs(value * scale - Math.round(value * scale)) > 1e-8; }
 
@@ -88,7 +88,8 @@ export default function NewSalesInvoicePage() {
   }
   function selectProduct(index: number, productId: string) {
     const product = products.find((item) => item.id === productId);
-    setLines((current) => current.map((line, i) => i === index ? { ...line, productId, unitPrice: product ? String(product.sellingPrice) : '' } : line));
+    const selectedUnit = product?.productUnits.find((unit) => unit.isDefault) ?? product?.productUnits.find((unit) => unit.conversionFactor === 1);
+    setLines((current) => current.map((line, i) => i === index ? { ...line, productId, unitId: selectedUnit?.unitId ?? '', unitPrice: product ? String(product.sellingPrice * (selectedUnit?.conversionFactor ?? 1)) : '' } : line));
   }
   const subtotal = lines.reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unitPrice) || 0) * (1 - (Number(line.discountPercentage) || 0) / 100), 0);
   const taxableEstimate = Math.max(0, subtotal - (Number(discountAmount) || 0));
@@ -101,7 +102,7 @@ export default function NewSalesInvoicePage() {
     if (!customerId || !locationId) { setError('Choose an active customer and location.'); return; }
     if (dueDate && dueDate < invoiceDate) { setError('Due date cannot be before invoice date.'); return; }
     const cleanLines = lines.map((line) => ({
-      productId: line.productId, quantity: Number(line.quantity), unitPrice: Number(line.unitPrice),
+      productId: line.productId, unitId: line.unitId || undefined, quantity: Number(line.quantity), unitPrice: Number(line.unitPrice),
       ...(line.discountPercentage !== '' ? { discountPercentage: Number(line.discountPercentage) } : {}),
     }));
     if (cleanLines.some((line) => !line.productId || !Number.isFinite(line.quantity) || line.quantity <= 0 || hasMoreThanDecimals(line.quantity, 4) || !Number.isFinite(line.unitPrice) || line.unitPrice < 0 || hasMoreThanDecimals(line.unitPrice, 4) || (line.discountPercentage !== undefined && (line.discountPercentage < 0 || line.discountPercentage > 100 || hasMoreThanDecimals(line.discountPercentage, 4))))) {
@@ -144,15 +145,16 @@ export default function NewSalesInvoicePage() {
       </section>
       <section className="rounded-xl border border-[#e5e7e0] bg-white p-4">
         <div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-semibold text-[#30342e]">Items</h2><button type="button" className="min-h-9 rounded-lg border border-[#dfe2d9] px-3 text-sm font-semibold" onClick={() => setLines((all) => [...all, blankLine()])}>Add item</button></div>
-        <div className="space-y-3">{lines.map((line, index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-lg bg-[#f8f9f6] p-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+        <div className="space-y-3">{lines.map((line, index) => { const selectedProduct = products.find((p) => p.id === line.productId); const productUnits = selectedProduct?.productUnits ?? []; return <div key={index} className="grid grid-cols-1 gap-3 rounded-lg bg-[#f8f9f6] p-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto]">
           <label className="text-xs font-semibold text-[#62685d]">Product<select required className={`${input} mt-1`} value={line.productId} onChange={(e) => selectProduct(index, e.target.value)}><option value="">Choose product</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></label>
+          <label className="text-xs font-semibold text-[#62685d]">Unit<select required disabled={!selectedProduct} className={`${input} mt-1`} value={line.unitId} onChange={(e) => { const unit = productUnits.find((entry) => entry.unitId === e.target.value); updateLine(index, 'unitId', e.target.value); if (selectedProduct && unit) updateLine(index, 'unitPrice', String(selectedProduct.sellingPrice * unit.conversionFactor)); }}><option value="">Choose unit</option>{productUnits.map((unit) => <option key={unit.unitId} value={unit.unitId}>{unit.unitName} ({unit.unitSymbol}) · ×{unit.conversionFactor}{unit.isDefault ? ' · Default' : ''}</option>)}</select></label>
           <label className="text-xs font-semibold text-[#62685d]">Quantity<input type="number" min="0.0001" step="0.0001" required className={`${input} mt-1`} value={line.quantity} onChange={(e) => updateLine(index, 'quantity', e.target.value)} /></label>
           <label className="text-xs font-semibold text-[#62685d]">Unit price<input type="number" min="0" step="0.0001" required className={`${input} mt-1`} value={line.unitPrice} onChange={(e) => updateLine(index, 'unitPrice', e.target.value)} /></label>
           {permissions.canDiscount ? <label className="text-xs font-semibold text-[#62685d]">Line discount %<input type="number" min="0" max="100" step="0.0001" className={`${input} mt-1`} value={line.discountPercentage} onChange={(e) => updateLine(index, 'discountPercentage', e.target.value)} /></label> : null}
           <button type="button" disabled={lines.length === 1} onClick={() => setLines((all) => all.filter((_, i) => i !== index))} className="min-h-10 self-end rounded-lg border border-[#efd4cf] bg-[#fff7f5] px-3 text-sm font-semibold text-[#9b3730] transition hover:bg-[#ffe4df] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#a63832] disabled:cursor-not-allowed disabled:border-[#dfe2da] disabled:bg-transparent disabled:text-[#73766f] dark:border-[#533530] dark:bg-[#241a19] dark:text-[#ffaaa0] dark:hover:bg-[#351e1b] dark:focus-visible:outline-[#ffaaa0] dark:disabled:border-[#343a32] dark:disabled:bg-transparent dark:disabled:text-[#8a9186]">Remove</button>
-        </div>)}</div>
+        </div>; })}</div>
         <div className="mt-4 flex flex-wrap justify-end gap-x-8 gap-y-2 border-t border-[#eef0eb] pt-4 text-sm"><span>Subtotal after line discounts: <strong>{money(subtotal, currency)}</strong></span><span>Taxable amount: <strong>{money(taxableEstimate, currency)}</strong></span><span>Tax ({taxPercentage}%): <strong>{money(taxEstimate, currency)}</strong></span><span>Estimated total: <strong>{money(estimate, currency)}</strong></span></div>
-        <p className="mt-2 text-xs text-[#747a68]">Tax defaults to your active default sales tax rate, or the business tax rate when no sales rate is configured. It is calculated after discounts. The server recalculates all totals. Stock availability is checked when the invoice is issued.</p>
+        <p className="mt-2 text-xs text-[#747a68]">Unit price and quantity use the selected unit. The server converts the line to the product’s base unit for stock and saves amounts in the business currency. Tax is calculated after discounts, and stock availability is checked when the invoice is issued.</p>
       </section>
       <div className="flex flex-wrap justify-end gap-3"><Link href="/dashboard/sales/invoices" className="inline-flex min-h-10 items-center rounded-lg border border-[#dfe2d9] px-4 text-sm font-semibold">Cancel</Link><button type="submit" disabled={saving || loadingOptions || !customers.length || !products.length || !locations.length} className="min-h-10 rounded-lg bg-[#20211f] px-5 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Create draft invoice'}</button></div>
     </form>

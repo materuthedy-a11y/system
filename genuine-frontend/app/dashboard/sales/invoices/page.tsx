@@ -9,7 +9,7 @@ import { SalesHeading, SalesNotice, StatusBadge, calendarDateLabel, money, useSa
 import { EmptyState } from '@/components/ui/EmptyState';
 
 const statuses: InvoiceStatus[] = ['DRAFT', 'ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'CANCELLED'];
-const inputClass = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
+const inputClass = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#c24e00]/20';
 
 export default function SalesInvoicesPage() {
   const { invoices, total, page, limit, isLoading, error, fetchInvoices } = useSalesStore();

@@ -58,6 +58,10 @@ export class AuditService {
       { entityType: { contains: search, mode: 'insensitive' } },
       { entityId: { contains: search, mode: 'insensitive' } },
       { description: { contains: search, mode: 'insensitive' } },
+      // Managed-user changes keep the target identity and status in these
+      // snapshots; include them so searching for the affected user finds the event.
+      { beforeData: { contains: search, mode: 'insensitive' } },
+      { afterData: { contains: search, mode: 'insensitive' } },
       { user: { is: { email: { contains: search, mode: 'insensitive' } } } },
       { user: { is: { firstName: { contains: search, mode: 'insensitive' } } } },
       { user: { is: { lastName: { contains: search, mode: 'insensitive' } } } },

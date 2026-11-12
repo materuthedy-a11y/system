@@ -115,7 +115,7 @@ export function AuthPhotoStoryCard({
           key={active}
           aria-live="polite"
           onAnimationEnd={finishPageTurn}
-          className={`auth-story-page absolute left-[18%] top-[2px] h-[178px] w-[66%] overflow-hidden rounded-[22px] border border-[#d8f04b]/45 bg-gradient-to-br ${slide.palette} shadow-[0_20px_48px_rgba(0,0,0,0.38)] ${turning ? pendingDirection.current === 1 ? 'auth-story-page-turn-next' : 'auth-story-page-turn-prev' : ''}`}
+          className={`auth-story-page absolute left-[18%] top-[2px] h-[178px] w-[66%] overflow-hidden rounded-[22px] border border-[#ffad66]/45 bg-gradient-to-br ${slide.palette} shadow-[0_20px_48px_rgba(0,0,0,0.38)] ${turning ? pendingDirection.current === 1 ? 'auth-story-page-turn-next' : 'auth-story-page-turn-prev' : ''}`}
           style={{ transformOrigin: 'left center', zIndex: 4 }}
         >
           {slide.image ? <div className="auth-story-image absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url("${slide.image}")` }} /> : <Icon className="absolute right-5 top-3 h-24 w-24 text-white/[0.1]" strokeWidth={0.8} aria-hidden="true" />}
@@ -126,19 +126,19 @@ export function AuthPhotoStoryCard({
               <p className="mt-1 text-[11px] text-white/65">Sales · Stock · Finance · More</p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#d8f04b]">Mizania</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#ffad66]">Mizania</p>
               <p className="mt-1 text-[10px] text-white/65">{String(active + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</p>
             </div>
           </div>
-          <span className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-xl border border-white/20 bg-black/20 text-[#d8f04b] backdrop-blur-sm" aria-hidden="true"><Icon size={18} /></span>
+          <span className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-xl border border-white/20 bg-black/20 text-[#ffad66] backdrop-blur-sm" aria-hidden="true"><Icon size={18} /></span>
         </div>
 
-        <button type="button" disabled={turning} onClick={() => turnPage(-1)} aria-label="Previous story" className="absolute left-0 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-white/[0.09] text-white/85 backdrop-blur-md transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#d8f04b] disabled:cursor-wait disabled:opacity-50"><ArrowLeft size={16} /></button>
-        <button type="button" disabled={turning} onClick={() => turnPage(1)} aria-label="Next story" className="absolute right-0 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-white/[0.09] text-white/85 backdrop-blur-md transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#d8f04b] disabled:cursor-wait disabled:opacity-50"><ArrowRight size={16} /></button>
+        <button type="button" disabled={turning} onClick={() => turnPage(-1)} aria-label="Previous story" className="absolute left-0 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-white/[0.09] text-white/85 backdrop-blur-md transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ffad66] disabled:cursor-wait disabled:opacity-50"><ArrowLeft size={16} /></button>
+        <button type="button" disabled={turning} onClick={() => turnPage(1)} aria-label="Next story" className="absolute right-0 top-1/2 z-10 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/15 bg-white/[0.09] text-white/85 backdrop-blur-md transition hover:bg-white/[0.18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#ffad66] disabled:cursor-wait disabled:opacity-50"><ArrowRight size={16} /></button>
       </div>
       <div className="mt-2 flex justify-center gap-1.5" role="group" aria-label="Choose a business story">
         {slides.map((item, index) => (
-          <button key={item.category} type="button" disabled={turning} onClick={() => setActive(index)} aria-label={`Show story ${index + 1}: ${item.category}`} aria-current={index === active ? 'true' : undefined} className={`h-1.5 rounded-full transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#d8f04b] disabled:cursor-wait ${index === active ? 'w-7 bg-[#d8f04b]' : 'w-3 bg-white/30 hover:bg-white/55'}`} />
+          <button key={item.category} type="button" disabled={turning} onClick={() => setActive(index)} aria-label={`Show story ${index + 1}: ${item.category}`} aria-current={index === active ? 'true' : undefined} className={`h-1.5 rounded-full transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ffad66] disabled:cursor-wait ${index === active ? 'w-7 bg-[#ffad66]' : 'w-3 bg-white/30 hover:bg-white/55'}`} />
         ))}
       </div>
       <style jsx>{`

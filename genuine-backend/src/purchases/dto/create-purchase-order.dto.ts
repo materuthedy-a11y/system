@@ -91,6 +91,11 @@ export class PurchaseOrderItemDto {
   @IsNotEmpty()
   productId: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  unitId?: string;
+
   @Type(() => Number)
   @IsNumber()
   @Min(0.01)

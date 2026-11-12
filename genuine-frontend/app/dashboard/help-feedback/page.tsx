@@ -234,15 +234,15 @@ export default function HelpFeedbackPage() {
       <header className="flex flex-col gap-4 rounded-3xl border border-amber-200/80 bg-amber-50/80 p-5 shadow-sm shadow-amber-950/[0.03] sm:flex-row sm:items-center sm:justify-between sm:p-7 dark:border-white/[0.06] dark:bg-[#20211f]">
         <div className="flex items-start gap-4">
           <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-200/70 text-amber-900 dark:bg-[#352c1a] dark:text-[#f5cc72]"><LifeBuoy size={22} /></span>
-          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#738900] dark:text-[#d8f04b]">Mizania support</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#20211f] dark:text-[#f0f1ed]">Help & feedback</h1><p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#73766f] dark:text-[#afb5ac]">Start a conversation and get a reply from your business administrator.</p></div>
+          <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c24e00] dark:text-[#ffad66]">Mizania support</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-[#20211f] dark:text-[#f0f1ed]">Help & feedback</h1><p className="mt-1.5 max-w-2xl text-sm leading-6 text-[#73766f] dark:text-[#afb5ac]">Start a conversation and get a reply from your business administrator.</p></div>
         </div>
-        <button type="button" onClick={() => setNewConversationOpen(true)} className="feedback-primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#343632] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#738900] dark:bg-[#d8f04b] dark:text-white dark:hover:bg-[#e4f77a]"><Plus size={17} />New conversation</button>
+        <button type="button" onClick={() => setNewConversationOpen(true)} className="feedback-primary inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#343632] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c24e00] dark:bg-[#ffad66] dark:text-white dark:hover:bg-[#ffc28f]"><Plus size={17} />New conversation</button>
       </header>
 
       {newConversationOpen ? (
         <section className="rounded-3xl border border-[#dfe7bd] bg-white p-5 shadow-sm sm:p-7 dark:border-[#41473f] dark:bg-[#191d19]">
           <div className="mb-5 flex items-start justify-between gap-4">
-            <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#738900] dark:text-[#d8f04b]">New support request</p><h2 className="mt-1 text-xl font-semibold text-[#20211f] dark:text-[#f0f1ed]">What can we help with?</h2></div>
+            <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#c24e00] dark:text-[#ffad66]">New support request</p><h2 className="mt-1 text-xl font-semibold text-[#20211f] dark:text-[#f0f1ed]">What can we help with?</h2></div>
             <button type="button" onClick={() => setNewConversationOpen(false)} aria-label="Close new conversation form" className="rounded-xl p-2 text-[#73766f] hover:bg-[#f3f4ef] dark:text-[#e7e9e3] dark:hover:bg-[#262b25]"><X size={18} /></button>
           </div>
           <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-2">
@@ -252,18 +252,18 @@ export default function HelpFeedbackPage() {
               </select>
             </label>
             <label className="text-sm font-medium text-[#32352e] dark:text-[#dce1d7]">Subject
-              <input required maxLength={120} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="A short summary" className="mt-1.5 min-h-11 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#829600] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#d8f04b]" />
+              <input required maxLength={120} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="A short summary" className="mt-1.5 min-h-11 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#c24e00] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#ffad66]" />
             </label>
             <label className="text-sm font-medium text-[#32352e] dark:text-[#dce1d7] lg:col-span-2">Message
-              <textarea required maxLength={5000} rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Describe the issue or ask your question…" className="mt-1.5 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#829600] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#d8f04b]" />
+              <textarea required maxLength={5000} rows={4} value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Describe the issue or ask your question…" className="mt-1.5 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#c24e00] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#ffad66]" />
               <span className="mt-1 block text-right text-xs text-[#858880] dark:text-[#c2c8bd]">{message.length}/5000</span>
             </label>
             <label className="text-sm font-medium text-[#32352e] dark:text-[#dce1d7] lg:col-span-2">Affected page or feature <span className="font-normal text-[#858880]">(optional)</span>
-              <input maxLength={200} value={pageContext} onChange={(event) => setPageContext(event.target.value)} placeholder="e.g. Purchases → New purchase order" className="mt-1.5 min-h-11 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#829600] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#d8f04b]" />
+              <input maxLength={200} value={pageContext} onChange={(event) => setPageContext(event.target.value)} placeholder="e.g. Purchases → New purchase order" className="mt-1.5 min-h-11 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#c24e00] dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3] dark:focus:border-[#ffad66]" />
             </label>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:col-span-2">
-              <p className="flex items-start gap-2 text-xs leading-5 text-[#73766f] dark:text-[#afb5ac]"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#738900]" />Never include passwords, access tokens, or payment card details.</p>
-              <button type="submit" disabled={submitting} className="feedback-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white transition hover:bg-[#343632] disabled:cursor-wait disabled:opacity-60 dark:bg-[#d8f04b] dark:text-white">
+              <p className="flex items-start gap-2 text-xs leading-5 text-[#73766f] dark:text-[#afb5ac]"><ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#c24e00]" />Never include passwords, access tokens, or payment card details.</p>
+              <button type="submit" disabled={submitting} className="feedback-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white transition hover:bg-[#343632] disabled:cursor-wait disabled:opacity-60 dark:bg-[#ffad66] dark:text-white">
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}{submitting ? 'Starting…' : 'Start conversation'}
               </button>
             </div>
@@ -284,7 +284,7 @@ export default function HelpFeedbackPage() {
             <ul className="min-h-0 flex-1 overflow-y-auto p-2">
               {conversations.map((item) => <li key={item.id}>
                 <button type="button" onClick={() => { stickToLatestMessage.current = true; setSelectedId(item.id); }} className={`w-full rounded-2xl p-3.5 text-left transition ${selectedId === item.id ? 'bg-[#f1f5dc] ring-1 ring-[#dce7a7] dark:bg-[#252b1a] dark:ring-[#414a24]' : 'hover:bg-[#f7f8f4] dark:hover:bg-[#222622]'}`}>
-                  <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><CategoryIcon category={item.category} /><span className="truncate text-sm font-semibold text-[#30342e] dark:text-[#e7e9e3]">{item.subject}</span></div><ChevronRight size={15} className={`mt-0.5 shrink-0 text-[#9a9e95] transition ${selectedId === item.id ? 'translate-x-0.5 text-[#738900]' : ''}`} /></div>
+                  <div className="flex items-start justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><CategoryIcon category={item.category} /><span className="truncate text-sm font-semibold text-[#30342e] dark:text-[#e7e9e3]">{item.subject}</span></div><ChevronRight size={15} className={`mt-0.5 shrink-0 text-[#9a9e95] transition ${selectedId === item.id ? 'translate-x-0.5 text-[#c24e00]' : ''}`} /></div>
                   <div className="mt-2 flex items-center justify-between gap-2"><span className="truncate text-xs text-[#73766f] dark:text-[#afb5ac]">{canManageInbox && isInboxItem(item) ? item.submitterName : categoryLabels[item.category]}</span><span className="shrink-0 text-[11px] text-[#858880] dark:text-[#c2c8bd]">{relativeDate(item.updatedAt)}</span></div>
                   <div className="mt-2"><StatusBadge status={item.status} /></div>
                 </button>
@@ -297,7 +297,7 @@ export default function HelpFeedbackPage() {
           {selected ? <>
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eceee8] px-4 py-4 sm:px-6 dark:border-[#343a32]">
               <div className="flex min-w-0 items-center gap-3">
-                <button type="button" onClick={() => setSelectedId(null)} aria-label="Back to conversations" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[#73766f] transition hover:bg-[#f3f4ef] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#829600] lg:hidden dark:text-[#e7e9e3] dark:hover:bg-[#262b25] dark:focus-visible:outline-[#d8f04b]"><ArrowLeft size={18} /></button>
+                <button type="button" onClick={() => setSelectedId(null)} aria-label="Back to conversations" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[#73766f] transition hover:bg-[#f3f4ef] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c24e00] lg:hidden dark:text-[#e7e9e3] dark:hover:bg-[#262b25] dark:focus-visible:outline-[#ffad66]"><ArrowLeft size={18} /></button>
                 <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-semibold text-[#20211f] dark:text-[#f0f1ed]">{selected.subject}</h2><StatusBadge status={selected.status} /></div><p className="mt-1 text-xs text-[#858880] dark:text-[#c2c8bd]">{categoryLabels[selected.category]} · Started {formatDate(selected.createdAt)}</p></div>
               </div>
               <div className="flex items-center gap-2">
@@ -313,7 +313,7 @@ export default function HelpFeedbackPage() {
               const node = event.currentTarget;
               stickToLatestMessage.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100;
             }} className="min-h-0 flex-1 overflow-y-auto bg-amber-50/80 px-4 py-5 sm:px-7 dark:bg-[#282317]">
-              {selected.pagePath ? <div className="mx-auto mb-5 flex max-w-3xl items-start gap-2 rounded-xl border border-[#e8e9e5] bg-white px-3.5 py-3 text-xs text-[#73766f] dark:border-[#343a32] dark:bg-[#191d19] dark:text-[#afb5ac]"><CircleHelp size={15} className="mt-0.5 shrink-0 text-[#829600]" /><span><span className="font-semibold">Related page:</span> {selected.pagePath}</span></div> : null}
+              {selected.pagePath ? <div className="mx-auto mb-5 flex max-w-3xl items-start gap-2 rounded-xl border border-[#e8e9e5] bg-white px-3.5 py-3 text-xs text-[#73766f] dark:border-[#343a32] dark:bg-[#191d19] dark:text-[#afb5ac]"><CircleHelp size={15} className="mt-0.5 shrink-0 text-[#c24e00]" /><span><span className="font-semibold">Related page:</span> {selected.pagePath}</span></div> : null}
               {threadError ? <div role="alert" className="mx-auto mb-4 flex max-w-3xl items-start gap-2 rounded-xl border border-[#efd4cf] bg-[#fff8f6] p-3 text-sm text-[#a63832] dark:border-[#663631] dark:bg-[#2b1b19] dark:text-[#ffaaa0]"><AlertCircle size={16} className="mt-0.5 shrink-0" />{threadError}<button type="button" onClick={() => void loadThread(selected.id)} className="ml-auto shrink-0 font-semibold underline">Retry</button></div> : null}
               {loadingThread ? <div className="flex h-40 items-center justify-center text-sm text-[#73766f]"><Loader2 size={17} className="mr-2 animate-spin" />Loading messages…</div> : (
                 <div className="mx-auto max-w-3xl space-y-5">
@@ -336,24 +336,24 @@ export default function HelpFeedbackPage() {
 
             <form onSubmit={handleReply} className="border-t border-[#eceee8] bg-white p-4 sm:px-6 sm:py-5 dark:border-[#343a32] dark:bg-[#191d19]">
               <label htmlFor="reply-message" className="sr-only">Write a reply</label>
-              <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-[#dfe2da] bg-[#fafbf8] p-2 focus-within:border-[#9eb22d] focus-within:ring-2 focus-within:ring-[#d8f04b]/25 dark:border-[#3b423a] dark:bg-[#111510] dark:focus-within:border-[#829600]">
+              <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-[#dfe2da] bg-[#fafbf8] p-2 focus-within:border-[#9eb22d] focus-within:ring-2 focus-within:ring-[#ffad66]/25 dark:border-[#3b423a] dark:bg-[#111510] dark:focus-within:border-[#c24e00]">
                 <textarea id="reply-message" rows={2} maxLength={5000} required value={reply} onChange={(event) => setReply(event.target.value)} placeholder={selected.status === 'RESOLVED' ? 'Reply to reopen this conversation…' : 'Write a message…'} className="max-h-36 min-h-12 flex-1 resize-y bg-transparent px-2 py-2 text-sm leading-5 text-[#30342e] outline-none placeholder:text-[#9a9e95] dark:text-[#e7e9e3]" />
-                <button type="submit" disabled={replying || !reply.trim()} aria-label="Send reply" className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl transition disabled:cursor-not-allowed ${replying || !reply.trim() ? 'bg-[#263326] text-white opacity-40 dark:bg-[#303630] dark:text-[#afb5ac]' : 'bg-[#d8f04b] text-[#20211f] hover:bg-[#e4f77a] dark:bg-[#d8f04b] dark:text-[#20211f] dark:hover:bg-[#e4f77a]'}`}><Send size={17} /></button>
+                <button type="submit" disabled={replying || !reply.trim()} aria-label="Send reply" className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl transition disabled:cursor-not-allowed ${replying || !reply.trim() ? 'bg-[#263326] text-white opacity-40 dark:bg-[#303630] dark:text-[#afb5ac]' : 'bg-[#ffad66] text-[#20211f] hover:bg-[#ffc28f] dark:bg-[#ffad66] dark:text-[#20211f] dark:hover:bg-[#ffc28f]'}`}><Send size={17} /></button>
               </div>
               <div className="mx-auto mt-2 flex max-w-3xl items-center justify-between gap-2 px-1"><p className="flex items-center gap-1.5 text-[11px] text-[#8a8f84] dark:text-[#c2c8bd]"><Clock3 size={12} />Messages refresh automatically</p><span className="text-[11px] text-[#9a9e95] dark:text-[#c2c8bd]">{reply.length}/5000</span></div>
             </form>
           </> : (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
-              <span className="grid h-16 w-16 place-items-center rounded-3xl bg-[#f1f5dc] text-[#687d00] dark:bg-[#252b1a] dark:text-[#d8f04b]"><MessageCircle size={27} /></span>
+              <span className="grid h-16 w-16 place-items-center rounded-3xl bg-[#f1f5dc] text-[#c24e00] dark:bg-[#252b1a] dark:text-[#ffad66]"><MessageCircle size={27} /></span>
               <h2 className="mt-5 text-lg font-semibold text-[#30342e] dark:text-[#e7e9e3]">{loading ? 'Loading your inbox…' : 'Your support conversations'}</h2>
               <p className="mt-2 max-w-sm text-sm leading-6 text-[#73766f] dark:text-[#afb5ac]">{loading ? 'Please wait while we fetch your messages.' : 'Choose a conversation on the left, or start a new one. Admin replies will appear right here.'}</p>
-              {!loading && !conversations.length ? <button type="button" onClick={() => setNewConversationOpen(true)} className="feedback-primary mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white dark:bg-[#d8f04b] dark:text-white"><Plus size={16} />Start a conversation</button> : null}
+              {!loading && !conversations.length ? <button type="button" onClick={() => setNewConversationOpen(true)} className="feedback-primary mt-5 inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white dark:bg-[#ffad66] dark:text-white"><Plus size={16} />Start a conversation</button> : null}
             </div>
           )}
         </div>
       </section>
 
-      <p className="flex items-start gap-2 px-1 text-xs leading-5 text-[#858880] dark:text-[#c2c8bd]"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#829600] dark:text-[#d8f04b]" />Conversations are visible only to you and authorized administrators in your business. Never send passwords or access tokens.</p>
+      <p className="flex items-start gap-2 px-1 text-xs leading-5 text-[#858880] dark:text-[#c2c8bd]"><ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#c24e00] dark:text-[#ffad66]" />Conversations are visible only to you and authorized administrators in your business. Never send passwords or access tokens.</p>
     </div>
   );
 }
@@ -379,10 +379,10 @@ function StatusBadge({ status }: { status: FeedbackStatus }) {
 
 function CategoryIcon({ category }: { category: FeedbackCategory }) {
   const Icon = category === 'BUG' ? Wrench : category === 'QUESTION' ? CircleHelp : Lightbulb;
-  return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f1f5dc] text-[#687d00] dark:bg-[#303a18] dark:text-[#d8f04b]"><Icon size={15} /></span>;
+  return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#f1f5dc] text-[#c24e00] dark:bg-[#3b2818] dark:text-[#ffad66]"><Icon size={15} /></span>;
 }
 
 function Avatar({ admin, name }: { admin: boolean; name: string }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U';
-  return <span aria-hidden="true" className={`mb-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[10px] font-bold ${admin ? 'bg-[#e8f2aa] text-[#465600] dark:bg-[#303a18] dark:text-[#d8f04b]' : 'bg-[#e9ece5] text-[#5b6255] dark:bg-[#303630] dark:text-[#dce1d7]'}`}>{initials}</span>;
+  return <span aria-hidden="true" className={`mb-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl text-[10px] font-bold ${admin ? 'bg-[#fff0e3] text-[#693100] dark:bg-[#3b2818] dark:text-[#ffad66]' : 'bg-[#e9ece5] text-[#5b6255] dark:bg-[#303630] dark:text-[#dce1d7]'}`}>{initials}</span>;
 }

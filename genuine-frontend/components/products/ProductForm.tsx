@@ -66,8 +66,22 @@ const blank: FormState = {
 };
 
 const fieldClass =
-  'mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3.5 text-sm text-[#292d27] outline-none transition placeholder:text-[#9a9f92] focus:border-[#78930b] focus:ring-4 focus:ring-[#c9e600]/20 disabled:bg-[#f3f4f0]';
+  'mt-1.5 min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3.5 text-sm text-[#292d27] outline-none transition placeholder:text-[#9a9f92] focus:border-[#c24e00] focus:ring-4 focus:ring-[#ff7600]/20 disabled:bg-[#f3f4f0]';
 const labelClass = 'block text-sm font-semibold text-[#454a41]';
+
+function configuredUnitFactor(unit: Unit | undefined, baseUnit: Unit | undefined): number | null {
+  if (!unit || !baseUnit) return null;
+  if (unit.id === baseUnit.id) return 1;
+  const unitBase = unit.baseUnit?.trim().toLocaleLowerCase();
+  const selectedBase = baseUnit.baseUnit?.trim().toLocaleLowerCase();
+  const unitName = unit.name.trim().toLocaleLowerCase();
+  const baseName = baseUnit.name.trim().toLocaleLowerCase();
+  let factor: number | null = null;
+  if (unitBase && unitBase === baseName) factor = unit.conversionFactor;
+  else if (selectedBase && selectedBase === unitName) factor = 1 / baseUnit.conversionFactor;
+  else if (unitBase && selectedBase && unitBase === selectedBase) factor = unit.conversionFactor / baseUnit.conversionFactor;
+  return factor !== null && Number.isFinite(factor) && factor > 0 ? Number(factor.toPrecision(12)) : null;
+}
 
 export function ProductForm({
   productId,
@@ -189,6 +203,11 @@ export function ProductForm({
 
   function chooseDefaultUnit(unitId: string) {
     const selected = unitLines.find((line) => line.unitId === unitId);
+    if (!selected && !productId && unitLines.length === 1 && unitLines[0].isDefault) {
+      change('defaultUnitId', unitId);
+      setUnitLines([{ unitId, conversionFactor: '1', isDefault: true }]);
+      return;
+    }
     const selectedFactor = Number(selected?.conversionFactor);
     if (!selected || !Number.isFinite(selectedFactor) || selectedFactor <= 0) {
       notify.error('Add this unit and its conversion factor before setting it as the base.');
@@ -217,9 +236,18 @@ export function ProductForm({
   }
 
   function updateUnit(index: number, patch: Partial<UnitLine>) {
-    setUnitLines((current) =>
-      current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line))
-    );
+    setUnitLines((current) => current.map((line, lineIndex) => {
+      if (lineIndex !== index) return line;
+      let conversionPatch = {};
+      if (patch.unitId && patch.unitId !== line.unitId && patch.conversionFactor === undefined) {
+        const factor = configuredUnitFactor(
+          units.find((unit) => unit.id === patch.unitId),
+          units.find((unit) => unit.id === form.defaultUnitId),
+        );
+        conversionPatch = { conversionFactor: factor === null ? '' : String(factor) };
+      }
+      return { ...line, ...conversionPatch, ...patch };
+    }));
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -721,7 +749,7 @@ export function ProductForm({
                 />
               </label>
               {line.isDefault ? (
-                <span className="inline-flex min-h-11 items-center px-3 text-xs font-bold uppercase tracking-wide text-[#617500]">
+                <span className="inline-flex min-h-11 items-center px-3 text-xs font-bold uppercase tracking-wide text-[#c24e00]">
                   Default unit
                 </span>
               ) : (
@@ -747,7 +775,7 @@ export function ProductForm({
             onChange={(e) => chooseDefaultUnit(e.target.value)}
           >
             <option value="">Choose unit</option>
-            {unitLines.map((line) => units.find((unit) => unit.id === line.unitId)).filter((unit): unit is Unit => Boolean(unit)).map((unit) => (
+            {(!productId && unitLines.length === 1 ? units : unitLines.map((line) => units.find((unit) => unit.id === line.unitId)).filter((unit): unit is Unit => Boolean(unit))).map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name} ({unit.symbol})
               </option>
@@ -816,7 +844,7 @@ export function ProductForm({
           <label className="flex min-h-11 items-center gap-3 rounded-xl border border-[#e0e5d8] px-3.5 text-sm font-semibold text-[#454a41]">
             <input
               type="checkbox"
-              className="h-4 w-4 accent-[#78930b]"
+              className="h-4 w-4 accent-[#c24e00]"
               checked={form.requiresExpiry}
               onChange={(e) => change('requiresExpiry', e.target.checked)}
             />

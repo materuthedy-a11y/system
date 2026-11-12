@@ -143,18 +143,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user || !executive || isLoading || error) return;
-    const welcomeKey = 'mizania.dashboard.welcome.v2.shown';
+    const pendingKey = 'mizania.welcome.after-login.v1';
+    const lastShownKey = `mizania.welcome.last-shown.v1.${user.businessId || 'business'}.${user.id}`;
     try {
-      if (window.sessionStorage.getItem(welcomeKey) === 'yes') return;
+      if (window.sessionStorage.getItem(pendingKey) !== 'yes') return;
+      window.sessionStorage.removeItem(pendingKey);
+      const lastShown = Number(window.localStorage.getItem(lastShownKey) || 0);
+      const welcomeCooldownMs = 24 * 60 * 60 * 1000;
+      if (Number.isFinite(lastShown) && Date.now() - lastShown < welcomeCooldownMs) return;
+      window.localStorage.setItem(lastShownKey, String(Date.now()));
     } catch {
-      // Show the dialog even when browser storage is unavailable.
+      // Allow the welcome prompt when browser storage is unavailable.
     }
     setShowWelcomePrompt(true);
-    try {
-      window.sessionStorage.setItem(welcomeKey, 'yes');
-    } catch {
-      // The dialog can still be dismissed for the current render.
-    }
   }, [user, executive, isLoading, error]);
 
   const welcomeLanguage = definitionsLanguage;
@@ -299,15 +300,15 @@ export default function DashboardPage() {
       : costingMethod === 'WEIGHTED_AVERAGE'
         ? 'Weighted average: stock value uses the average purchase cost of the items.'
         : `Stock valuation method: ${costingMethod || 'provided by the inventory service.'}`;
-  const metricCards: Array<{ metric: DashboardMetric; tone: string; valueColor: string; href: string; invertTrend?: boolean }> = availableMetrics ? [
-    { metric: availableMetrics.totalRevenue, tone: 'bg-[#b9e52e] text-[#354900]', valueColor: 'text-[#24713c]', href: permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/reports?tab=sales' },
-    { metric: availableMetrics.totalExpenses, tone: 'bg-[#e7a7b6] text-[#842a20]', valueColor: 'text-[#842a20]', href: '/dashboard/reports?tab=finance', invertTrend: true },
-    { metric: availableMetrics.totalProfit, tone: 'bg-[#ffd541] text-[#624500]', valueColor: 'text-[#9a6a00]', href: '/dashboard/reports?tab=finance' },
-    { metric: availableMetrics.profitMargin, tone: 'bg-[#a8ccff] text-[#214e88]', valueColor: 'text-[#315fa5]', href: '/dashboard/reports?tab=finance' },
-    { metric: availableMetrics.cashOnHand, tone: 'bg-[#77ddb0] text-[#10563f]', valueColor: 'text-[#147554]', href: '/dashboard/reports?tab=finance' },
-    { metric: availableMetrics.outstandingReceivables, tone: 'bg-[#ffcf24] text-[#5c4000]', valueColor: 'text-[#926100]', href: '/dashboard/reports?tab=finance', invertTrend: true },
-    { metric: availableMetrics.outstandingPayables, tone: 'bg-[#91b9ff] text-[#1e477f]', valueColor: 'text-[#315fa5]', href: '/dashboard/reports?tab=finance', invertTrend: true },
-    { metric: { ...availableMetrics.inventoryValue, changePercent: null }, tone: 'bg-[#c8a8ee] text-[#513276]', valueColor: 'text-[#7043a3]', href: canViewInventory ? '/dashboard/inventory' : '/dashboard/reports?tab=inventory' },
+  const metricCards: Array<{ metric: DashboardMetric; href: string; invertTrend?: boolean }> = availableMetrics ? [
+    { metric: availableMetrics.totalRevenue, href: permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/reports?tab=sales' },
+    { metric: availableMetrics.totalExpenses, href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: availableMetrics.totalProfit, href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.profitMargin, href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.cashOnHand, href: '/dashboard/reports?tab=finance' },
+    { metric: availableMetrics.outstandingReceivables, href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: availableMetrics.outstandingPayables, href: '/dashboard/reports?tab=finance', invertTrend: true },
+    { metric: { ...availableMetrics.inventoryValue, changePercent: null }, href: canViewInventory ? '/dashboard/inventory' : '/dashboard/reports?tab=inventory' },
   ] : [];
 
   if (isLoading && !executive) return <AuthLoadingOverlay message="Loading your dashboard…" />;
@@ -315,7 +316,7 @@ export default function DashboardPage() {
   return (
     <div className="min-w-0 space-y-6 sm:space-y-8">
       <section className="flex flex-col gap-5 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-5 shadow-sm shadow-amber-950/[0.03] sm:flex-row sm:items-end sm:justify-between sm:p-7 dark:border-amber-900/60 dark:bg-[#282317] dark:shadow-black/20">
-        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#527000]">Mizania · {definitionsLanguage === 'sw' ? 'muhtasari wa biashara' : 'business pulse'}</p><h1 className="mt-1.5 flex flex-wrap items-center gap-x-2.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">{greeting ? <greeting.Icon aria-hidden="true" size={25} className="shrink-0 text-amber-600 dark:text-amber-300" /> : null}<span>{greeting?.text || (definitionsLanguage === 'sw' ? 'Karibu' : 'Welcome')}{firstName ? `, ${firstName}` : ''}</span></h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">{definitionsLanguage === 'sw' ? 'Takwimu za biashara nzima. Location ya shughuli mpya:' : 'Business-wide totals across locations. Active location for new activity:'} <span className="font-semibold text-[#315c45]">{activeLocation?.name || (definitionsLanguage === 'sw' ? 'Chagua location' : 'Choose a location')}</span>.</p></div>
+        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#c24e00]">Mizania · {definitionsLanguage === 'sw' ? 'muhtasari wa biashara' : 'business pulse'}</p><h1 className="mt-1.5 flex flex-wrap items-center gap-x-2.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">{greeting ? <greeting.Icon aria-hidden="true" size={25} className="shrink-0 text-amber-600 dark:text-amber-300" /> : null}<span>{greeting?.text || (definitionsLanguage === 'sw' ? 'Karibu' : 'Welcome')}{firstName ? `, ${firstName}` : ''}</span></h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">{definitionsLanguage === 'sw' ? 'Takwimu za biashara nzima. Location ya shughuli mpya:' : 'Business-wide totals across locations. Active location for new activity:'} <span className="font-semibold text-[#315c45]">{activeLocation?.name || (definitionsLanguage === 'sw' ? 'Chagua location' : 'Choose a location')}</span>.</p></div>
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="dashboard-period" className="sr-only">Dashboard date range</label>
           <select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">
@@ -332,8 +333,8 @@ export default function DashboardPage() {
 
       {executive ? <>
         <section aria-labelledby="kpi-heading">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#527000]">Key indicators</p><h2 id="kpi-heading" className="mt-1 text-lg font-semibold text-[#292d27]">Financial and stock position</h2></div><p className="text-[11px] text-[#747a68]">Based on {executive.period}</p></div>
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(({ metric, tone, valueColor, href, invertTrend }) => <MetricCard key={metric.name} metric={metric} currency={executive.currency} tone={tone} valueColor={valueColor} href={href} invertTrend={invertTrend} />)}</div>
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-[#c24e00]">Key indicators</p><h2 id="kpi-heading" className="mt-1 text-lg font-semibold text-[#292d27]">Financial and stock position</h2></div><p className="text-[11px] text-[#747a68]">Based on {executive.period}</p></div>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(({ metric, href, invertTrend }) => <MetricCard key={metric.name} metric={metric} currency={executive.currency} href={href} invertTrend={invertTrend} />)}</div>
           <p className="mt-3 text-[11px] leading-5 text-[#8a8d85]">Revenue, expenses and profit use the selected period. Inventory value is a current snapshot as of {formatBusinessDateTime(executive.inventoryAsOf)}; it is not a historical comparison.</p>
         </section>
 

@@ -156,6 +156,7 @@ export interface SalesPayment {
 
 export interface InvoiceItemInput {
   productId: string;
+  unitId?: string;
   quantity: number;
   unitPrice: number;
   discountPercentage?: number;

@@ -35,6 +35,11 @@ export class SalesInvoiceItemDto {
   @Length(1, 64)
   productId: string;
 
+  @IsOptional()
+  @IsString()
+  @Length(1, 64)
+  unitId?: string;
+
   @Type(() => Number)
   @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 4 })
   @Min(0.0001)

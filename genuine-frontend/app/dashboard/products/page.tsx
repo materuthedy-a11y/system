@@ -253,7 +253,7 @@ export default function ProductsPage() {
     <div className="min-w-0 space-y-6">
       <header className="flex min-w-0 flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#617500]">Products</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c24e00]">Products</p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#20231f] sm:text-3xl">
             Product catalog
           </h1>
@@ -274,7 +274,7 @@ export default function ProductsPage() {
           {canCreate ? (
             <Link
               href="/dashboard/products/new"
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#20211f] px-4 text-sm font-bold text-white hover:bg-[#315c45]"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#ff7600] px-4 text-sm font-bold text-white transition hover:bg-[#e96d00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff7600]"
             >
               <Plus size={17} />
               Add product
@@ -285,7 +285,7 @@ export default function ProductsPage() {
 
       <section className="grid min-w-0 gap-3 sm:grid-cols-2">
         <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-[#e6e9e1] bg-white p-4">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e4f58c] text-[#527000]">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0e3] text-[#c24e00]">
             <Package size={18} />
           </span>
           <div className="min-w-0">
@@ -326,7 +326,7 @@ export default function ProductsPage() {
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
               placeholder="Search name, SKU or barcode"
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white pl-10 pr-3 text-sm outline-none focus:border-[#78930b] focus:ring-4 focus:ring-[#c9e600]/20"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white pl-10 pr-3 text-sm outline-none focus:border-[#c24e00] focus:ring-4 focus:ring-[#ff7600]/20"
             />
           </label>
           <label className="min-w-0">
@@ -338,7 +338,7 @@ export default function ProductsPage() {
                 setBrandId(e.target.value);
                 setPage(1);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="">All brands</option>
               {brands.map((brand) => (
@@ -357,7 +357,7 @@ export default function ProductsPage() {
                 setSupplierId(e.target.value);
                 setPage(1);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="">All suppliers</option>
               {suppliers.map((supplier) => (
@@ -375,7 +375,7 @@ export default function ProductsPage() {
                 setCategoryId(e.target.value);
                 setPage(1);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="">All categories</option>
               {categories.map((category) => (
@@ -401,7 +401,7 @@ export default function ProductsPage() {
                 setPage(1);
               }}
               placeholder="Min selling price"
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             />
           </label>
           <label className="min-w-0">
@@ -420,7 +420,7 @@ export default function ProductsPage() {
                 setPage(1);
               }}
               placeholder="Max selling price"
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             />
           </label>
           <label className="min-w-0">
@@ -432,7 +432,7 @@ export default function ProductsPage() {
                 setStockStatus(e.target.value);
                 setPage(1);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="">All stock levels</option>
               <option value="BELOW_MINIMUM">Below minimum</option>
@@ -449,7 +449,7 @@ export default function ProductsPage() {
                 setStatus(e.target.value);
                 setPage(1);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="">All statuses</option>
               <option value="ACTIVE">Active</option>
@@ -469,7 +469,7 @@ export default function ProductsPage() {
                 setSort(nextSort);
                 setSortOrder(nextOrder);
               }}
-              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#78930b]"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-[#e0e5d8] bg-white px-3 text-sm text-[#454a41] outline-none focus:border-[#c24e00]"
             >
               <option value="createdAt:desc">Newest first</option>
               <option value="createdAt:asc">Oldest first</option>
@@ -575,7 +575,7 @@ export default function ProductsPage() {
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
-                        className="h-4 w-4 accent-[#78930b]"
+                        className="h-4 w-4 accent-[#c24e00]"
                       />
                     </th>
                     <th className="px-4 py-3">Product</th>
@@ -602,7 +602,7 @@ export default function ProductsPage() {
                                 : [...current, product.id]
                             )
                           }
-                          className="h-4 w-4 accent-[#78930b]"
+                          className="h-4 w-4 accent-[#c24e00]"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -722,7 +722,7 @@ export default function ProductsPage() {
                               : [...current, product.id]
                           )
                         }
-                        className="mt-1 h-4 w-4 shrink-0 accent-[#78930b]"
+                        className="mt-1 h-4 w-4 shrink-0 accent-[#c24e00]"
                       />
                     ) : null}
                     <div className="min-w-0 flex-1">

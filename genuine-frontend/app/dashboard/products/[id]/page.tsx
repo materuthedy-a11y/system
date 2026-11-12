@@ -195,7 +195,7 @@ export default function ProductDetailPage() {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]">
         <section className={panel}>
           <div className="flex items-center gap-2">
-            <Package className="text-[#70820f]" size={18} />
+            <Package className="text-[#c24e00]" size={18} />
             <h2 className="text-base font-bold text-[#292d27]">Product details</h2>
           </div>
           <dl className="mt-5 grid min-w-0 gap-4 sm:grid-cols-2">
@@ -275,7 +275,7 @@ export default function ProductDetailPage() {
           )}
           <div className="mt-5 border-t border-[#eef0eb] pt-4">
             <h3 className="flex items-center gap-2 text-sm font-bold text-[#343832]">
-              <Boxes size={16} className="text-[#70820f]" />
+              <Boxes size={16} className="text-[#c24e00]" />
               Units for this product
             </h3>
             <div className="mt-2 space-y-2">
@@ -283,7 +283,7 @@ export default function ProductDetailPage() {
                 <div key={unit.id} className="flex justify-between gap-2 text-sm">
                   <span className="truncate text-[#545850]">
                     {unit.unitName} ({unit.unitSymbol}){' '}
-                    {unit.isDefault ? <span className="text-xs text-[#70820f]">Base</span> : null}
+                    {unit.isDefault ? <span className="text-xs text-[#c24e00]">Base</span> : null}
                   </span>
                   <span className="shrink-0 tabular-nums text-[#73766f]">
                     × {unit.conversionFactor}

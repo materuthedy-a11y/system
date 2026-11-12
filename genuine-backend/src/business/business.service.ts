@@ -209,7 +209,7 @@ export class BusinessService {
 
   async createRole(businessId: string, actorId: string, dto: CreateRoleDto) {
     const name = dto.name.trim();
-    if (['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('Built-in role names are reserved');
+    if (['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('That name is reserved for a built-in role. Please choose a different name for your custom role.');
     const permissions = await this.prisma.permission.findMany({ where: { businessId, key: { in: [...new Set(dto.permissions)] } } });
     if (permissions.length !== new Set(dto.permissions).size) throw new BadRequestException('One or more permissions are not available in this business');
     this.assertPermissionDependencies(permissions.map(({ key }) => key));
@@ -239,7 +239,7 @@ export class BusinessService {
       permissionIds = permissions.map(({ id: permissionId }) => permissionId);
     }
     const name = dto.name?.trim();
-    if (name && ['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('Built-in role names are reserved');
+    if (name && ['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('That name is reserved for a built-in role. Please choose a different name for your custom role.');
     try {
       return await this.prisma.$transaction(async (tx) => {
         if (permissionIds) await tx.role.update({ where: { id }, data: { permissions: { set: permissionIds.map((permissionId) => ({ id: permissionId })) } } });

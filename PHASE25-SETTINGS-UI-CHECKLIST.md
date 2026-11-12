@@ -78,55 +78,55 @@ Use the task IDs below when reporting results. Keep each unchecked item pending 
 
 - [x] 25.6.1 Create `PH25 QA Expense`, edit it to `PH25 QA Expense edited` (`PH25_QA_EXP_2`), then deactivate/reactivate it. User confirmed green, 8 Nov 2026.
 - [x] 25.6.2 Confirm active categories appear in expense entry and inactive ones cannot be selected for new expenses. User confirmed green, 8 Nov 2026.
-- [ ] 25.6.3 Confirm existing expense history still displays its category.
+- [x] 25.6.3 Confirm existing expense history still displays its category after the category is deactivated. User confirmed green, 8 Nov 2026.
 
 ## 25.7 Product categories
 
-- [ ] 25.7.1 Create and edit a category; deactivate/reactivate it.
-- [ ] 25.7.2 Confirm new product forms use active categories and historical products keep their category labels.
+- [x] 25.7.1 Create and edit `PH25 QA Product Category` to `PH25 QA Product Category edited`, then deactivate/reactivate it. User confirmed green, 8 Nov 2026.
+- [x] 25.7.2 Confirm active category appears in new product form, inactive category is omitted, and saved product retains its category label while that category is inactive. User confirmed green, 8 Nov 2026.
 
 ## 25.8 Units of measurement
 
-- [ ] 25.8.1 Open the **Units** section from `/dashboard/settings`.
-- [ ] 25.8.2 Open the direct page `/dashboard/settings/units`; confirm it opens the same Units management UI.
-- [ ] 25.8.3 Add a business unit with name, symbol, optional base unit and conversion factor; refresh and confirm it persists.
-- [ ] 25.8.4 Edit the unit and deactivate/reactivate it.
-- [ ] 25.8.5 Confirm system/shared units are visible but cannot be edited/deactivated by this business.
-- [ ] 25.8.6 Confirm the unit is selectable on product forms and any conversion behavior matches the configured base unit/factor.
+- [x] 25.8.1 Open the **Units** section from `/dashboard/settings`.
+- [x] 25.8.2 Open the direct page `/dashboard/settings/units`; confirm it opens the same Units management UI. User-provided screen showed the Units section at the direct route, 8 Nov 2026.
+- [x] 25.8.3 Add `PH25 QA Case` (`ph25case`) with base unit `Bottle` and factor `12`; refresh and confirm it persists as `12 Bottle`. User confirmed, 8 Nov 2026.
+- [x] 25.8.4 Edit `PH25 QA Case` to `PH25 QA Case edited`, then deactivate/reactivate it. User confirmed green, 8 Nov 2026.
+- [x] 25.8.5 Confirm system/shared units are visible but cannot be edited/deactivated by this business. User confirmed green after the Settings UI hid both controls for the system unit, 8 Nov 2026.
+- [x] 25.8.6 Confirm an active business unit is selectable on product forms and its configured base-unit conversion factor is prefilled, saved and shown correctly for the product. `PH25 QA Case edited` persisted as `× 12` with `Bottle` as the product base; user confirmed, 8 Nov 2026.
 
 ## 25.9 Users and roles
 
 Cross-system authorization cleanup and role-by-role verification has its own Phase 31 checklist: [Phase 31 — Permissions and authorization](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md). Audit history and its own access rules are tracked separately in [Phase 32 — Audit trail](PHASE32-AUDIT-TRAIL-CHECKLIST.md). The code changes are in place; manual role checks remain pending until their acceptance stages.
 
 - [x] 25.9.1 Confirm the Forgot Password flow sends a reset email through the SMTP provider configured for the same business as the account. User confirmed green after correcting the Gmail SMTP username to the account email and saving a valid App Password (6 Nov 2026).
-- [ ] 25.9.2 Open `/dashboard/settings/users`; confirm the user list, role filter and active/inactive filter load.
-- [ ] 25.9.3 Create a user with a unique email and role; confirm it appears with no password/hash exposed.
-- [ ] 25.9.4 Edit user identity, role and active state; confirm sessions are revoked when role/email changes or the user is deactivated.
-- [ ] 25.9.5 Reset a managed user's password and confirm that user's sessions are revoked.
-- [ ] 25.9.6 Open `/dashboard/settings/roles`; create, edit and delete a custom role and assign only permissions available to this business.
-- [ ] 25.9.7 Confirm reserved Owner/Admin names and deleting roles still assigned to users are rejected; confirm a business retains at least one active Owner.
-- [ ] 25.9.8 Confirm direct APIs reject cross-business role/user IDs and insufficient permissions.
+- [x] 25.9.2 Open `/dashboard/settings/users`; confirm the user list, role filter and active/inactive filter load. User confirmed the Manager filter shows one active and one inactive Manager (9 Nov 2026).
+- [x] 25.9.3 Create `PH25 QA User` (`ph25.qa.20261109@example.test`) with the Salesperson role; it appeared ACTIVE and no password/hash was exposed. User confirmed green, 9 Nov 2026.
+- [x] 25.9.4 Edit the QA user's identity and role, confirm the changed role/email persisted and the old session was revoked; deactivate the user and verify sign-in is rejected with `User account is deactivated.` User confirmed green, 9 Nov 2026.
+- [x] 25.9.5 Reactivate the QA user, reset its password from Team access, and confirm the existing session is revoked and the new password permits sign-in. User confirmed green, 9 Nov 2026.
+- [x] 25.9.6 Open `/dashboard/settings/roles`; create `PH25 QA Custom Role` with only `products.view`, edit its name/description, confirm it has zero assigned users and one access rule, then delete it. Replaced machine-style permission keys with readable labels/descriptions and green category labels. User confirmed green, 9 Nov 2026.
+- [x] 25.9.7 Reserved `Owner` and `Admin` role names were rejected with user-friendly guidance; deletion of `PH25 QA Assigned Role` was rejected while assigned, then succeeded after restoring the QA user's previous role. `Admin User · Owner` remained ACTIVE. User confirmed green, 9 Nov 2026.
+- [x] 25.9.8 Salesperson direct access to `/dashboard/settings/roles` was blocked. Added backend regression tests verifying user/role IDs from another business are rejected at service boundaries and a Salesperson without an allowed permission is denied by `PermissionGuard`; all 7 tests passed. Nest compile passed. Full `pnpm build` Prisma generation was blocked by Windows `EPERM` renaming a locked query-engine DLL, not by compilation. User confirmed blocked route, 9 Nov 2026.
 
 ## 25.10 Direct settings routes
 
-- [ ] 25.10.1 Open `/dashboard/settings/business`, `/dashboard/settings/general`, `/dashboard/settings/users`, `/dashboard/settings/roles`, `/dashboard/settings/locations`, `/dashboard/settings/product-categories`, `/dashboard/settings/payment-methods`, `/dashboard/settings/expense-categories`, `/dashboard/settings/tax-settings`, and `/dashboard/settings/units` directly; each must select its matching section, not a blank page or wrong tab.
+- [x] 25.10.1 Directly opened `/dashboard/settings/business`, `/dashboard/settings/general`, `/dashboard/settings/users`, `/dashboard/settings/roles`, `/dashboard/settings/locations`, `/dashboard/settings/product-categories`, `/dashboard/settings/payment-methods`, `/dashboard/settings/expense-categories`, `/dashboard/settings/tax-settings`, and `/dashboard/settings/units`; each loaded its matching section. User confirmed green, 9 Nov 2026.
 
 ## 25.11 Permissions and failure states
 
-- [ ] 25.11.1 Sign in as a view-only user: settings load, editing controls are disabled, and direct mutation attempts return a permission error.
-- [ ] 25.11.2 Sign in as a user without `settings.view`: settings page shows a clear access error rather than a blank/broken page.
-- [ ] 25.11.3 Simulate a failed save/network response; confirm the save button shows progress, the error is readable, and retry works without duplicate records.
-- [ ] 25.11.4 Confirm changing settings in one business/workspace does not leak into another business/workspace.
+- [x] 25.11.1 Created `PH25 QA Settings Viewer` with only `settings.view` and its QA user. Fixed the expense-category endpoint mismatch that blocked view-only settings data. User confirmed profile data loads with editing controls disabled. Regression test reads actual `PATCH /business/profile` permission metadata and verifies `settings.view` alone is denied and audited; all 8 authorization tests pass (10 Nov 2026).
+- [x] 25.11.2 Salesperson without `settings.view` opened a Settings route directly and saw the clear access-required message instead of a blank/broken page (user confirmed, 10 Nov 2026).
+- [x] 25.11.3 Offline save displayed a clear connection error and the PWA correctly explained that live business changes are not queued. After reconnect, save succeeded; user removed the temporary description marker and saved the original value back. Offline banner uses warm gold in light mode, charcoal/emerald in dark mode, and photo-glass styling (user confirmed green, 10 Nov 2026).
+- [x] 25.11.4 Added and passed a backend regression test with two isolated business settings records: updating `invoicePrefix` for Business A changed only A, while Business B retained its own `B-INV-` value. UI workspace selector was confirmed to list active locations for the single `Genuine Liquor Store` business, so no second-business UI switch was claimed. 9 authorization/business-scope tests passed (10 Nov 2026).
 
 ## 25.12 Cross-module and data-contract audit
 
-- [ ] 25.12.1 Verify settings defaults reach every consumer: sales invoice, purchase order/GRN, payment, inventory threshold, dashboard date range and report currency/date formatting.
-- [ ] 25.12.2 Verify inactive locations, payment methods, tax rates, categories, units and users cannot be chosen for new records; historical records still render their saved values.
-- [ ] 25.12.3 Verify user deletion/deactivation semantics against the API: existing sales, audit history and ownership must remain valid; the UI must clearly identify whether the action disables access or permanently deletes a user.
-- [ ] 25.12.4 Verify unit conversion factors are actually applied anywhere a quantity changes. If stock records remain in each product's single base unit, the UI/docs must label that limitation and must not imply cross-unit stock conversion.
-- [ ] 25.12.5 Audit finding: conversion factors are stored for product-unit choices, but no conversion-factor consumer was found in sales, purchase or inventory stock-write services. This is an implementation/integration gap until verified or explicitly constrained to base-unit entry; do not mark unit conversion green from the Settings screen alone.
+- [x] 25.12.1 General-settings defaults propagated across modules: base currency `TZS`, default tax `2.25%`, invoice prefix `PH25-INV-`, default location `Main Warehouse · MAIN`, default payment method `PH25 QA Bank Transfer`. New invoice form matched location and tax; PH19 Tonic Water at TZS 1,800 produced tax TZS 40.50 (2.25%) and total TZS 1,840.50. New purchase-order form showed 2.25% tax, TZS currency, `Main Warehouse` as receive location, and PH19 Tonic Water buying price TZS 1,200; tax TZS 27 and total TZS 1,227. Generated invoice `PH25-INV-202611-00002` confirms configured invoice prefix. Sales-payment prefix fix confirmed: payment `PH25-PAY-202611-00001` recorded TZS 1 using default `PH25 QA Bank Transfer` and supplied reference `PH25-QA-PAYMENT-002`; idempotency hash is stored separately. Inventory confirmed global low-stock threshold `5`, negative stock disabled, and 31 low-stock balances; inventory uses the higher of global threshold and product reorder level. Dashboard `This month` showed 01/11/2026–10/11/2026 and money/chart labels in TZS. Report chart date labels were corrected from ISO and visually verified by user after refresh. PO/GRN prefix generation confirmed: `PH25-PO-202611-00001` and `PH25-GRN-202611-00001`.
+- [x] 25.12.2 Inactive options excluded from new records and historical value preserved: PH21 Salesperson QA disappeared from new-invoice salesperson choices while inactive, then restored Active. `PH25 QA Inactive Category` was absent from new-product form while inactive, then restored Active. `PH25 QA Inactive Location` (`PH25-QA-LOC-01`, WAREHOUSE) was absent from new PO receive-location choices while inactive, then restored Active. QA inactive payment method was absent from Record payment choices, then restored Active. Invoice tax override is numeric, not a tax picker; while QA `1.11%` rate was inactive, active default `2.25%` continued to populate as expected. `PH25 QA Inactive Unit` (no base, factor 1) was absent from new-product unit choices while inactive. Historical product `PH25 Unit Conversion Check` (`PH25-QA-UNIT-001`) continued displaying saved `PH25 QA Case edited × 12` while that unit was inactive. User confirmed all QA settings restored Active.
+- [x] 25.12.3 Managed-user deactivation is a reversible soft-disable, not deletion: the UI warns that active sessions are revoked; sign-in rejects the disabled account; the user remains in the business and can be reactivated. User verified Audit log event for `ph21.salesperson@example.test` with actor Admin User (`materuthedy@gmail.com`), before `isActive: true`, after `false`, then confirmed QA user restored Active. Audit search now includes beforeData/afterData so target email finds the event. Owner guard prevents removing/deactivating the final active Owner.
+- [x] 25.12.4 Sales unit conversion verified and QA transaction cleaned up: `PH25-INV-202611-00003` for `PH21 Filter Customer Alpha` used `PH25 QA Case edited ×12`, entered quantity `1`; invoice detail showed 12 base units at TZS 200, subtotal TZS 2,400, tax TZS 54, total TZS 2,454. After issue, Main Warehouse stock decreased from 12 to 0 and value from TSh 1,200 to TSh 0. User cancelled the QA invoice with a test reason; Inventory then confirmed stock restored to 12 and value to TSh 1,200. Server resolves the selected unit factor and stores normalized base-unit quantities/prices.
+- [x] 25.12.5 Purchase unit conversion verified end to end: `PH25-PO-202611-00002` used `PH25 QA Case edited ×12`, entered quantity `1` at TZS 1,200; saved PO showed 12 ordered at TZS 100/base unit, subtotal TZS 1,200 and total TZS 1,227. `PH25-GRN-202611-00002` received/accepted 12; Inventory confirmed Main Warehouse on-hand 12 and cost value TSh 1,200. No database migration was needed.
 - [ ] 25.12.6 Verify the Phase 25 migration on a nonempty database preserves existing business values, backfills defaults safely and can be deployed once without duplicate settings.
-- [ ] 25.12.7 Verify all settings writes create the expected audit record and failed/forbidden writes leave both settings and related records unchanged.
+- [x] 25.12.7 Settings write audit and viewer authorization verified: Admin changed low-stock threshold `5 → 6 → 5`; Audit log recorded both `UPDATE SAVE general settings` events with matching before/after values and timestamps. PH25 QA Settings Viewer saw the `settings.edit` read-only notice and could not edit settings; user confirmed green. No Viewer settings write was possible from the UI.
 
 ### Online smoke flow — fresh Mizania workspace (5 Nov 2026)
 
@@ -139,12 +139,12 @@ Cross-system authorization cleanup and role-by-role verification has its own Pha
 
 **Scope contract:** the active location in the workspace switcher is the operational context for creating new records. It is not a hidden global report filter. Executive dashboard and combined business overview reports aggregate the current business across locations. Inventory dashboard summary cards are business-wide; its stock and movement tables start at **All locations** and can be filtered to one location. Detail reports may expose their own explicit location filters. Transaction-specific pages should show the location saved on each record and expose an explicit location filter when the list supports it. Every API must remain scoped to the authenticated business.
 
-- [ ] 25.13.1 Switch active location and confirm the dashboard still identifies its figures as business-wide / all locations, while showing the active location separately as the default for new activity.
-- [ ] 25.13.2 Switch location and confirm no existing invoice, purchase, payment, return, adjustment, transfer or count is moved or silently re-scoped.
+- [x] 25.13.1 Switched active location to `PH19 Test Warehouse`; Dashboard continued to label its figures `Business-wide totals across locations`, identified PH19 Test Warehouse only as the active location for new activity, and showed same business-wide Total Revenue TZS 21,240. Inventory snapshot reflected all locations at TZS 774,200. User supplied the post-switch Dashboard snapshot (12 Nov 2026).
+- [x] 25.13.2 With active location switched to `PH19 Test Warehouse`, existing Dashboard activity still showed the QA invoice and PO at `Main Warehouse`, QA/test sales payments at `PH21 Test Branch`, and the expense at `Main Warehouse`. Existing source invoice and PO detail had also retained Main Warehouse. Records were not moved or silently re-scoped (user supplied Dashboard activity evidence, 12 Nov 2026).
 - [x] 25.13.3 Confirm every Recent activity row shows the source location; where a payment has no invoice, purchase order or expense location, it is explicitly labeled as not recorded rather than assigned to the active location. User confirmed `PH20-SEED-PAY-001` now shows `Main Warehouse` after backend restart and refresh (5 Nov 2026).
-- [ ] 25.13.4 On Inventory, confirm summary totals include all active locations; the stock balance and recent movement lists default to **All locations**; selecting one location filters both lists and switching back restores the aggregate view.
-- [ ] 25.13.5 Compare business-wide stock quantity and valuation with the sum of location-level rows, accounting for pagination and the same valuation method; no location is omitted or double-counted.
-- [ ] 25.13.6 Confirm the combined Reports overview labels itself as business-wide; report detail pages with location filters send the selected location to the API and clear/reset filters correctly.
+- [x] 25.13.4 On Inventory, confirmed summary totals include all active locations; stock balance and recent movement lists default to **All locations**; selecting one location filters both lists and switching back restores the aggregate view (user confirmed green, 12 Nov 2026).
+- [x] 25.13.5 Compared business-wide stock quantity and valuation with the sum of location-level rows across pages; no location was omitted or double-counted (user confirmed green, 12 Nov 2026).
+- [x] 25.13.6 Confirmed the Reports inventory summary is a business-wide snapshot (579 units, TZS 774,200, 5 locations with stock); verified the dedicated Stock valuation report location filter and its return to All locations (user confirmed green, 12 Nov 2026).
 - [ ] 25.13.7 For sales, purchases, returns and payments, create/read records at two locations and verify list/detail filters and saved location labels agree with their source records.
 - [ ] 25.13.8 Verify financial totals use each transaction's owning location consistently (invoice, return, expense, payment, purchase and supplier return); reject invalid or cross-business location IDs server-side.
 - [ ] 25.13.9 Audit location access control before enabling staff-specific location visibility: current permissions are business-role permissions and no per-user location assignment model was found. Decide whether staff may see all business locations or require location grants; enforce that policy in APIs, not only the selector UI.

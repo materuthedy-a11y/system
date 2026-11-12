@@ -11,7 +11,7 @@ import type { LocationOption } from '@/lib/api/purchases';
 import { useSalesStore } from '@/store/salesStore';
 import { SalesHeading, SalesNotice, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
 
-const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
+const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#c24e00]/20';
 const terms: PaymentTerms[] = ['COD', 'PREPAID', 'NET-7', 'NET-14', 'NET-30', 'NET-45', 'NET-60'];
 type EditLine = { productId: string; quantity: string; unitPrice: string; discountAmount: string };
 function hasMoreThanDecimals(value: number, places: number) { const scale = 10 ** places; return Math.abs(value * scale - Math.round(value * scale)) > 1e-8; }

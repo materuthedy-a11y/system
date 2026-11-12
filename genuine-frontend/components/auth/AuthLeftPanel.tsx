@@ -24,8 +24,8 @@ export function AuthLeftPanel() {
       />
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#171a17]/80 via-[#171a17]/70 to-[#111811]/78" aria-hidden="true" />
       <div className="absolute -right-40 -top-32 z-0 h-[32rem] w-[32rem] rounded-full border border-white/10" aria-hidden="true" />
-      <div className="absolute -right-24 -top-16 z-0 h-[25rem] w-[25rem] rounded-full border border-[#d8f04b]/20" aria-hidden="true" />
-      <div className="absolute -bottom-56 -left-40 z-0 h-[34rem] w-[34rem] rounded-full bg-[#d8f04b]/[0.07] blur-3xl" aria-hidden="true" />
+      <div className="absolute -right-24 -top-16 z-0 h-[25rem] w-[25rem] rounded-full border border-[#ffad66]/20" aria-hidden="true" />
+      <div className="absolute -bottom-56 -left-40 z-0 h-[34rem] w-[34rem] rounded-full bg-[#ffad66]/[0.07] blur-3xl" aria-hidden="true" />
 
       <Link href="/login" className="relative z-10 flex w-fit items-center gap-3" aria-label="Mizania home">
         <Image
@@ -40,7 +40,7 @@ export function AuthLeftPanel() {
       </Link>
 
       <div className="relative z-10 max-w-lg pb-16">
-        <p className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#d8f04b]"><span className="h-px w-7 bg-[#d8f04b]" /> One clear view of your business</p>
+        <p className="mb-5 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#ffad66]"><span className="h-px w-7 bg-[#ffad66]" /> One clear view of your business</p>
         <TypewriterHeading text="Run every part of your business with confidence." />
         <p className="mt-6 max-w-md text-base leading-7 text-white/75">Sales, stock, purchasing and finance, connected in one thoughtful workspace.</p>
         <AuthPhotoStoryCard onStoryImageChange={updateBackgroundImage} />

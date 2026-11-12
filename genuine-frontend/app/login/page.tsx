@@ -31,6 +31,11 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       await login(email, password);
+      try {
+        window.sessionStorage.setItem('mizania.welcome.after-login.v1', 'yes');
+      } catch {
+        // Login remains available if browser storage is disabled.
+      }
       const requestedPath = new URLSearchParams(window.location.search).get('next');
       const safePath = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/dashboard';
       router.replace(safePath);
@@ -60,7 +65,7 @@ export default function LoginPage() {
           suffix={<button type="button" onClick={() => setShowPassword((shown) => !shown)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#777b73] hover:text-[#20231f]">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>}
         />
         <div className="-mt-2 flex justify-end">
-          <Link href="/forgot-password" className="text-sm font-semibold text-[#d8f04b] hover:text-white">Forgot password?</Link>
+          <Link href="/forgot-password" className="text-sm font-semibold text-[#ffad66] hover:text-white">Forgot password?</Link>
         </div>
         <button
           type="submit"

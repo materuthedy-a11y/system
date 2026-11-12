@@ -684,17 +684,12 @@ export class SalesService {
           }))
         )
           throw new BadRequestException('Active payment method not found');
-        const idempotentPaymentNumber =
-          !dto.paymentNumber && idempotencyKey
-            ? `SP-IDEM-${createHash('sha256')
-                .update(`${businessId}:${idempotencyKey}`)
-                .digest('hex')
-                .slice(0, 32)
-                .toUpperCase()}`
-            : undefined;
-        if (idempotentPaymentNumber) {
+        const idempotencyHash = idempotencyKey
+          ? createHash('sha256').update(idempotencyKey).digest('hex')
+          : undefined;
+        if (idempotencyHash) {
           const existing = await tx.payment.findFirst({
-            where: { businessId, paymentNumber: idempotentPaymentNumber },
+            where: { businessId, idempotencyKey: idempotencyHash },
           });
           if (existing) {
             const sameRequest =
@@ -715,14 +710,14 @@ export class SalesService {
         if (amount > state.balance + 1e-8)
           throw new BadRequestException(`Payment exceeds balance due (${state.balance})`);
         const paymentNumber =
-          dto.paymentNumber ||
-          idempotentPaymentNumber ||
-          `SP-${new Date().toISOString().slice(0, 7).replace('-', '')}-${uuid().slice(0, 8).toUpperCase()}`;
+          dto.paymentNumber?.trim() ||
+          (await this.nextSalesPaymentNumber(tx, businessId, paymentDate));
         const payment = await tx.payment.create({
           data: {
             id: uuid(),
             businessId,
             paymentNumber,
+            idempotencyKey: idempotencyHash,
             paymentDate,
             customerId: invoice.customerId,
             invoiceId,
@@ -1330,15 +1325,25 @@ export class SalesService {
         id: { in: [...new Set(items.map((item) => item.productId))] },
         status: 'ACTIVE',
       },
-      select: { id: true },
+      include: { units: { include: { unit: { select: { isActive: true, businessId: true } } } } },
     });
-    const known = new Set(products.map((product) => product.id));
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    const known = new Set(productMap.keys());
     const unknown = items.find((item) => !known.has(item.productId));
     if (unknown)
       throw new NotFoundException(`Active product ${unknown.productId} not found in this business`);
     return items.map((item) => {
+      const product = productMap.get(item.productId)!;
+      const selectedUnit = item.unitId
+        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
+        : product.units.find((unit) => unit.isDefault) ?? product.units.find((unit) => unit.conversionFactor === 1);
+      if (!selectedUnit) throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
+      const factor = Number(selectedUnit.conversionFactor);
+      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
+      const baseQuantity = item.quantity * factor;
+      const baseUnitPrice = item.unitPrice / factor;
       this.exclusiveDiscount(item.discountAmount, item.discountPercentage);
-      const gross = money(item.quantity * item.unitPrice);
+      const gross = money(baseQuantity * baseUnitPrice);
       const discount =
         item.discountAmount !== undefined
           ? money(item.discountAmount)
@@ -1347,8 +1352,8 @@ export class SalesService {
         throw new BadRequestException('Line discount cannot exceed line subtotal');
       return {
         productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        quantity: baseQuantity,
+        unitPrice: baseUnitPrice,
         discount,
         discountPercentage: item.discountPercentage || 0,
         total: money(gross - discount),
@@ -1456,6 +1461,31 @@ export class SalesService {
       'invoiceNumber',
       normalizeDocumentPrefix(settings?.invoicePrefix, 'INV'),
     );
+  }
+
+  private async nextSalesPaymentNumber(
+    tx: Prisma.TransactionClient,
+    businessId: string,
+    date: Date,
+  ): Promise<string> {
+    await this.lockSequence(tx, 'Payment', businessId);
+    const settings = await tx.businessSettings.findUnique({
+      where: { businessId },
+      select: { receiptPrefix: true },
+    });
+    const prefix = `${normalizeDocumentPrefix(settings?.receiptPrefix, 'PAY')}-${date
+      .toISOString()
+      .slice(0, 7)
+      .replace('-', '')}-`;
+    const rows = await tx.payment.findMany({
+      where: { businessId, paymentNumber: { startsWith: prefix } },
+      select: { paymentNumber: true },
+    });
+    const highest = rows.reduce(
+      (max, row) => Math.max(max, Number(row.paymentNumber.slice(prefix.length)) || 0),
+      0,
+    );
+    return `${prefix}${String(highest + 1).padStart(5, '0')}`;
   }
 
   private async nextReturnNumber(

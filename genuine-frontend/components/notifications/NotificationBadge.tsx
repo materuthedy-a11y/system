@@ -35,7 +35,7 @@ export function NotificationBadge() {
     window.addEventListener('focus', onFocus);
     return () => { active = false; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };
   }, [user?.id, user?.businessId]);
-  return <Link href="/dashboard/notifications" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="relative rounded-xl bg-[#f0f7c9] p-2 text-[#596b05] transition hover:bg-[#e7f49d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:bg-[#28301c] dark:text-[#d8f04b] dark:hover:bg-[#343d22]">
+  return <Link href="/dashboard/notifications" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'} className="relative rounded-xl bg-[#e8f5ee] p-2 text-[#087b59] transition hover:bg-[#d8eee3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:bg-[#1b3026] dark:text-[#7dd3a7] dark:hover:bg-[#243d30]">
     <Bell size={18}/>{unread > 0 ? <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full border border-white bg-rose-600 px-1 text-[9px] font-bold leading-none text-white dark:border-[#20211f]">{unread > 99 ? '99+' : unread}</span> : null}
   </Link>;
 }

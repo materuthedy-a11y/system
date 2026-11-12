@@ -44,7 +44,7 @@ export function ProductPhoto({
   }, [productId, imageId]);
   return (
     <div
-      className={`relative grid place-items-center overflow-hidden bg-[#f4f7e9] text-[#71840c] ${className}`}
+      className={`relative grid place-items-center overflow-hidden bg-[#f4f7e9] text-[#c24e00] ${className}`}
     >
       {url ? (
         <Image
@@ -155,7 +155,7 @@ export function ProductImagePicker({
             id="product-images-heading"
             className="flex items-center gap-2 text-base font-bold text-[#292d27]"
           >
-            <ImagePlus size={18} className="text-[#70820f]" />
+            <ImagePlus size={18} className="text-[#c24e00]" />
             Product photos
           </h2>
           <p className="mt-1 text-sm text-[#73766f]">

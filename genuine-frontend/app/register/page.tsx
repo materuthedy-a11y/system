@@ -88,7 +88,7 @@ export default function RegisterPage() {
         <AuthField label="Business name" id="businessName" autoComplete="organization" placeholder="Your business" value={businessName} onChange={setBusinessName} disabled={isSubmitting} />
         <div>
           <label htmlFor="businessType" className="mb-2 block text-sm font-semibold text-white">Business type</label>
-          <select id="businessType" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)} disabled={isSubmitting} className="h-12 w-full rounded-xl border border-[#dfe1db] bg-white px-4 text-sm text-[#20231f] shadow-sm shadow-black/[0.02] focus:border-[#8aa91a] focus:outline-none focus:ring-4 focus:ring-[#d8f04b]/15 disabled:opacity-60">
+          <select id="businessType" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)} disabled={isSubmitting} className="h-12 w-full rounded-xl border border-[#dfe1db] bg-white px-4 text-sm text-[#20231f] shadow-sm shadow-black/[0.02] focus:border-[#c24e00] focus:outline-none focus:ring-4 focus:ring-[#ffad66]/15 disabled:opacity-60">
             <option value="">Select business type</option>
             <option value="Distribution">Distribution</option>
             <option value="Retail">Retail</option>

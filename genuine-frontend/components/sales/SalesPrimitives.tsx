@@ -52,8 +52,8 @@ export function SalesHeading({ title, description, action }: {
   title: string; description: string; action?: { href: string; label: string };
 }) {
   return <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-    <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#637b12]">Sales</p><h1 className="mt-1 text-2xl font-semibold text-[#292d27]">{title}</h1><p className="mt-1 text-sm text-[#747a68]">{description}</p></div>
-    {action ? <Link href={action.href} className="inline-flex min-h-10 items-center rounded-lg bg-[#20211f] px-4 text-sm font-semibold text-white hover:bg-[#353832] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#718b11]">{action.label}</Link> : null}
+    <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#c24e00]">Sales</p><h1 className="mt-1 text-2xl font-semibold text-[#292d27]">{title}</h1><p className="mt-1 text-sm text-[#747a68]">{description}</p></div>
+    {action ? <Link href={action.href} className="inline-flex min-h-10 items-center rounded-lg bg-[#ff7600] px-4 text-sm font-semibold text-white transition hover:bg-[#e96d00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff7600]">{action.label}</Link> : null}
   </div>;
 }
 

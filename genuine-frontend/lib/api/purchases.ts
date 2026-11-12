@@ -147,6 +147,8 @@ export interface PurchaseProductOption {
   sku: string;
   buyingPrice: number;
   defaultUnit: string;
+  defaultUnitId: string;
+  productUnits: Array<{ id: string; unitId: string; unitName: string; unitSymbol: string; conversionFactor: number; isDefault: boolean }>;
   status: string;
 }
 export interface CreatePurchaseOrderInput {
@@ -155,7 +157,7 @@ export interface CreatePurchaseOrderInput {
   idempotencyKey?: string;
   orderDate?: string;
   expectedDeliveryDate?: string;
-  items: Array<{ productId: string; quantity: number; unitPrice: number; discount?: number }>;
+  items: Array<{ productId: string; unitId?: string; quantity: number; unitPrice: number; discount?: number }>;
   shippingCost?: number;
   taxAmount?: number;
   taxPercentage?: number;

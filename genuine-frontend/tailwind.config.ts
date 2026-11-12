@@ -30,9 +30,9 @@ const config: Config = {
           light: '#2A2A2A',
         },
         accent: {
-          DEFAULT: '#C9E600',
+          DEFAULT: '#FF7600',
           foreground: '#1A1A1A',
-          light: '#E7F49D',
+          light: '#FFF0E3',
           dark: '#789100',
         },
         success: {

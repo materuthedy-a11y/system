@@ -9,7 +9,7 @@ import { salesAPI, type ReturnReason, type SalesInvoice, type SalesReturn } from
 import { useSalesStore } from '@/store/salesStore';
 import { SalesHeading, SalesNotice, calendarDateLabel, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
 
-const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#718b11] focus:ring-2 focus:ring-[#718b11]/20';
+const input = 'min-h-10 w-full rounded-lg border border-[#dfe2d9] bg-white px-3 text-sm text-[#30342e] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#c24e00]/20';
 const reasons: Array<{ value: ReturnReason; label: string }> = [
   { value: 'DEFECTIVE', label: 'Defective' }, { value: 'EXPIRED', label: 'Expired' },
   { value: 'WRONG_ITEM', label: 'Wrong item' }, { value: 'OVERAGE', label: 'Overage' },

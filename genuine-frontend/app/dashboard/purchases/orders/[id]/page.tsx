@@ -30,7 +30,7 @@ import { notify } from '@/components/ui/AppToaster';
 import { formatBusinessDate } from '@/lib/format/businessDate';
 
 const input =
-  'min-h-10 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#829600] focus:ring-2 focus:ring-[#d8f04b]/40';
+  'min-h-10 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#ffad66]/40';
 const decimalPlaces = (value: number) => {
   const [coefficient, exponent = '0'] = value.toString().toLowerCase().split('e');
   return Math.max(0, (coefficient.split('.')[1]?.length ?? 0) - Number(exponent));
@@ -619,7 +619,7 @@ export default function PurchaseOrderDetailPage() {
         {po.status === 'DRAFT' && permissions.includes('purchases.edit') && (
           <Link
             href={`/dashboard/purchases/orders/${id}/edit`}
-            className="inline-flex min-h-10 items-center rounded-xl border border-[#dfe2da] bg-white px-4 text-sm font-semibold text-[#32352e] transition hover:border-[#829600] hover:text-[#647500]"
+            className="inline-flex min-h-10 items-center rounded-xl border border-[#dfe2da] bg-white px-4 text-sm font-semibold text-[#32352e] transition hover:border-[#c24e00] hover:text-[#c24e00]"
           >
             Edit draft
           </Link>
@@ -639,7 +639,7 @@ export default function PurchaseOrderDetailPage() {
       )}
       <header className="flex flex-col gap-4 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:flex-row sm:items-start sm:justify-between sm:p-7">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#738900]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c24e00]">
             Purchase order
           </p>
           <h1 className="mt-2 break-all text-2xl font-semibold sm:text-3xl">{po.poNumber}</h1>
@@ -704,7 +704,7 @@ export default function PurchaseOrderDetailPage() {
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="space-y-4 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6">
           <div className="flex items-center gap-2">
-            <PackageCheck className="text-[#738900]" size={19} />
+            <PackageCheck className="text-[#c24e00]" size={19} />
             <h2 className="text-lg font-semibold">Receiving</h2>
           </div>
           {permissions.includes('purchases.approve') &&
@@ -715,7 +715,7 @@ export default function PurchaseOrderDetailPage() {
                   .filter((g) => g.status === 'RECEIVED')
                   .map((g) => (
                     <div className="flex flex-wrap items-center justify-between gap-2" key={g.id}>
-                      <Link href={`/dashboard/purchases/grn/${g.id}`} className="text-sm font-medium hover:text-[#738900] hover:underline hover:underline-offset-4 dark:hover:text-[#d8f04b]">
+                      <Link href={`/dashboard/purchases/grn/${g.id}`} className="text-sm font-medium hover:text-[#c24e00] hover:underline hover:underline-offset-4 dark:hover:text-[#ffad66]">
                         {g.grnNumber} Â· {g.totalAcceptedQty} accepted
                       </Link>
                       <div className="flex gap-2">
@@ -948,7 +948,7 @@ export default function PurchaseOrderDetailPage() {
               <button
                 disabled={!!busy || !receipt.length}
                 onClick={() => void createReceipt()}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-transparent bg-[#20211f] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#343632] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#738900] disabled:opacity-50 dark:border-[#596347] dark:bg-[#050605] dark:text-[#e7e9e3] dark:hover:border-[#829600] dark:hover:bg-[#111510] dark:hover:shadow-[0_0_18px_rgba(216,240,75,0.12)] dark:focus-visible:outline-[#d8f04b]"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-transparent bg-[#20211f] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#343632] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c24e00] disabled:opacity-50 dark:border-[#6B452B] dark:bg-[#050605] dark:text-[#e7e9e3] dark:hover:border-[#c24e00] dark:hover:bg-[#111510] dark:hover:shadow-[0_0_18px_rgba(255,173,102,0.12)] dark:focus-visible:outline-[#ffad66]"
               >
                 {busy === 'grn' ? (
                   <Loader2 className="animate-spin" size={16} />
@@ -970,7 +970,7 @@ export default function PurchaseOrderDetailPage() {
               <div id={`receipt-${g.id}`} key={g.id} className="scroll-mt-24 space-y-2 border-b border-[#eceee8] py-3 last:border-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <Link href={`/dashboard/purchases/grn/${g.id}`} className="text-sm font-semibold hover:text-[#738900] hover:underline hover:underline-offset-4 dark:hover:text-[#d8f04b]">{g.grnNumber}</Link>
+                    <Link href={`/dashboard/purchases/grn/${g.id}`} className="text-sm font-semibold hover:text-[#c24e00] hover:underline hover:underline-offset-4 dark:hover:text-[#ffad66]">{g.grnNumber}</Link>
                     <p className="mt-1 text-xs text-[#73766f]">
                       Received {g.totalReceivedQty} Â· Accepted {g.totalAcceptedQty} Â· Rejected{' '}
                       {g.totalRejectedQty} Â· Damaged {g.totalDamageQty}
@@ -1291,7 +1291,7 @@ export default function PurchaseOrderDetailPage() {
         <div className="space-y-5">
           <section className="space-y-3 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center gap-2">
-              <Wallet className="text-[#738900]" size={19} />
+              <Wallet className="text-[#c24e00]" size={19} />
               <h2 className="text-lg font-semibold">Supplier payment</h2>
             </div>
             {permissions.includes('payments.create') && po.balanceDue > 0 ? (
@@ -1391,7 +1391,7 @@ export default function PurchaseOrderDetailPage() {
           <section className="space-y-3 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6" aria-labelledby="supplier-payment-history-heading">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Wallet className="text-[#738900]" size={19} />
+                <Wallet className="text-[#c24e00]" size={19} />
                 <h2 id="supplier-payment-history-heading" className="text-lg font-semibold">Payment history</h2>
               </div>
               {permissions.includes('payments.view') ? <span className="text-xs text-[#73766f]">{payments.length} {payments.length === 1 ? 'payment' : 'payments'}</span> : null}
@@ -1422,7 +1422,7 @@ export default function PurchaseOrderDetailPage() {
           </section>
           <section className="space-y-3 rounded-2xl border border-[#e6e8e1] bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center gap-2">
-              <RotateCcw className="text-[#738900]" size={19} />
+              <RotateCcw className="text-[#c24e00]" size={19} />
               <h2 className="text-lg font-semibold">Supplier returns</h2>
             </div>
             {permissions.includes('purchases.create') &&
@@ -1644,7 +1644,7 @@ export default function PurchaseOrderDetailPage() {
                 setCancelReason(event.target.value);
                 if (cancelReasonError) setCancelReasonError('');
               }}
-              className="mt-1 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2 text-sm text-[#20211f] outline-none focus:border-[#829600] focus:ring-2 focus:ring-[#d8f04b]/40 dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3]"
+              className="mt-1 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2 text-sm text-[#20211f] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#ffad66]/40 dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3]"
               placeholder="Why is this order being cancelled?"
               aria-describedby={
                 cancelReasonError ? 'cancel-order-reason-error' : 'cancel-order-reason-count'
@@ -1719,7 +1719,7 @@ export default function PurchaseOrderDetailPage() {
                 setRejectReason(event.target.value);
                 if (rejectReasonError) setRejectReasonError('');
               }}
-              className="mt-1 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2 text-sm text-[#20211f] outline-none focus:border-[#829600] focus:ring-2 focus:ring-[#d8f04b]/40 dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3]"
+              className="mt-1 w-full resize-y rounded-xl border border-[#dfe2da] bg-white px-3 py-2 text-sm text-[#20211f] outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#ffad66]/40 dark:border-[#3b423a] dark:bg-[#111510] dark:text-[#e7e9e3]"
               placeholder="Why is this record being rejected?"
               aria-describedby={rejectReasonError ? 'reject-record-reason-error' : 'reject-record-reason-count'}
             />

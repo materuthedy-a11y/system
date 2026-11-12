@@ -147,6 +147,7 @@ export class PurchaseService {
         businessId,
         status: 'ACTIVE',
       },
+      include: { units: { include: { unit: { select: { isActive: true, businessId: true } } } } },
     });
 
     const productMap = new Map(products.map((p) => [p.id, p]));
@@ -169,10 +170,17 @@ export class PurchaseService {
         throw new BadRequestException('Item discount cannot exceed its gross amount');
       }
       subtotal = roundMoney(subtotal + lineTotal);
+      const product = productMap.get(item.productId)!;
+      const selectedUnit = item.unitId
+        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
+        : product.units.find((unit) => unit.isDefault);
+      if (!selectedUnit) throw new BadRequestException(`The selected unit is inactive or is not configured for ${product.name}. Refresh products and check the product's Units settings.`);
+      const factor = Number(selectedUnit.conversionFactor);
+      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
       poItems.push({
         productId: item.productId,
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.unitPrice),
+        quantity: Number(item.quantity) * factor,
+        unitPrice: Number(item.unitPrice) / factor,
         discount: Number(item.discount || 0),
         lineTotal,
         notes: item.notes,
@@ -740,14 +748,15 @@ export class PurchaseService {
     ) {
       throw new NotFoundException('Location not found or inactive');
     }
+    let products: any[] = [];
     if (dto.items) {
-      const products = await this.prisma.product.findMany({
+      products = await this.prisma.product.findMany({
         where: {
           id: { in: dto.items.map((item) => item.productId) },
           businessId,
           status: 'ACTIVE',
         },
-        select: { id: true },
+        include: { units: { include: { unit: { select: { isActive: true, businessId: true } } } } },
       });
       const productIds = new Set(products.map((product) => product.id));
       for (const item of dto.items)
@@ -759,8 +768,15 @@ export class PurchaseService {
     const shippingCost =
       dto.shippingCost !== undefined ? roundMoney(Number(dto.shippingCost)) : po.shippingCost;
     const nextItems = dto.items?.map((item) => {
-      const quantity = Number(item.quantity);
-      const unitPrice = Number(item.unitPrice);
+      const product = products.find((entry) => entry.id === item.productId)!;
+      const selectedUnit = item.unitId
+        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
+        : product.units.find((unit) => unit.isDefault);
+      if (!selectedUnit) throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
+      const factor = Number(selectedUnit.conversionFactor);
+      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
+      const quantity = Number(item.quantity) * factor;
+      const unitPrice = Number(item.unitPrice) / factor;
       const discount = Number(item.discount || 0);
       const lineTotal = roundMoney(quantity * unitPrice - discount);
       if (!Number.isFinite(lineTotal) || lineTotal < 0) {

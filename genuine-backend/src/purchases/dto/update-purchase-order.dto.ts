@@ -22,6 +22,11 @@ export class UpdatePurchaseOrderItemDto {
   @MaxLength(128)
   productId: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  unitId?: string;
+
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)

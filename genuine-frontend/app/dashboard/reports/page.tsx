@@ -57,6 +57,10 @@ function currency(value: unknown, code = 'TZS') {
   catch { return `${code} ${amount.toLocaleString()}`; }
 }
 
+function formatPeriodLabel(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatBusinessDate(value) : value;
+}
+
 function labelOf(key: string) {
   return key.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/^./, (s) => s.toUpperCase());
 }
@@ -94,14 +98,14 @@ function TrendBars({ labels, values, code }: { labels: string[]; values: number[
   const safe = values.map((value) => Number.isFinite(Number(value)) ? Number(value) : 0);
   const max = Math.max(1, ...safe.map(Math.abs));
   if (!safe.length) return <div className="grid min-h-40 place-items-center text-sm text-[#70786d] dark:text-[#aab2a5]">No trend points for this period.</div>;
-  return <div className="flex min-h-48 items-end gap-2 overflow-x-auto border-b border-[#dfe4da] px-1 pt-5 dark:border-white/10">{safe.map((value, index) => <div key={`${labels[index] || index}-${value}`} className="flex min-w-12 flex-1 flex-col items-center justify-end gap-2"><span className="max-w-20 truncate text-[9px] text-[#646d60] dark:text-[#aab2a5]" title={currency(value, code)}>{value ? currency(value, code) : '0'}</span><div className="chart-bar-rise w-full max-w-14 rounded-t-lg bg-gradient-to-t from-[#a98220] to-[#e3c46c] dark:from-[#8e6a15] dark:to-[#d8b454]" style={{ height: `${Math.max(value ? 8 : 3, Math.abs(value) / max * 120)}px`, animationDelay: `${Math.min(index * 55, 500)}ms` }} /><span className="max-w-16 truncate pb-2 text-[9px] text-[#687064] dark:text-[#aab2a5]" title={labels[index]}>{labels[index] || '—'}</span></div>)}</div>;
+  return <div className="flex min-h-48 items-end gap-2 overflow-x-auto border-b border-[#dfe4da] px-1 pt-5 dark:border-white/10">{safe.map((value, index) => <div key={`${labels[index] || index}-${value}`} className="flex min-w-12 flex-1 flex-col items-center justify-end gap-2"><span className="max-w-20 truncate text-[9px] text-[#646d60] dark:text-[#aab2a5]" title={currency(value, code)}>{value ? currency(value, code) : '0'}</span><div className="chart-bar-rise w-full max-w-14 rounded-t-lg bg-gradient-to-t from-[#a98220] to-[#e3c46c] dark:from-[#8e6a15] dark:to-[#d8b454]" style={{ height: `${Math.max(value ? 8 : 3, Math.abs(value) / max * 120)}px`, animationDelay: `${Math.min(index * 55, 500)}ms` }} /><span className="max-w-16 truncate pb-2 text-[9px] text-[#687064] dark:text-[#aab2a5]" title={labels[index]}>{formatPeriodLabel(labels[index] || '—')}</span></div>)}</div>;
 }
 
 function PairedTrendBars({ labels, series, code }: { labels: string[]; series: Array<{ label: string; data: number[] }>; code: string }) {
   const max = Math.max(1, ...series.flatMap((item) => item.data.map((value) => Math.abs(Number(value) || 0))));
   if (!labels.length) return <div className="grid min-h-40 place-items-center text-sm text-[#70786d] dark:text-[#aab2a5]">No trend points for this period.</div>;
   const colors = ['bg-emerald-600 dark:bg-emerald-500', 'bg-amber-500 dark:bg-amber-400'];
-  return <div className="flex min-h-48 items-end gap-2 overflow-x-auto border-b border-[#dfe4da] px-1 pt-5 dark:border-white/10">{labels.map((label, index) => <div key={`${label}-${index}`} className="flex min-w-14 flex-1 flex-col items-center justify-end gap-2"><div className="flex h-36 w-full items-end justify-center gap-1">{series.map((item, seriesIndex) => { const value = Number(item.data[index]) || 0; return <div key={`${item.label}-${value}`} className={`chart-bar-rise w-4 max-w-1/3 rounded-t-md ${colors[seriesIndex % colors.length]}`} style={{ height: `${Math.max(value ? 4 : 2, Math.abs(value) / max * 120)}px`, animationDelay: `${Math.min(index * 60 + seriesIndex * 90, 550)}ms` }} title={`${item.label}: ${currency(value, code)}`} />; })}</div><span className="max-w-16 truncate pb-2 text-[9px] text-[#687064] dark:text-[#aab2a5]" title={label}>{label || '—'}</span></div>)}</div>;
+  return <div className="flex min-h-48 items-end gap-2 overflow-x-auto border-b border-[#dfe4da] px-1 pt-5 dark:border-white/10">{labels.map((label, index) => <div key={`${label}-${index}`} className="flex min-w-14 flex-1 flex-col items-center justify-end gap-2"><div className="flex h-36 w-full items-end justify-center gap-1">{series.map((item, seriesIndex) => { const value = Number(item.data[index]) || 0; return <div key={`${item.label}-${value}`} className={`chart-bar-rise w-4 max-w-1/3 rounded-t-md ${colors[seriesIndex % colors.length]}`} style={{ height: `${Math.max(value ? 4 : 2, Math.abs(value) / max * 120)}px`, animationDelay: `${Math.min(index * 60 + seriesIndex * 90, 550)}ms` }} title={`${item.label}: ${currency(value, code)}`} />; })}</div><span className="max-w-16 truncate pb-2 text-[9px] text-[#687064] dark:text-[#aab2a5]" title={label}>{formatPeriodLabel(label || '—')}</span></div>)}</div>;
 }
 
 function MetricDefinition({ metric, code, index }: { metric: ReportMetric; code: string; index: number }) {

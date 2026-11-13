@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { AuthField, AuthFrame, FormError } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
@@ -11,14 +11,22 @@ import { useAuthStore } from '@/store/authStore';
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
+  const authStatus = useAuthStore((state) => state.status);
+  const initialize = useAuthStore((state) => state.initialize);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (authStatus === 'loading') void initialize();
+    if (authStatus === 'authenticated') router.replace('/dashboard');
+  }, [authStatus, initialize, router]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting || authStatus === 'authenticated') return;
     setError('');
     if (!email.trim() || !password) {
       setError('Enter both your email address and password.');

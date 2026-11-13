@@ -11,8 +11,8 @@ export class CreateLocationDto {
   code?: string;
 
   @IsOptional()
-  @IsEnum(['WAREHOUSE', 'SHOP', 'BRANCH', 'DEPOT'])
-  type?: 'WAREHOUSE' | 'SHOP' | 'BRANCH' | 'DEPOT';
+  @IsEnum(['WAREHOUSE', 'SHOP', 'STORE', 'BRANCH', 'DEPOT'])
+  type?: 'WAREHOUSE' | 'SHOP' | 'STORE' | 'BRANCH' | 'DEPOT';
 
   @IsOptional()
   @IsString()
@@ -38,8 +38,8 @@ export class UpdateLocationDto {
   code?: string;
 
   @IsOptional()
-  @IsEnum(['WAREHOUSE', 'SHOP', 'BRANCH', 'DEPOT'])
-  type?: 'WAREHOUSE' | 'SHOP' | 'BRANCH' | 'DEPOT';
+  @IsEnum(['WAREHOUSE', 'SHOP', 'STORE', 'BRANCH', 'DEPOT'])
+  type?: 'WAREHOUSE' | 'SHOP' | 'STORE' | 'BRANCH' | 'DEPOT';
 
   @IsOptional()
   @IsString()

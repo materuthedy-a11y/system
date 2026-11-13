@@ -239,9 +239,10 @@ export class BusinessController {
   @ApiResponse({ status: 200, type: [LocationResponseDto] })
   async getLocations(
     @Business() businessId: string,
+    @UserId() userId: string,
     @Query('includeInactive') includeInactive?: string,
   ): Promise<LocationResponseDto[]> {
-    return this.businessService.getLocations(businessId, includeInactive === 'true');
+    return this.businessService.getLocations(businessId, userId, includeInactive === 'true');
   }
 
   @Get('location-options')
@@ -254,8 +255,8 @@ export class BusinessController {
   )
   @ApiOperation({ summary: 'Get active locations for the current workspace' })
   @ApiResponse({ status: 200 })
-  async getLocationOptions(@Business() businessId: string) {
-    return this.businessService.getLocationOptions(businessId);
+  async getLocationOptions(@Business() businessId: string, @UserId() userId: string) {
+    return this.businessService.getLocationOptions(businessId, userId);
   }
 
   @Patch('locations/:id')

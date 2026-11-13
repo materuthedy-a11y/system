@@ -12,6 +12,7 @@ import { LoggerService } from '../common/logger/logger.service';
 import { PrismaService } from '../database/prisma.service';
 import { assertAccountingPeriodOpen } from '../common/utils/accounting-period.util';
 import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
+import { accessibleLocationIds, assertLocationAccess } from '../common/utils/location-access.util';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationEventType } from '../notifications/dto';
@@ -59,7 +60,8 @@ export class SalesService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async getInvoiceOptions(businessId: string) {
+  async getInvoiceOptions(businessId: string, userId: string) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     const [business, defaultTaxRate, locations, salespeople, customers, settings] = await Promise.all([
       this.prisma.business.findUnique({
         where: { id: businessId },
@@ -67,7 +69,7 @@ export class SalesService {
       }),
       this.prisma.taxRate.findFirst({ where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } }, select: { rate: true } }),
       this.prisma.location.findMany({
-        where: { businessId, isActive: true },
+        where: { businessId, isActive: true, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
         orderBy: { createdAt: 'desc' },
         select: { id: true, name: true, code: true, isActive: true },
       }),
@@ -104,6 +106,7 @@ export class SalesService {
     userId: string,
     dto: CreateSalesInvoiceDto,
   ): Promise<SalesInvoiceResponseDto> {
+    await assertLocationAccess(this.prisma, businessId, userId, dto.locationId);
     this.exclusiveDiscount(dto.discountAmount, dto.discountPercentage);
     const customer = await this.prisma.customer.findFirst({
       where: { id: dto.customerId, businessId, isActive: true, status: 'ACTIVE' },
@@ -243,16 +246,19 @@ export class SalesService {
   async getSalesInvoiceById(
     businessId: string,
     invoiceId: string,
+    userId?: string,
   ): Promise<SalesInvoiceResponseDto> {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const invoice = await this.prisma.salesInvoice.findFirst({
-      where: { id: invoiceId, businessId },
+      where: { id: invoiceId, businessId, ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}) },
       include: invoiceInclude,
     });
     if (!invoice) throw new NotFoundException('Sales invoice not found');
     return this.mapInvoice(invoice);
   }
 
-  async getAllSalesInvoices(businessId: string, filter: SalesInvoiceFilterDto) {
+  async getAllSalesInvoices(businessId: string, userId: string, filter: SalesInvoiceFilterDto) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     if (filter.locationId) {
       const location = await this.prisma.location.findFirst({
         where: { id: filter.locationId, businessId },
@@ -269,8 +275,9 @@ export class SalesService {
       throw new BadRequestException('dateFrom must be on or before dateTo');
     const where: Prisma.SalesInvoiceWhereInput = {
       businessId,
+      ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       ...(filter.customerId && { customerId: filter.customerId }),
-      ...(filter.locationId && { locationId: filter.locationId }),
+      ...(filter.locationId && { AND: [{ locationId: filter.locationId }] }),
       ...(filter.salespersonId && { salespersonId: filter.salespersonId }),
       ...(filter.search && {
         OR: [
@@ -903,6 +910,7 @@ export class SalesService {
           include: { items: { include: { product: true } } },
         });
         if (!invoice) throw new NotFoundException('Sales invoice not found');
+        await assertLocationAccess(this.prisma, businessId, userId, invoice.locationId);
         if (['DRAFT', 'CANCELLED'].includes(invoice.status))
           throw new BadRequestException('Returns require an issued invoice');
         const requestedIds = [...new Set(dto.items.map((item) => item.salesInvoiceItemId))];
@@ -1014,9 +1022,10 @@ export class SalesService {
     return this.getSalesReturnById(businessId, id);
   }
 
-  async getSalesReturnById(businessId: string, returnId: string): Promise<SalesReturnResponseDto> {
+  async getSalesReturnById(businessId: string, returnId: string, userId?: string): Promise<SalesReturnResponseDto> {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const ret = await this.prisma.salesReturn.findFirst({
-      where: { id: returnId, businessId },
+      where: { id: returnId, businessId, ...(accessibleIds ? { invoice: { locationId: { in: accessibleIds } } } : {}) },
       include: {
         invoice: { include: { customer: true, business: { select: { currency: true } } } },
         items: { include: { product: true } },
@@ -1026,11 +1035,21 @@ export class SalesService {
     return this.mapReturn(ret);
   }
 
-  async getAllSalesReturns(businessId: string, filter: SalesReturnFilterDto) {
+  async getAllSalesReturns(businessId: string, userId: string, filter: SalesReturnFilterDto) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     const page = Math.max(1, Math.floor(Number(filter.page) || 1));
     const limit = Math.min(100, Math.max(1, Math.floor(Number(filter.limit) || 20)));
+    if (filter.locationId) {
+      const location = await this.prisma.location.findFirst({
+        where: { id: filter.locationId, businessId },
+        select: { id: true },
+      });
+      if (!location) throw new NotFoundException('Location not found');
+    }
     const where: Prisma.SalesReturnWhereInput = {
       businessId,
+      ...(accessibleIds ? { invoice: { locationId: { in: accessibleIds } } } : {}),
+      ...(filter.locationId && { AND: [{ invoice: { locationId: filter.locationId } }] }),
       ...(filter.salesInvoiceId && { invoiceId: filter.salesInvoiceId }),
       ...(filter.status && { status: filter.status }),
       ...(filter.search && {
@@ -1062,6 +1081,7 @@ export class SalesService {
     returnId: string,
     userId: string,
   ): Promise<SalesReturnResponseDto> {
+    await this.getSalesReturnById(businessId, returnId, userId);
     await this.prisma.$transaction(async (tx) => {
       const key = await tx.salesReturn.findFirst({
         where: { id: returnId, businessId },
@@ -1088,6 +1108,7 @@ export class SalesService {
     returnId: string,
     userId: string,
   ): Promise<SalesReturnResponseDto> {
+    await this.getSalesReturnById(businessId, returnId, userId);
     await this.prisma.$transaction(async (tx) => {
       const key = await tx.salesReturn.findFirst({
         where: { id: returnId, businessId },
@@ -1183,6 +1204,7 @@ export class SalesService {
     userId: string,
     dto: SalesRejectDto,
   ): Promise<SalesReturnResponseDto> {
+    await this.getSalesReturnById(businessId, returnId, userId);
     const reason = dto.reason.trim();
     if (!reason) throw new BadRequestException('Rejection reason is required');
     await this.prisma.$transaction(async (tx) => {

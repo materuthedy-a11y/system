@@ -71,9 +71,10 @@ export class PurchaseController {
   @ApiResponse({ status: 200, type: [PurchaseOrderResponseDto] })
   async getAllPurchaseOrders(
     @Business() businessId: string,
+    @UserId() userId: string,
     @Query() filter: PurchaseOrderFilterDto,
   ): Promise<{ data: PurchaseOrderResponseDto[]; total: number; page: number; limit: number }> {
-    return this.purchaseService.getAllPurchaseOrders(businessId, filter);
+    return this.purchaseService.getAllPurchaseOrders(businessId, userId, filter);
   }
 
   @Get('orders/:id')
@@ -82,9 +83,10 @@ export class PurchaseController {
   @ApiResponse({ status: 200, type: PurchaseOrderResponseDto })
   async getPurchaseOrderById(
     @Business() businessId: string,
+    @UserId() userId: string,
     @Param('id', new ParseUUIDPipe()) poId: string,
   ): Promise<PurchaseOrderResponseDto> {
-    return this.purchaseService.getPurchaseOrderById(businessId, poId);
+    return this.purchaseService.getPurchaseOrderById(businessId, poId, userId);
   }
 
   @Post('orders/:id/payments')

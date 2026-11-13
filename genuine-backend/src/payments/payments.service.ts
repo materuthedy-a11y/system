@@ -7,6 +7,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { createHash } from 'crypto';
 import { PrismaService } from '../database/prisma.service';
+import { accessibleLocationIds, assertLocationAccess } from '../common/utils/location-access.util';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
@@ -113,6 +114,8 @@ export class PaymentsService {
               dto.referenceId,
               paymentDate,
             );
+            const linkedLocationId = reference.invoice?.locationId || reference.po?.locationId || reference.expense?.locationId;
+            if (linkedLocationId) await assertLocationAccess(this.prisma, businessId, userId, linkedLocationId);
             if (dto.referenceType === PaymentReferenceType.Other && !dto.referenceId.trim()) {
               throw new BadRequestException('referenceId is required for Other payments');
             }
@@ -339,9 +342,14 @@ export class PaymentsService {
     }
   }
 
-  async getPaymentById(businessId: string, id: string) {
+  async getPaymentById(businessId: string, id: string, userId?: string) {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const row = await this.prisma.payment.findFirst({
-      where: { id, businessId },
+      where: { id, businessId, ...(accessibleIds ? { OR: [
+        { invoice: { is: { locationId: { in: accessibleIds } } } },
+        { po: { is: { locationId: { in: accessibleIds } } } },
+        { expense: { is: { locationId: { in: accessibleIds } } } },
+      ] } : {}) },
       include: {
         paymentMethod: true,
         invoice: { include: { location: { select: { id: true, name: true } } } },
@@ -366,7 +374,8 @@ export class PaymentsService {
     };
   }
 
-  async getAllPayments(businessId: string, query: PaymentListQueryDto) {
+  async getAllPayments(businessId: string, userId: string, query: PaymentListQueryDto) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     if (query.locationId) {
       const location = await this.prisma.location.findFirst({
         where: { id: query.locationId, businessId },
@@ -393,6 +402,11 @@ export class PaymentsService {
       { invoice: { is: { locationId: query.locationId } } },
       { po: { is: { locationId: query.locationId } } },
       { expense: { is: { locationId: query.locationId } } },
+    ] });
+    if (accessibleIds) and.push({ OR: [
+      { invoice: { is: { locationId: { in: accessibleIds } } } },
+      { po: { is: { locationId: { in: accessibleIds } } } },
+      { expense: { is: { locationId: { in: accessibleIds } } } },
     ] });
     const search = query.search?.trim();
     if (search) and.push({ OR: [
@@ -1388,7 +1402,7 @@ export class PaymentsService {
         select: { purchaseOrderId: true, totalReturnAmount: true },
       }),
     ]);
-    const inventoryValuation = await this.inventory.getStockValuationReport(businessId, {});
+    const inventoryValuation = await this.inventory.getStockValuationReport(businessId, '', {});
     const inflows = roundMoney(
       payments
         .filter((p) => (p.direction || (p.invoiceId ? 'INFLOW' : 'OUTFLOW')) === 'INFLOW')

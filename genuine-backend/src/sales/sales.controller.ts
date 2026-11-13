@@ -45,8 +45,8 @@ export class SalesController {
     summary:
       'Get active customers, locations, salespeople and tax settings for sales filters and invoice entry',
   })
-  invoiceOptions(@Business() businessId: string) {
-    return this.salesService.getInvoiceOptions(businessId);
+  invoiceOptions(@Business() businessId: string, @UserId() userId: string) {
+    return this.salesService.getInvoiceOptions(businessId, userId);
   }
 
   @Post('invoices')
@@ -65,15 +65,15 @@ export class SalesController {
   @Get('invoices')
   @RequirePermission('sales.view')
   @ApiOperation({ summary: 'List invoices with filters and pagination' })
-  getInvoices(@Business() businessId: string, @Query() filter: SalesInvoiceFilterDto) {
-    return this.salesService.getAllSalesInvoices(businessId, filter);
+  getInvoices(@Business() businessId: string, @UserId() userId: string, @Query() filter: SalesInvoiceFilterDto) {
+    return this.salesService.getAllSalesInvoices(businessId, userId, filter);
   }
 
   @Get('invoices/:id')
   @RequirePermission('sales.view')
   @ApiResponse({ status: 200, type: SalesInvoiceResponseDto })
-  getInvoice(@Business() businessId: string, @Param('id') id: string) {
-    return this.salesService.getSalesInvoiceById(businessId, id);
+  getInvoice(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.salesService.getSalesInvoiceById(businessId, id, userId);
   }
 
   @Patch('invoices/:id')
@@ -147,14 +147,14 @@ export class SalesController {
 
   @Get('returns')
   @RequirePermission('sales.view')
-  getReturns(@Business() businessId: string, @Query() filter: SalesReturnFilterDto) {
-    return this.salesService.getAllSalesReturns(businessId, filter);
+  getReturns(@Business() businessId: string, @UserId() userId: string, @Query() filter: SalesReturnFilterDto) {
+    return this.salesService.getAllSalesReturns(businessId, userId, filter);
   }
 
   @Get('returns/:id')
   @RequirePermission('sales.view')
-  getReturn(@Business() businessId: string, @Param('id') id: string) {
-    return this.salesService.getSalesReturnById(businessId, id);
+  getReturn(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.salesService.getSalesReturnById(businessId, id, userId);
   }
 
   @Post('returns/:id/authorize')

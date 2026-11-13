@@ -7,6 +7,7 @@
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Length,
   Min,
   ValidateNested,
@@ -64,6 +65,11 @@ export class SalesReturnFilterDto {
   @IsOptional()
   @IsString()
   salesInvoiceId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  locationId?: string;
 
   @IsOptional()
   @IsIn(['DRAFT', 'AUTHORIZED', 'RECEIVED', 'COMPLETED', 'REJECTED'])

@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { accessibleLocationIds } from '../common/utils/location-access.util';
 import { LoggerService } from '../common/logger/logger.service';
 import {
   BusinessSetupDto,
@@ -1012,9 +1013,10 @@ export class BusinessService {
     };
   }
 
-  async getLocations(businessId: string, includeInactive = false): Promise<LocationResponseDto[]> {
+  async getLocations(businessId: string, userId: string, includeInactive = false): Promise<LocationResponseDto[]> {
+    const allowedLocationIds = await accessibleLocationIds(this.prisma, businessId, userId);
     const locations = await this.prisma.location.findMany({
-      where: { businessId, ...(includeInactive ? {} : { isActive: true }) },
+      where: { businessId, ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}), ...(includeInactive ? {} : { isActive: true }) },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -1032,9 +1034,10 @@ export class BusinessService {
     }));
   }
 
-  async getLocationOptions(businessId: string) {
+  async getLocationOptions(businessId: string, userId: string) {
+    const allowedLocationIds = await accessibleLocationIds(this.prisma, businessId, userId);
     return this.prisma.location.findMany({
-      where: { businessId, isActive: true },
+      where: { businessId, isActive: true, ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}) },
       orderBy: [{ name: 'asc' }, { code: 'asc' }],
       select: { id: true, name: true, code: true, type: true, isActive: true },
     });

@@ -44,20 +44,20 @@ export class InventoryController {
   @Get('balances')
   @RequirePermission('inventory.view')
   @ApiOperation({ summary: 'List current stock balances by product and location' })
-  balances(@Business() businessId: string, @Query() filter: StockBalanceQueryDto) {
-    return this.inventory.getStockBalances(businessId, filter);
+  balances(@Business() businessId: string, @UserId() userId: string, @Query() filter: StockBalanceQueryDto) {
+    return this.inventory.getStockBalances(businessId, userId, filter);
   }
 
   @Get('options')
   @RequirePermission('inventory.view')
-  options(@Business() businessId: string) {
-    return this.inventory.getInventoryOptions(businessId);
+  options(@Business() businessId: string, @UserId() userId: string) {
+    return this.inventory.getInventoryOptions(businessId, userId);
   }
 
   @Get('reorder-points')
   @RequirePermission('inventory.view')
-  reorderPoints(@Business() businessId: string, @Query() filter: ReorderPointQueryDto) {
-    return this.inventory.getReorderPoints(businessId, filter);
+  reorderPoints(@Business() businessId: string, @UserId() userId: string, @Query() filter: ReorderPointQueryDto) {
+    return this.inventory.getReorderPoints(businessId, userId, filter);
   }
 
   @Patch('reorder-points/:productId')
@@ -74,8 +74,8 @@ export class InventoryController {
 
   @Get('adjustments')
   @RequirePermission('inventory.view')
-  listAdjustments(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
-    return this.inventory.listStockAdjustments(businessId, filter);
+  listAdjustments(@Business() businessId: string, @UserId() userId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listStockAdjustments(businessId, userId, filter);
   }
 
   @Post('adjustments')
@@ -92,14 +92,14 @@ export class InventoryController {
 
   @Get('transfers')
   @RequirePermission('inventory.view')
-  listTransfers(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
-    return this.inventory.listStockTransfers(businessId, filter);
+  listTransfers(@Business() businessId: string, @UserId() userId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listStockTransfers(businessId, userId, filter);
   }
 
   @Get('adjustments/:id')
   @RequirePermission('inventory.view')
-  getAdjustment(@Business() businessId: string, @Param('id') id: string) {
-    return this.inventory.getStockAdjustmentById(businessId, id);
+  getAdjustment(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.inventory.getStockAdjustmentById(businessId, id, userId);
   }
 
   @Post('adjustments/:id/approve')
@@ -138,14 +138,14 @@ export class InventoryController {
 
   @Get('counts')
   @RequirePermission('inventory.view')
-  listCounts(@Business() businessId: string, @Query() filter: InventoryListQueryDto) {
-    return this.inventory.listPhysicalCounts(businessId, filter);
+  listCounts(@Business() businessId: string, @UserId() userId: string, @Query() filter: InventoryListQueryDto) {
+    return this.inventory.listPhysicalCounts(businessId, userId, filter);
   }
 
   @Get('transfers/:id')
   @RequirePermission('inventory.view')
-  getTransfer(@Business() businessId: string, @Param('id') id: string) {
-    return this.inventory.getStockTransferById(businessId, id);
+  getTransfer(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.inventory.getStockTransferById(businessId, id, userId);
   }
 
   @Post('transfers/:id/send')
@@ -180,8 +180,8 @@ export class InventoryController {
 
   @Get('counts/:id')
   @RequirePermission('inventory.view')
-  getCount(@Business() businessId: string, @Param('id') id: string) {
-    return this.inventory.getPhysicalCountById(businessId, id);
+  getCount(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.inventory.getPhysicalCountById(businessId, id, userId);
   }
 
   @Post('counts/:id/complete')
@@ -200,32 +200,32 @@ export class InventoryController {
 
   @Get('reports/valuation')
   @RequirePermission('inventory.view')
-  valuation(@Business() businessId: string, @Query() filter: StockValuationReportDto) {
-    return this.inventory.getStockValuationReport(businessId, filter);
+  valuation(@Business() businessId: string, @UserId() userId: string, @Query() filter: StockValuationReportDto) {
+    return this.inventory.getStockValuationReport(businessId, userId, filter);
   }
 
   @Get('reports/low-stock')
   @RequirePermission('inventory.view')
-  lowStock(@Business() businessId: string, @Query() filter: LowStockReportDto) {
-    return this.inventory.getLowStockReport(businessId, filter);
+  lowStock(@Business() businessId: string, @UserId() userId: string, @Query() filter: LowStockReportDto) {
+    return this.inventory.getLowStockReport(businessId, userId, filter);
   }
 
   @Get('reports/expiry')
   @RequirePermission('inventory.view')
-  expiry(@Business() businessId: string, @Query() filter: ExpiryReportDto) {
-    return this.inventory.getStockExpiryReport(businessId, filter);
+  expiry(@Business() businessId: string, @UserId() userId: string, @Query() filter: ExpiryReportDto) {
+    return this.inventory.getStockExpiryReport(businessId, userId, filter);
   }
 
   @Get('reports/ageing')
   @RequirePermission('inventory.view')
-  ageing(@Business() businessId: string, @Query() filter: StockAgeingReportDto) {
-    return this.inventory.getStockAgeingReport(businessId, filter);
+  ageing(@Business() businessId: string, @UserId() userId: string, @Query() filter: StockAgeingReportDto) {
+    return this.inventory.getStockAgeingReport(businessId, userId, filter);
   }
 
   @Get('reports/movements')
   @RequirePermission('inventory.view')
-  movements(@Business() businessId: string, @Query() filter: InventoryMovementReportDto) {
-    return this.inventory.getInventoryMovementReport(businessId, filter);
+  movements(@Business() businessId: string, @UserId() userId: string, @Query() filter: InventoryMovementReportDto) {
+    return this.inventory.getInventoryMovementReport(businessId, userId, filter);
   }
 
   @Get('dashboard')

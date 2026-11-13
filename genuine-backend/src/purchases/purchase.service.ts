@@ -11,6 +11,7 @@ import { PrismaService } from '../database/prisma.service';
 import { LoggerService } from '../common/logger/logger.service';
 import { assertAccountingPeriodOpen } from '../common/utils/accounting-period.util';
 import { normalizeDocumentPrefix } from '../common/utils/document-number.util';
+import { accessibleLocationIds, assertLocationAccess } from '../common/utils/location-access.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { NotificationEventType } from '../notifications/dto';
@@ -76,6 +77,7 @@ export class PurchaseService {
     userId: string,
     dto: CreatePurchaseOrderDto,
   ): Promise<PurchaseOrderResponseDto> {
+    await assertLocationAccess(this.prisma, businessId, userId, dto.locationId);
     const requestFingerprint = dto.idempotencyKey
       ? this._createPurchaseOrderFingerprint(dto)
       : undefined;
@@ -287,11 +289,13 @@ export class PurchaseService {
   /**
    * GET PURCHASE ORDER BY ID
    */
-  async getPurchaseOrderById(businessId: string, poId: string): Promise<PurchaseOrderResponseDto> {
+  async getPurchaseOrderById(businessId: string, poId: string, userId?: string): Promise<PurchaseOrderResponseDto> {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const po = await this.prisma.purchaseOrder.findFirst({
       where: {
         id: poId,
         businessId,
+        ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       },
       include: {
         supplier: true,
@@ -623,8 +627,10 @@ export class PurchaseService {
    */
   async getAllPurchaseOrders(
     businessId: string,
+    userId: string,
     filter: PurchaseOrderFilterDto,
   ): Promise<{ data: PurchaseOrderResponseDto[]; total: number; page: number; limit: number }> {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     if (filter.locationId) {
       const location = await this.prisma.location.findFirst({
         where: { id: filter.locationId, businessId },
@@ -661,7 +667,8 @@ export class PurchaseService {
 
     const where: Prisma.PurchaseOrderWhereInput = {
       businessId,
-      ...(filter.locationId && { locationId: filter.locationId }),
+      ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
+      ...(filter.locationId && { AND: [{ locationId: filter.locationId }] }),
       ...(filter.status && { status: filter.status }),
       ...(filter.supplierId && { supplierId: filter.supplierId }),
       ...(filter.search && {

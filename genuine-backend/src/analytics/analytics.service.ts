@@ -64,7 +64,7 @@ export class AnalyticsService {
       this.payments.getIncomeStatement(businessId, this.asFinancialFilter(previous)),
       this.payments.getFinancialSummary(businessId, { dateAs: range.endDate.toISOString() }),
       this.payments.getFinancialSummary(businessId, { dateAs: previous.endDate.toISOString() }),
-      this.inventory.getStockValuationReport(businessId, { page: 1, limit: 100 }),
+      this.inventory.getStockValuationReport(businessId, '', { page: 1, limit: 100 }),
       this.prisma.salesInvoice.findMany({
         where: {
           businessId,
@@ -458,8 +458,8 @@ export class AnalyticsService {
   async getInventoryDashboard(businessId: string, filter: DashboardFilterDto) {
     const range = await this.getDateRange(businessId, filter);
     const [valuation, lowStock, movements, products, stockRows] = await Promise.all([
-      this.inventory.getStockValuationReport(businessId, { page: 1, limit: 100 }),
-      this.inventory.getLowStockReport(businessId, { page: 1, limit: 10, type: 'BOTH' }),
+      this.inventory.getStockValuationReport(businessId, '', { page: 1, limit: 100 }),
+      this.inventory.getLowStockReport(businessId, '', { page: 1, limit: 10, type: 'BOTH' }),
       this.prisma.inventoryMovement.findMany({
         where: {
           businessId,
@@ -1536,7 +1536,7 @@ export class AnalyticsService {
       this.payments.getFinancialSummary(businessId, {
         dateAs: previousRange.endDate.toISOString(),
       }),
-      this.inventory.getStockValuationReport(businessId, { page: 1, limit: 100 }),
+      this.inventory.getStockValuationReport(businessId, '', { page: 1, limit: 100 }),
       this.prisma.salesInvoice.count({
         where: {
           businessId,

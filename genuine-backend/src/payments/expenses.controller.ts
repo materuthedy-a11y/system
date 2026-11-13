@@ -103,8 +103,8 @@ export class ExpensesController {
 
   @Get('options')
   @RequirePermission('expenses.view', 'expenses.create', 'expenses.pay')
-  options(@Business() businessId: string) {
-    return this.expenses.getExpenseOptions(businessId);
+  options(@Business() businessId: string, @UserId() userId: string) {
+    return this.expenses.getExpenseOptions(businessId, userId);
   }
 
   @Post(['', 'create'])
@@ -116,14 +116,14 @@ export class ExpensesController {
 
   @Get()
   @RequirePermission('expenses.view')
-  list(@Business() businessId: string, @Query() query: ExpenseFilterDto) {
-    return this.expenses.listExpenses(businessId, query);
+  list(@Business() businessId: string, @UserId() userId: string, @Query() query: ExpenseFilterDto) {
+    return this.expenses.listExpenses(businessId, userId, query);
   }
 
   @Get(':id')
   @RequirePermission('expenses.view')
-  get(@Business() businessId: string, @Param('id') id: string) {
-    return this.expenses.getExpenseById(businessId, id);
+  get(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.expenses.getExpenseById(businessId, id, userId);
   }
 
   @Patch(':id')

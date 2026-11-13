@@ -232,6 +232,7 @@ export interface SalesInvoiceFilters {
 export interface SalesReturnFilters {
   search?: string;
   salesInvoiceId?: string;
+  locationId?: string;
   status?: ReturnStatus;
   page?: number;
   limit?: number;

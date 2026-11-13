@@ -46,8 +46,8 @@ export class PaymentsController {
 
   @Get()
   @RequirePermission('payments.view')
-  listPayments(@Business() businessId: string, @Query() query: PaymentListQueryDto) {
-    return this.payments.getAllPayments(businessId, query);
+  listPayments(@Business() businessId: string, @UserId() userId: string, @Query() query: PaymentListQueryDto) {
+    return this.payments.getAllPayments(businessId, userId, query);
   }
 
   @Get('methods')
@@ -168,7 +168,7 @@ export class PaymentsController {
   // /payments/expenses. Prisma IDs in this API are CUIDs or UUIDs.
   @Get(':id([A-Za-z0-9-]{20,36})')
   @RequirePermission('payments.view')
-  getPayment(@Business() businessId: string, @Param('id') id: string) {
-    return this.payments.getPaymentById(businessId, id);
+  getPayment(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.payments.getPaymentById(businessId, id, userId);
   }
 }

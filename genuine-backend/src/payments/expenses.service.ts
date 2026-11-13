@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ExpenseCategory } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
+import { accessibleLocationIds, assertLocationAccess } from '../common/utils/location-access.util';
 import {
   CreateExpenseDto,
   CreateExpenseItemDto,
@@ -134,6 +135,7 @@ export class ExpensesService {
   }
 
   async createExpense(businessId: string, userId: string, dto: CreateExpenseDto) {
+    await assertLocationAccess(this.prisma, businessId, userId, dto.locationId);
     if (dto.isPaid)
       throw new BadRequestException('Expenses must be approved and paid through the workflow');
     const expenseDate = dto.expenseDate ? new Date(dto.expenseDate) : new Date();
@@ -199,9 +201,10 @@ export class ExpensesService {
     return this.getExpenseById(businessId, id);
   }
 
-  async getExpenseById(businessId: string, id: string) {
+  async getExpenseById(businessId: string, id: string, userId?: string) {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const row = await this.prisma.expense.findFirst({
-      where: { id, businessId },
+      where: { id, businessId, ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}) },
       include: this.expenseInclude(),
     });
     if (!row) throw new NotFoundException('Expense not found');
@@ -213,7 +216,8 @@ export class ExpensesService {
     return { ...this.mapExpense(row), paidAmount, balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)) };
   }
 
-  async getExpenseOptions(businessId: string) {
+  async getExpenseOptions(businessId: string, userId: string) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     const [categories, locations, suppliers, paymentMethods, business] = await Promise.all([
       this.prisma.expenseCategory.findMany({
         where: { businessId, isActive: true },
@@ -221,7 +225,7 @@ export class ExpensesService {
         select: { id: true, name: true, code: true, budgetLimit: true, budgetPeriod: true },
       }),
       this.prisma.location.findMany({
-        where: { businessId, isActive: true },
+        where: { businessId, isActive: true, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
         orderBy: { name: 'asc' },
         select: { id: true, name: true, code: true },
       }),
@@ -240,7 +244,8 @@ export class ExpensesService {
     return { categories, locations, suppliers, paymentMethods, currency: business?.currency || 'TZS' };
   }
 
-  async listExpenses(businessId: string, filter: ExpenseFilterDto) {
+  async listExpenses(businessId: string, userId: string, filter: ExpenseFilterDto) {
+    const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
     if (filter.locationId) {
       const location = await this.prisma.location.findFirst({
         where: { id: filter.locationId, businessId },
@@ -257,6 +262,7 @@ export class ExpensesService {
     const search = filter.search?.trim();
     const where: Prisma.ExpenseWhereInput = {
       businessId,
+      ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       AND: [
         ...(filter.categoryId ? [{ OR: [
           { categoryId: filter.categoryId },
@@ -272,7 +278,7 @@ export class ExpensesService {
       ],
       ...(filter.status && { status: filter.status }),
       ...(filter.supplierId && { supplierId: filter.supplierId }),
-      ...(filter.locationId && { locationId: filter.locationId }),
+      ...(filter.locationId && { AND: [{ locationId: filter.locationId }] }),
       ...(filter.fromDate || filter.toDate
         ? {
             expenseDate: {

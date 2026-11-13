@@ -22,6 +22,10 @@ export class CreateLocationDto {
   @IsString()
   description?: string;
 
+  @IsOptional()
+  @IsString()
+  managerId?: string | null;
+
 }
 
 export class UpdateLocationDto {
@@ -48,6 +52,10 @@ export class UpdateLocationDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  managerId?: string | null;
 }
 
 export class LocationResponseDto {
@@ -58,6 +66,7 @@ export class LocationResponseDto {
   type: string;
   address?: string | null;
   description?: string;
+  managerId?: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

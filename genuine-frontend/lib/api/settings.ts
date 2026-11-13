@@ -14,7 +14,7 @@ export interface BusinessSettings {
   invoicePrefix: string; poPrefix: string; grnPrefix: string; receiptPrefix: string;
   dateFormat: string; timeFormat: string; weekStartsOn: string; lowStockThreshold: number; theme: string;
 }
-export interface Location { id: string; name: string; code: string; type: string; address?: string | null; description?: string | null; isActive: boolean; }
+export interface Location { id: string; name: string; code: string; type: string; address?: string | null; description?: string | null; managerId?: string | null; isActive: boolean; }
 export interface PaymentMethod { id: string; name: string; description?: string | null; code?: string | null; methodType: string; requiresReference: boolean; bankDetails?: string | null; isActive: boolean; }
 export interface ExpenseCategory { id: string; name: string; code: string; description?: string | null; budgetLimit?: number | null; budgetPeriod?: string | null; isActive: boolean; }
 export interface TaxRate { id: string; name: string; code: string; rate: number; description?: string | null; appliesTo: string; isDefault: boolean; isActive: boolean; }

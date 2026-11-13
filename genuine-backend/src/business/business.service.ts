@@ -985,6 +985,15 @@ export class BusinessService {
       throw new ConflictException(`Location with code ${code} already exists`);
     }
 
+    const managerId = dto.managerId || userId;
+    const manager = await this.prisma.user.findFirst({
+      where: { id: managerId, businessId, isActive: true },
+      select: { id: true },
+    });
+    if (!manager) {
+      throw new BadRequestException('Choose an active team member from this business as the location manager.');
+    }
+
     const location = await this.prisma.location.create({
       data: {
         id: uuid(),
@@ -994,7 +1003,7 @@ export class BusinessService {
         type,
         address: dto.address,
         description: dto.description,
-        managerId: userId,
+        managerId,
         isActive: true,
       },
     });
@@ -1007,6 +1016,7 @@ export class BusinessService {
       type: location.type,
       address: location.address,
       description: location.description,
+      managerId: location.managerId,
       isActive: location.isActive,
       createdAt: location.createdAt,
       updatedAt: location.updatedAt,
@@ -1028,6 +1038,7 @@ export class BusinessService {
       type: loc.type,
       address: loc.address,
       description: loc.description,
+      managerId: loc.managerId,
       isActive: loc.isActive,
       createdAt: loc.createdAt,
       updatedAt: loc.updatedAt,
@@ -1077,6 +1088,16 @@ export class BusinessService {
       throw new NotFoundException('Location not found');
     }
 
+    if (dto.managerId) {
+      const manager = await this.prisma.user.findFirst({
+        where: { id: dto.managerId, businessId, isActive: true },
+        select: { id: true },
+      });
+      if (!manager) {
+        throw new BadRequestException('Choose an active team member from this business as the location manager.');
+      }
+    }
+
     if (dto.code && dto.code !== location.code) {
       const existing = await this.prisma.location.findFirst({
         where: {
@@ -1099,6 +1120,7 @@ export class BusinessService {
         ...(dto.address !== undefined && { address: dto.address || null }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        ...(dto.managerId !== undefined && { managerId: dto.managerId || null }),
       },
     });
 
@@ -1123,6 +1145,7 @@ export class BusinessService {
       type: updated.type,
       address: updated.address,
       description: updated.description,
+      managerId: updated.managerId,
       isActive: updated.isActive,
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,

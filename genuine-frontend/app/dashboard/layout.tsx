@@ -49,6 +49,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const [avatarBusy, setAvatarBusy] = useState(false);
   const activeLocation = useWorkspaceStore((state) => state.activeLocation);
   const setActiveLocation = useWorkspaceStore((state) => state.setActiveLocation);
+  const clearActiveLocation = useWorkspaceStore((state) => state.clearActiveLocation);
   const businessBrand = useBusinessProfileStore((state) => state.businessId === user?.businessId ? state.brand : null);
   const setBusinessProfile = useBusinessProfileStore((state) => state.setProfile);
   const setBusinessBrand = useBusinessProfileStore((state) => state.setBrand);
@@ -95,9 +96,16 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => { setWorkspaceLogoFailed(false); }, [businessBrand?.logoUrl]);
 
   useEffect(() => {
-    if (!user?.businessId || !user.id) return;
+    if (!user?.businessId || !user.id) {
+      setWorkspaceLocations([]);
+      clearActiveLocation();
+      setLocationsLoading(false);
+      return;
+    }
     let live = true;
     setLocationsLoading(true);
+    // Never carry a previous user's/business's in-memory location into this session.
+    clearActiveLocation();
     workspaceAPI.locations().then((locations) => {
       if (!live) return;
       setWorkspaceLocations(locations);
@@ -110,7 +118,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       if (live) setLocationsLoading(false);
     });
     return () => { live = false; };
-  }, [user?.businessId, user?.id, setActiveLocation]);
+  }, [user?.businessId, user?.id, setActiveLocation, clearActiveLocation]);
 
   useEffect(() => { setLocationMenuOpen(false); setPendingLocation(null); }, [pathname]);
 

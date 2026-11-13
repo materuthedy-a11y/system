@@ -2,7 +2,7 @@
 
 **Code state:** Implementation is present for the items marked `[x]` under implementation. **Browser/device acceptance has not started.** No acceptance check in this file is green until it is observed with the application and recorded below.
 
-**Order:** Finish the user's currently paused Phase 25 acceptance, then Phase 24, then Phase 23 as previously agreed. After those, test Phases 27, 28, 29, 30, 31 and 32 in sequence. Phase 28's detailed combined checklist is [PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md](PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md). Phase 30's detailed PWA matrix is [PHASE30-PWA-CHECKLIST.md](genuine-frontend/docs/PHASE30-PWA-CHECKLIST.md). Phase 31's role and authorization matrix is [PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md). Phase 32's audit trail and business history matrix is [PHASE32-AUDIT-TRAIL-CHECKLIST.md](PHASE32-AUDIT-TRAIL-CHECKLIST.md).
+**Order:** Finish the user's currently paused Phase 25 acceptance, then Phase 23, then Phase 24 as directed by the user. After those, test Phases 27, 28, 29, 30, 31 and 32 in sequence. Phase 28's detailed combined checklist is [PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md](PHASE28-EXPENSES-PAYMENTS-FINANCE-CHECKLIST.md). Phase 30's detailed PWA matrix is [PHASE30-PWA-CHECKLIST.md](genuine-frontend/docs/PHASE30-PWA-CHECKLIST.md). Phase 31's role and authorization matrix is [PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md](PHASE31-PERMISSIONS-AUTHORIZATION-CHECKLIST.md). Phase 32's audit trail and business history matrix is [PHASE32-AUDIT-TRAIL-CHECKLIST.md](PHASE32-AUDIT-TRAIL-CHECKLIST.md).
 
 ## Rules for acceptance
 

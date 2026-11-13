@@ -157,7 +157,7 @@ export class InventoryService {
     const search = filter.search?.trim();
     const where: Prisma.StockAdjustmentWhereInput = {
       businessId,
-      ...(accessibleIds ? { items: { some: { locationId: { in: accessibleIds } } } } : {}),
+      ...(accessibleIds ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } } : {}),
       ...(filter.status ? { status: filter.status } : {}),
       ...(filter.locationId ? { AND: [{ items: { some: { locationId: filter.locationId } } }] } : {}),
       ...(search ? { OR: [
@@ -318,7 +318,13 @@ export class InventoryService {
   async getStockAdjustmentById(businessId: string, id: string, userId?: string) {
     const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
     const result = await this.prisma.stockAdjustment.findFirst({
-      where: { id, businessId, ...(accessibleIds ? { items: { some: { locationId: { in: accessibleIds } } } } : {}) },
+      where: {
+        id,
+        businessId,
+        ...(accessibleIds
+          ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } }
+          : {}),
+      },
       include: { items: { include: { product: true, location: true } } },
     });
     if (!result) throw new NotFoundException('Stock adjustment not found');

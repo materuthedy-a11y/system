@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { AuthField, AuthFrame, FormError } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
@@ -13,20 +13,28 @@ export default function LoginPage() {
   const login = useAuthStore((state) => state.login);
   const authStatus = useAuthStore((state) => state.status);
   const initialize = useAuthStore((state) => state.initialize);
+  const initializationStarted = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (authStatus === 'loading') void initialize();
-    if (authStatus === 'authenticated') router.replace('/dashboard');
-  }, [authStatus, initialize, router]);
+    if (!initializationStarted.current) {
+      initializationStarted.current = true;
+      if (useAuthStore.getState().status === 'loading') void initialize();
+    }
+  }, [initialize]);
+
+  useEffect(() => {
+    if (authStatus === 'authenticated' && !isSubmitting && !isRedirecting) router.replace('/dashboard');
+  }, [authStatus, isSubmitting, isRedirecting, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmitting || authStatus === 'authenticated') return;
+    if (isSubmitting || isRedirecting || authStatus === 'loading' || authStatus === 'authenticated') return;
     setError('');
     if (!email.trim() || !password) {
       setError('Enter both your email address and password.');
@@ -45,7 +53,8 @@ export default function LoginPage() {
         // Login remains available if browser storage is disabled.
       }
       const requestedPath = new URLSearchParams(window.location.search).get('next');
-      const safePath = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/dashboard';
+      const safePath = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') && requestedPath !== '/login' ? requestedPath : '/dashboard';
+      setIsRedirecting(true);
       router.replace(safePath);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'We could not sign you in. Please try again.');
@@ -77,8 +86,8 @@ export default function LoginPage() {
         </div>
         <button
           type="submit"
-          disabled={isSubmitting}
-          aria-busy={isSubmitting}
+          disabled={isSubmitting || isRedirecting || authStatus === 'loading'}
+          aria-busy={isSubmitting || isRedirecting}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#20211f] px-5 text-sm font-semibold text-white shadow-lg shadow-[#20211f]/15 transition hover:bg-[#363a33] focus:outline-none focus:ring-4 focus:ring-[#20211f]/20 disabled:cursor-wait disabled:opacity-70"
         >
           Sign in <span aria-hidden="true">→</span>
@@ -87,7 +96,7 @@ export default function LoginPage() {
       </form>
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-white/70"><LockKeyhole size={14} /> Your sign-in is encrypted and protected.</div>
     </AuthFrame>
-    {isSubmitting ? <AuthLoadingOverlay message="Signing you in…" /> : null}
+    {isSubmitting || isRedirecting ? <AuthLoadingOverlay message={isRedirecting ? 'Opening your workspace…' : 'Signing you in…'} /> : null}
     </>
   );
 }

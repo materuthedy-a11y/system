@@ -89,7 +89,9 @@ export default function DashboardPage() {
     if (!user || canViewReports) return;
     const destination = permissions.includes('sales.view') || permissions.includes('sales.create') ? (permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/sales/invoices/new')
       : permissions.includes('products.view') || permissions.includes('products.create') ? (permissions.includes('products.view') ? '/dashboard/products' : '/dashboard/products/new')
-      : permissions.includes('inventory.view') || permissions.includes('inventory.adjust') || permissions.includes('inventory.transfer') ? '/dashboard/inventory'
+      : permissions.includes('inventory.view') ? '/dashboard/inventory'
+      : permissions.includes('inventory.adjust') ? '/dashboard/inventory/adjustments/new'
+      : permissions.includes('inventory.transfer') ? '/dashboard/inventory/transfers/new'
       : permissions.includes('purchases.view') || permissions.includes('purchases.create') ? (permissions.includes('purchases.view') ? '/dashboard/purchases' : '/dashboard/purchases/orders/new')
       : permissions.includes('customers.view') || permissions.includes('customers.create') ? (permissions.includes('customers.view') ? '/dashboard/customers' : '/dashboard/customers/new')
       : permissions.includes('suppliers.view') || permissions.includes('suppliers.create') ? (permissions.includes('suppliers.view') ? '/dashboard/suppliers' : '/dashboard/suppliers/new')

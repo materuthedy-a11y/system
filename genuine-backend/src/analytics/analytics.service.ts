@@ -25,7 +25,7 @@ const RECOGNIZED_RETURN_STATUSES = ['RECEIVED', 'COMPLETED'];
 const RECOGNIZED_EXPENSE_STATUSES = ['APPROVED', 'PAID'];
 const ACTIVE_PAYMENT_STATUSES = ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'];
 
-type DateRange = { startDate: Date; endDate: Date; periodName: string };
+type DateRange = { startDate: Date; endDate: Date; periodName: string; weekStartsOn?: string };
 type ReportContext = { range: DateRange; currency: string };
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -235,6 +235,26 @@ export class AnalyticsService {
         inventoryValuationTiming:
           'Current stock snapshot at inventoryAsOf; selected date range applies to period flows, not historical inventory valuation.',
       },
+    };
+  }
+
+  async getReportSettings(businessId: string) {
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: {
+        currency: true,
+        timezone: true,
+        financialYear: true,
+        settings: { select: { dateFormat: true, weekStartsOn: true } },
+      },
+    });
+    if (!business) throw new NotFoundException('Business not found');
+    return {
+      currency: business.currency,
+      timezone: business.timezone,
+      financialYear: business.financialYear,
+      dateFormat: business.settings?.dateFormat ?? 'DD/MM/YYYY',
+      weekStartsOn: business.settings?.weekStartsOn ?? 'MONDAY',
     };
   }
 
@@ -576,12 +596,15 @@ export class AnalyticsService {
 
   async analyzeTrends(businessId: string, filter: TrendAnalysisFilterDto) {
     const groupBy = filter.groupBy || 'MONTHLY';
-    const range = await this.trendRange(businessId, filter, groupBy, filter.periods || 12);
+    const [range, business] = await Promise.all([
+      this.trendRange(businessId, filter, groupBy, filter.periods || 12),
+      this.businessInfo(businessId),
+    ]);
     const points = await this.series(businessId, filter.metric, range, groupBy);
     const values = points.map((point) => point.value);
     const regression = this.regression(values);
     const projection = Array.from({ length: 3 }, (_, index) => {
-      const date = this.addBucket(this.floorBucket(range.endDate, groupBy), groupBy, index + 1);
+      const date = this.addBucket(this.floorBucket(range.endDate, groupBy, range.weekStartsOn), groupBy, index + 1);
       return {
         period: this.bucketLabel(date, groupBy),
         date,
@@ -594,6 +617,7 @@ export class AnalyticsService {
       : 0;
     return {
       metric: filter.metric,
+      currency: business.currency,
       unit:
         filter.metric === 'SALES_QUANTITY' ||
         filter.metric === 'CUSTOMER_COUNT' ||
@@ -617,7 +641,10 @@ export class AnalyticsService {
 
   async forecastMetric(businessId: string, filter: ForecastFilterDto) {
     const horizon = filter.periods || 6;
-    const range = await this.trendRange(businessId, filter, 'MONTHLY', 24);
+    const [range, business] = await Promise.all([
+      this.trendRange(businessId, filter, 'MONTHLY', 24),
+      this.businessInfo(businessId),
+    ]);
     const points = await this.series(businessId, filter.metric, range, 'MONTHLY');
     const values = points.map((point) => point.value);
     if (values.length < 3) {
@@ -676,6 +703,7 @@ export class AnalyticsService {
     const lastPredicted = forecast[forecast.length - 1]?.predicted ?? lastActualValue;
     return {
       metric: filter.metric,
+      currency: business.currency,
       method,
       startDate: range.startDate,
       endDate: range.endDate,
@@ -691,7 +719,10 @@ export class AnalyticsService {
   }
 
   async getProductPerformance(businessId: string, filter: ProductPerformanceFilterDto) {
-    const range = await this.getDateRange(businessId, filter);
+    const [range, business] = await Promise.all([
+      this.getDateRange(businessId, filter),
+      this.businessInfo(businessId),
+    ]);
     if (filter.categoryId) {
       const category = await this.prisma.category.findFirst({
         where: { id: filter.categoryId, businessId },
@@ -872,11 +903,14 @@ export class AnalyticsService {
         Number(b[sortKey[sortBy]]) - Number(a[sortKey[sortBy]]) ||
         a.productName.localeCompare(b.productName),
     );
-    return this.paginate(results, filter.page || 1, filter.limit || 20);
+    return { ...this.paginate(results, filter.page || 1, filter.limit || 20), currency: business.currency };
   }
 
   async getCustomerAnalytics(businessId: string, filter: CustomerAnalyticsFilterDto) {
-    const range = await this.getDateRange(businessId, filter);
+    const [range, business] = await Promise.all([
+      this.getDateRange(businessId, filter),
+      this.businessInfo(businessId),
+    ]);
     const customers = await this.prisma.customer.findMany({
       where: { businessId, isActive: true },
     });
@@ -983,11 +1017,14 @@ export class AnalyticsService {
     };
     const sort = field[filter.segmentBy || 'REVENUE'];
     segments.sort((a, b) => sort(b) - sort(a) || a.customerName.localeCompare(b.customerName));
-    return this.paginate(segments, filter.page || 1, filter.limit || 20);
+    return { ...this.paginate(segments, filter.page || 1, filter.limit || 20), currency: business.currency };
   }
 
   async getSupplierAnalytics(businessId: string, filter: SupplierAnalyticsFilterDto) {
-    const range = await this.getDateRange(businessId, filter);
+    const [range, business] = await Promise.all([
+      this.getDateRange(businessId, filter),
+      this.businessInfo(businessId),
+    ]);
     const suppliers = await this.prisma.supplier.findMany({
       where: { businessId, isActive: true },
       include: {
@@ -1077,7 +1114,7 @@ export class AnalyticsService {
           (b.acceptedPurchaseValue || 0) - (a.acceptedPurchaseValue || 0) ||
           a.supplierName.localeCompare(b.supplierName),
       );
-    return this.paginate(results, filter.page || 1, filter.limit || 20);
+    return { ...this.paginate(results, filter.page || 1, filter.limit || 20), currency: business.currency };
   }
 
   async getSalesByChannel(businessId: string, filter: SalesByChannelFilterDto) {
@@ -1222,7 +1259,7 @@ export class AnalyticsService {
       case 'CASH_FLOW':
         report = await this.payments.getCashFlowReport(
           businessId,
-          this.asFinancialFilter(await this.getDateRange(businessId, filter)),
+          { ...this.asFinancialFilter(await this.getDateRange(businessId, filter)), groupBy: filter.groupBy },
         );
         break;
       case 'RECEIVABLES_AGEING': {
@@ -1245,6 +1282,7 @@ export class AnalyticsService {
       case 'PRODUCT_PERFORMANCE': {
         const productReport = await this.getProductPerformance(businessId, {
           ...common,
+          sortBy: filter.sortBy,
           page: 1,
           limit: 10000,
         });
@@ -1258,6 +1296,7 @@ export class AnalyticsService {
       case 'CUSTOMER_ANALYTICS': {
         const customerReport = await this.getCustomerAnalytics(businessId, {
           ...common,
+          segmentBy: filter.segmentBy,
           page: 1,
           limit: 10000,
         });
@@ -1395,6 +1434,7 @@ export class AnalyticsService {
   }
 
   private async getDateRange(businessId: string, filter: PeriodFilterDto): Promise<DateRange> {
+    const reportSettings = await this.getReportSettings(businessId);
     if (filter.periodId && (filter.dateFrom || filter.dateTo)) {
       throw new BadRequestException('Use periodId or dateFrom/dateTo, not both');
     }
@@ -1403,7 +1443,7 @@ export class AnalyticsService {
         where: { id: filter.periodId, businessId },
       });
       if (!period) throw new NotFoundException('Accounting period not found');
-      return { startDate: period.startDate, endDate: period.endDate, periodName: period.period };
+      return { startDate: period.startDate, endDate: period.endDate, periodName: period.period, weekStartsOn: reportSettings.weekStartsOn };
     }
     const now = new Date();
     const startDate = filter.dateFrom
@@ -1420,6 +1460,7 @@ export class AnalyticsService {
     return {
       startDate,
       endDate,
+      weekStartsOn: reportSettings.weekStartsOn,
       periodName: `${startDate.toISOString().slice(0, 10)} to ${endDate.toISOString().slice(0, 10)}`,
     };
   }
@@ -1433,11 +1474,13 @@ export class AnalyticsService {
     if (filter.periodId || filter.dateFrom || filter.dateTo)
       return this.getDateRange(businessId, filter);
     const end = new Date();
-    const currentBucket = this.floorBucket(end, groupBy);
+    const { weekStartsOn } = await this.getReportSettings(businessId);
+    const currentBucket = this.floorBucket(end, groupBy, weekStartsOn);
     const start = this.addBucket(currentBucket, groupBy, -(defaultPeriods - 1));
     return {
       startDate: start,
       endDate: end,
+      weekStartsOn,
       periodName: `${this.bucketLabel(start, groupBy)} to ${this.bucketLabel(currentBucket, groupBy)}`,
     };
   }
@@ -1742,7 +1785,7 @@ export class AnalyticsService {
         : Promise.resolve([]),
     ]);
     const values = new Map(buckets.map((bucket) => [this.bucketLabel(bucket.start, groupBy), 0]));
-    const bucketFor = (date: Date) => this.bucketLabel(this.floorBucket(date, groupBy), groupBy);
+    const bucketFor = (date: Date) => this.bucketLabel(this.floorBucket(date, groupBy, range.weekStartsOn), groupBy);
     if (metric === 'REVENUE' || metric === 'PROFIT' || metric === 'CUSTOMER_COUNT') {
       for (const invoice of invoices) {
         if (!invoice.issuedDate) continue;
@@ -1841,8 +1884,8 @@ export class AnalyticsService {
 
   private buckets(range: DateRange, groupBy: AnalyticsGroup) {
     const buckets: Array<{ start: Date; end: Date }> = [];
-    let current = this.floorBucket(range.startDate, groupBy);
-    const final = this.floorBucket(range.endDate, groupBy);
+    let current = this.floorBucket(range.startDate, groupBy, range.weekStartsOn);
+    const final = this.floorBucket(range.endDate, groupBy, range.weekStartsOn);
     while (current <= final && buckets.length < 120) {
       const next = this.addBucket(current, groupBy, 1);
       buckets.push({ start: current, end: new Date(next.getTime() - 1) });
@@ -1851,11 +1894,12 @@ export class AnalyticsService {
     return buckets;
   }
 
-  private floorBucket(date: Date, groupBy: AnalyticsGroup) {
+  private floorBucket(date: Date, groupBy: AnalyticsGroup, weekStartsOn = 'MONDAY') {
     const bucket = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     if (groupBy === 'DAILY') return bucket;
     if (groupBy === 'WEEKLY') {
-      bucket.setUTCDate(bucket.getUTCDate() - ((bucket.getUTCDay() + 6) % 7));
+      const startDay = weekStartsOn === 'SUNDAY' ? 0 : 1;
+      bucket.setUTCDate(bucket.getUTCDate() - ((bucket.getUTCDay() - startDay + 7) % 7));
       return bucket;
     }
     if (groupBy === 'MONTHLY')
@@ -2147,17 +2191,86 @@ export class AnalyticsService {
   }
 
   private toCsv(report: unknown) {
-    const flattened = this.flattenRows(report);
-    const headers = [...new Set(flattened.flatMap((row) => Object.keys(row)))];
     const cell = (raw: unknown) => {
-      let value = String(raw ?? '');
+      let value = this.exportValue(raw);
       if (typeof raw !== 'number' && /^[=+@\-\t\r]/.test(value)) value = `'${value}`;
       return `"${value.replace(/"/g, '""')}"`;
     };
-    return [
-      headers.map(cell).join(','),
-      ...flattened.map((row) => headers.map((header) => cell(row[header])).join(',')),
-    ].join('\r\n');
+    const lines: string[] = [];
+    for (const section of this.exportSections(report)) {
+      lines.push(cell(section.title));
+      lines.push(section.headers.map((header) => cell(this.exportLabel(header))).join(','));
+      for (const row of section.rows)
+        lines.push(section.headers.map((header) => cell(row[header])).join(','));
+      lines.push('');
+    }
+    return `\uFEFF${lines.join('\r\n')}`;
+  }
+
+  private exportLabel(value: string) {
+    return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^./, (letter) => letter.toUpperCase());
+  }
+
+  private exportValue(value: unknown): string {
+    if (value === null || value === undefined || value === '') return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'object') return JSON.stringify(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return String(value).replace(/_/g, ' ');
+  }
+
+  private exportSections(report: unknown) {
+    const sections: Array<{ title: string; headers: string[]; rows: Array<Record<string, unknown>> }> = [];
+    const details: Array<Record<string, unknown>> = [];
+    const metrics: Array<Record<string, unknown>> = [];
+    const addRows = (title: string, values: unknown[]) => {
+      const rows = values.map((value) => {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return { Value: value };
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [this.exportLabel(key), item && typeof item === 'object' ? this.exportValue(item) : item]));
+      });
+      const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+      sections.push({ title: this.exportLabel(title), headers: headers.length ? headers : ['Value'], rows });
+    };
+    const visit = (key: string, value: unknown, path: string[] = []) => {
+      if (Array.isArray(value)) {
+        if (value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) addRows([...path, key].filter(Boolean).join(' '), value);
+        else addRows([...path, key].filter(Boolean).join(' '), value.map((item, index) => ({ Index: index + 1, Value: item })));
+        return;
+      }
+      if (value && typeof value === 'object' && !(value instanceof Date)) {
+        const record = value as Record<string, unknown>;
+        if ('value' in record && ('label' in record || 'name' in record)) {
+          metrics.push({ Metric: record.label ?? record.name ?? this.exportLabel(key), Value: record.value, Unit: record.unit ?? '', Trend: record.trend ?? '', Status: record.status ?? '' });
+          return;
+        }
+        const labels = Array.isArray(record.labels) ? record.labels : Array.isArray(record.periods) ? record.periods : null;
+        if (labels) {
+          const series: Record<string, unknown[]> = {};
+          for (const [seriesKey, seriesValue] of Object.entries(record)) {
+            if (seriesKey === 'labels' || seriesKey === 'periods') continue;
+            if (Array.isArray(seriesValue) && seriesValue.length === labels.length) series[seriesKey] = seriesValue;
+            else if (Array.isArray(seriesValue) && seriesValue.every((item) => item && typeof item === 'object' && Array.isArray((item as any).data))) {
+              for (const item of seriesValue as Array<{ label?: string; name?: string; data: unknown[] }>) series[String(item.label ?? item.name ?? 'Series')] = item.data;
+            }
+          }
+          const columns = Object.keys(series);
+          if (columns.length) {
+            addRows([...path, key].filter(Boolean).join(' '), labels.map((label, index) => ({ Period: label, ...Object.fromEntries(columns.map((column) => [this.exportLabel(column), series[column][index]])) })));
+            return;
+          }
+        }
+        for (const [childKey, child] of Object.entries(record)) visit(childKey, child, [...path, key].filter(Boolean));
+        return;
+      }
+      details.push({ Field: [...path, key].filter(Boolean).map((part) => this.exportLabel(part)).join(' · '), Value: value });
+    };
+    if (Array.isArray(report)) addRows('Report records', report);
+    else if (report && typeof report === 'object') for (const [key, value] of Object.entries(report)) visit(key, value);
+    else details.push({ Field: 'Value', Value: report });
+    if (details.length) sections.unshift({ title: 'Report details', headers: [...new Set(details.flatMap((row) => Object.keys(row)))], rows: details });
+    if (metrics.length) sections.unshift({ title: 'Key figures', headers: [...new Set(metrics.flatMap((row) => Object.keys(row)))], rows: metrics });
+    if (!sections.length) sections.push({ title: 'Report records', headers: ['Status'], rows: [{ Status: 'No data for the selected period' }] });
+    return sections;
   }
 
   private flattenRows(report: unknown): Array<Record<string, unknown>> {
@@ -2184,12 +2297,13 @@ export class AnalyticsService {
   }
 
   private toXlsx(report: unknown): Buffer {
-    const rows = this.flattenRows(report);
-    const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
-    const allRows: unknown[][] = [
-      headers,
-      ...rows.map((row) => headers.map((header) => row[header] ?? '')),
-    ];
+    const allRows: Array<{ values: unknown[]; style: number }> = [];
+    for (const section of this.exportSections(report)) {
+      allRows.push({ values: [section.title], style: 1 });
+      allRows.push({ values: section.headers.map((header) => this.exportLabel(header)), style: 2 });
+      for (const row of section.rows) allRows.push({ values: section.headers.map((header) => row[header] ?? ''), style: 0 });
+      allRows.push({ values: [], style: 0 });
+    }
     const columnName = (index: number) => {
       let name = '';
       for (let value = index + 1; value > 0; value = Math.floor((value - 1) / 26)) {
@@ -2198,7 +2312,7 @@ export class AnalyticsService {
       return name;
     };
     const xmlEscape = (value: string) =>
-      value.replace(
+      value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(
         /[<>&"']/g,
         (char) =>
           ({
@@ -2210,30 +2324,30 @@ export class AnalyticsService {
           })[char]!,
       );
     const sheetRows = allRows
-      .map((row, rowIndex) => {
-        const cells = row
+      .map(({ values, style }, rowIndex) => {
+        const cells = values
           .map((raw, colIndex) => {
             const address = `${columnName(colIndex)}${rowIndex + 1}`;
             if (typeof raw === 'number' && Number.isFinite(raw))
-              return `<c r="${address}"><v>${raw}</v></c>`;
+              return `<c r="${address}" s="${style === 2 ? 2 : 0}"><v>${raw}</v></c>`;
             if (typeof raw === 'boolean')
-              return `<c r="${address}" t="b"><v>${raw ? 1 : 0}</v></c>`;
+              return `<c r="${address}" t="b" s="${style === 2 ? 2 : 0}"><v>${raw ? 1 : 0}</v></c>`;
             const value =
               raw instanceof Date
                 ? raw.toISOString()
                 : typeof raw === 'string'
                   ? raw
                   : JSON.stringify(raw ?? '');
-            return `<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+            return `<c r="${address}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
           })
           .join('');
-        return `<row r="${rowIndex + 1}">${cells}</row>`;
+        return `<row r="${rowIndex + 1}"${style === 1 ? ' ht="22" customHeight="1"' : ''}>${cells}</row>`;
       })
       .join('');
     const files: Array<[string, string]> = [
       [
         '[Content_Types].xml',
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
       ],
       [
         '_rels/.rels',
@@ -2245,30 +2359,70 @@ export class AnalyticsService {
       ],
       [
         'xl/_rels/workbook.xml.rels',
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
       ],
       [
         'xl/worksheets/sheet1.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`,
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><sheetData>${sheetRows}</sheetData></worksheet>`,
+      ],
+      [
+        'xl/styles.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Aptos Display"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF292B27"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2D7"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf xfId="0"/><xf xfId="0" fontId="1" fillId="2" applyFont="1" applyFill="1"/><xf xfId="0" fontId="0" fillId="3" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>',
       ],
     ];
     return this.zipFiles(files);
   }
 
   private toPdf(report: unknown, title: string): Buffer {
-    const rows = this.flattenRows(report);
-    const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
-    const lines = [
-      title.replace(/_/g, ' '),
-      ...rows.map((row) =>
-        headers.map((header) => `${header}: ${String(row[header] ?? '')}`).join(' | '),
-      ),
-    ];
-    const wrapped = lines.flatMap((line) => line.match(/.{1,105}(?:\s|$)|.{1,105}/g) || ['']);
-    const pages: string[][] = [];
-    for (let index = 0; index < wrapped.length; index += 48)
-      pages.push(wrapped.slice(index, index + 48));
-    if (!pages.length) pages.push(['No data']);
+    const width = 842; const height = 595; const margin = 36; const contentWidth = width - margin * 2;
+    const pages: string[][] = [[]]; let commands = pages[0]; let y = height - 42;
+    const safe = (value: unknown) => this.exportValue(value).normalize('NFKD').replace(/[^\x20-\x7E]/g, '?');
+    const escaped = (value: string) => value.replace(/([\\()])/g, '\\$1');
+    const drawText = (value: string, x: number, baseline: number, size = 8, color = '0.16 0.18 0.15') => commands.push(`${color} rg BT /F1 ${size} Tf ${x.toFixed(1)} ${baseline.toFixed(1)} Td (${escaped(value)}) Tj ET`);
+    const drawRect = (x: number, top: number, w: number, h: number, color: string) => commands.push(`${color} rg ${x.toFixed(1)} ${(top-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);
+    const newPage = () => { pages.push([]); commands = pages[pages.length - 1]; y = height - 38; };
+    const wrap = (value: unknown, maxChars: number) => {
+      const result: string[] = []; let line = '';
+      for (const word of safe(value).split(/\s+/)) {
+        const parts = word.match(new RegExp(`.{1,${Math.max(maxChars, 4)}}`, 'g')) || [''];
+        for (const part of parts) { if (line && `${line} ${part}`.length > maxChars) { result.push(line); line = part; } else line = line ? `${line} ${part}` : part; }
+      }
+      if (line || !result.length) result.push(line); return result;
+    };
+    drawRect(0, height, width, 7, '0.98 0.58 0.04');
+    drawText('MIZANIA  |  BUSINESS REPORT', margin, y, 8, '0.35 0.38 0.33'); y -= 22;
+    drawText(this.exportLabel(title), margin, y, 22, '0.10 0.12 0.10'); y -= 20;
+    drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 26;
+    const sections = this.exportSections(report);
+    for (const section of sections) {
+      const columnWidths = section.headers.map(() => contentWidth / Math.max(section.headers.length, 1));
+      if (y < 75) newPage();
+      drawRect(margin, y + 12, contentWidth, 22, '0.98 0.95 0.87');
+      drawText(this.exportLabel(section.title), margin + 8, y - 3, 14, '0.42 0.24 0.02'); y -= 28;
+      const drawHeader = () => {
+        if (y < 55) newPage();
+        drawRect(margin, y + 13, contentWidth, 27, '0.17 0.18 0.16');
+        let x = margin + 5;
+        section.headers.forEach((header, index) => {
+          const headerLines = wrap(this.exportLabel(header), Math.floor(columnWidths[index] / 6));
+          headerLines.slice(0, 2).forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 12, 12, '1 1 1'));
+          x += columnWidths[index];
+        });
+        y -= 29;
+      };
+      drawHeader();
+      const rows = section.rows.length ? section.rows : [{ Status: 'No data for the selected period' }];
+      rows.forEach((row, rowIndex) => {
+        const cells = section.headers.map((header, index) => wrap(row[header], Math.floor(columnWidths[index] / 6)));
+        const lineCount = Math.max(1, ...cells.map((cell) => cell.length)); const rowHeight = Math.max(25, lineCount * 14 + 10);
+        if (y - rowHeight < 42) { newPage(); drawHeader(); }
+        if (rowIndex % 2) drawRect(margin, y + 7, contentWidth, rowHeight, '0.965 0.97 0.955');
+        let x = margin + 5;
+        cells.forEach((cell, index) => { cell.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12)); x += columnWidths[index]; });
+        y -= rowHeight;
+      });
+      y -= 12;
+    }
     const objects: string[] = [];
     const addObject = (value: string) => {
       objects.push(value);
@@ -2276,25 +2430,20 @@ export class AnalyticsService {
     };
     const catalogId = addObject('');
     const pagesId = addObject('');
-    const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+    const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>');
     const pageIds: number[] = [];
-    for (const pageLines of pages) {
-      const escapedLines = pageLines.map((line) =>
-        line
-          .normalize('NFKD')
-          .replace(/[^\x20-\x7E]/g, '?')
-          .replace(/([\\()])/g, '\\$1'),
-      );
-      const stream = `BT /F1 8 Tf 36 756 Td 12 TL ${escapedLines.map((line) => `(${line}) Tj T*`).join(' ')} ET`;
+    pages.forEach((pageCommands, index) => {
+      pageCommands.push(`0.42 0.45 0.40 rg BT /F1 9 Tf ${width - margin - 58} 20 Td (Page ${index + 1} of ${pages.length}) Tj ET`);
+      const stream = pageCommands.join('\n');
       const streamId = addObject(
         `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`,
       );
       pageIds.push(
         addObject(
-          `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`,
+          `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`,
         ),
       );
-    }
+    });
     objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
     objects[pagesId - 1] =
       `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;

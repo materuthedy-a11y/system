@@ -15,7 +15,13 @@ import { UserId } from '../common/decorators/auth.decorator';
 import { RequirePermission } from '../common/decorators/permission.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionGuard } from '../common/guards/permission.guard';
-import { CreateFeedbackDto, CreateFeedbackMessageDto, UpdateFeedbackStatusDto } from './dto';
+import {
+  AssignFeedbackDto,
+  CreateFeedbackDto,
+  CreateFeedbackMessageDto,
+  UpdateFeedbackPriorityDto,
+  UpdateFeedbackStatusDto,
+} from './dto';
 import { SupportService } from './support.service';
 
 @ApiTags('Support')
@@ -42,6 +48,12 @@ export class SupportController {
     return this.support.listInbox(businessId);
   }
 
+  @Get('agents')
+  @RequirePermission('settings.edit')
+  listAgents(@Business() businessId: string) {
+    return this.support.listAgents(businessId);
+  }
+
   @Get(':id/messages')
   listMessages(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
     return this.support.listMessages(businessId, userId, id);
@@ -66,5 +78,21 @@ export class SupportController {
     @Body() dto: UpdateFeedbackStatusDto,
   ) {
     return this.support.updateStatus(businessId, id, dto);
+  }
+
+  @Patch(':id/priority')
+  @RequirePermission('settings.edit')
+  updatePriority(
+    @Business() businessId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateFeedbackPriorityDto,
+  ) {
+    return this.support.updatePriority(businessId, id, dto.priority);
+  }
+
+  @Patch(':id/assignee')
+  @RequirePermission('settings.edit')
+  assign(@Business() businessId: string, @Param('id') id: string, @Body() dto: AssignFeedbackDto) {
+    return this.support.assign(businessId, id, dto.userId);
   }
 }

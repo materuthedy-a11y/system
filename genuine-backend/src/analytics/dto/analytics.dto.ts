@@ -193,6 +193,14 @@ export class ExportFilterDto extends PeriodFilterDto {
   channelBy?: 'LOCATION' | 'SALESPERSON' | 'CUSTOMER_TYPE';
 
   @IsOptional()
+  @IsIn(['REVENUE', 'QUANTITY', 'PROFIT', 'MARGIN'])
+  sortBy?: 'REVENUE' | 'QUANTITY' | 'PROFIT' | 'MARGIN';
+
+  @IsOptional()
+  @IsIn(['REVENUE', 'FREQUENCY', 'LOYALTY', 'RECENCY'])
+  segmentBy?: 'REVENUE' | 'FREQUENCY' | 'LOYALTY' | 'RECENCY';
+
+  @IsOptional()
   @IsIn(['REVENUE', 'EXPENSES', 'PROFIT', 'SALES_QUANTITY', 'CUSTOMER_COUNT'])
   metric?: 'REVENUE' | 'EXPENSES' | 'PROFIT' | 'SALES_QUANTITY' | 'CUSTOMER_COUNT';
 

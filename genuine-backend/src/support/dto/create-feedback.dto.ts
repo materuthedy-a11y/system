@@ -17,6 +17,10 @@ export class CreateFeedbackDto {
   message: string;
 
   @IsOptional()
+  @IsIn(['LOW', 'NORMAL', 'HIGH', 'URGENT'])
+  priority?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(200)
   pagePath?: string;

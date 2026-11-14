@@ -39,7 +39,9 @@ export default function ExchangeRatesPanel({ canEdit, currentBaseCurrency }: { c
       setBaseCurrency(result.baseCurrency);
       setRates(result.rates);
     } catch (cause) {
-      setError(getApiError(cause, 'Exchange rates could not be loaded.'));
+      const message = getApiError(cause, 'Exchange rates could not be loaded.');
+      setError(message);
+      notify.error(message);
     } finally {
       setLoading(false);
     }
@@ -76,7 +78,9 @@ export default function ExchangeRatesPanel({ canEdit, currentBaseCurrency }: { c
       const result = await settingsAPI.convertCurrency({ currencyCode: currencyCode.trim().toUpperCase(), amount: Number(amount), asOf, direction });
       setConversion(result);
     } catch (cause) {
-      setError(getApiError(cause, 'No exchange rate is available for that currency and date.'));
+      const message = getApiError(cause, 'No exchange rate is available for that currency and date.');
+      setError(message);
+      notify.error(message);
     }
   }
 
@@ -110,7 +114,7 @@ export default function ExchangeRatesPanel({ canEdit, currentBaseCurrency }: { c
         <div className="text-xs text-[#687064] dark:text-white/60">{codes.length ? `${codes.length} foreign currency rate(s) available` : 'Add a rate above to enable conversion.'}</div>
         <button className={button} disabled={loading}><ArrowLeftRight size={15}/>Convert</button>
       </form>
-      {conversion ? <div role="status" className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-950/30"><ArrowDownLeft size={17} className="text-emerald-700 dark:text-emerald-300"/><p className="text-sm font-semibold">{money(conversion.amount, direction === 'TO_BASE' ? currencyCode.toUpperCase() : baseCurrency)} = {money(conversion.result, displayCode)}</p><p className="w-full pl-6 text-xs text-[#687064] dark:text-white/60">Rate: 1 {currencyCode.toUpperCase()} = {conversion.rateToBase.toLocaleString()} {baseCurrency} · effective {conversion.effectiveFrom}</p></div> : null}
+      {conversion ? <div role="status" className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-emerald-500 bg-emerald-50 p-4 shadow-sm shadow-emerald-500/10 transition duration-200 hover:border-emerald-600 hover:shadow-[0_0_0_3px_rgba(16,185,129,0.16),0_8px_24px_rgba(16,185,129,0.14)] dark:border-emerald-400 dark:bg-emerald-950/30 dark:shadow-emerald-400/10 dark:hover:border-emerald-300 dark:hover:shadow-[0_0_0_3px_rgba(52,211,153,0.2),0_8px_24px_rgba(52,211,153,0.16)]"><ArrowDownLeft size={17} className="text-emerald-700 dark:text-emerald-300"/><p className="text-sm font-semibold">{money(conversion.amount, direction === 'TO_BASE' ? currencyCode.toUpperCase() : baseCurrency)} = {money(conversion.result, displayCode)}</p><p className="w-full pl-6 text-xs text-[#687064] dark:text-white/60">Rate: 1 {currencyCode.toUpperCase()} = {conversion.rateToBase.toLocaleString()} {baseCurrency} · effective {conversion.effectiveFrom}</p></div> : null}
     </section>
 
     <section className="rounded-2xl border border-[#e6e9e1] bg-white p-0 shadow-sm dark:border-white/10 dark:bg-[#1d201d]">

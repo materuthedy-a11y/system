@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
+import { PERMISSION_KEY } from '../common/decorators';
 import { PrismaService } from '../database/prisma.service';
+import { SupportController } from './support.controller';
 import { SupportService } from './support.service';
 
 type SupportPrismaMock = {
@@ -123,6 +125,40 @@ describe('SupportService', () => {
       where: { id: 'feedback-1', businessId: 'business-a' },
       data: { status: 'RESOLVED' },
     });
+  });
+
+  it('rejects assigning a ticket to a user outside the business help desk team', async () => {
+    const prisma = createPrismaMock();
+    prisma.feedbackSubmission.findFirst.mockResolvedValue({ id: 'feedback-1' });
+    prisma.user.findFirst.mockResolvedValue(null);
+    const service = new SupportService(prisma as unknown as PrismaService);
+
+    await expect(
+      service.assign('business-a', 'feedback-1', 'user-from-another-business'),
+    ).rejects.toThrow('Active help desk agent not found in this business');
+
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'user-from-another-business',
+          businessId: 'business-a',
+          isActive: true,
+        }),
+      }),
+    );
+    expect(prisma.feedbackSubmission.update).not.toHaveBeenCalled();
+  });
+
+  it('requires settings.edit to manage ticket priority, assignment and the agent list', () => {
+    expect(Reflect.getMetadata(PERMISSION_KEY, SupportController.prototype.updatePriority)).toEqual(
+      ['settings.edit'],
+    );
+    expect(Reflect.getMetadata(PERMISSION_KEY, SupportController.prototype.assign)).toEqual([
+      'settings.edit',
+    ]);
+    expect(Reflect.getMetadata(PERMISSION_KEY, SupportController.prototype.listAgents)).toEqual([
+      'settings.edit',
+    ]);
   });
 
   it('adds an admin reply and automatically marks an open conversation in progress', async () => {

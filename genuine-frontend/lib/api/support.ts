@@ -1,7 +1,15 @@
 import { apiClient, unwrap } from '@/lib/api';
 
 export type FeedbackCategory = 'BUG' | 'QUESTION' | 'IDEA';
-export type FeedbackStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+export type FeedbackPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type FeedbackStatus = 'OPEN' | 'IN_PROGRESS' | 'WAITING_ON_USER' | 'RESOLVED' | 'CLOSED';
+
+export interface FeedbackAgent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
 export interface FeedbackSubmission {
   id: string;
@@ -9,6 +17,9 @@ export interface FeedbackSubmission {
   subject: string;
   message: string;
   pagePath: string | null;
+  priority: FeedbackPriority;
+  assignedToId: string | null;
+  assignedTo?: FeedbackAgent | null;
   status: FeedbackStatus;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +28,7 @@ export interface FeedbackSubmission {
 export interface FeedbackInboxItem extends FeedbackSubmission {
   submitterName: string;
   submitterEmail: string;
+  assignedTo?: FeedbackAgent | null;
 }
 
 export interface FeedbackMessage {
@@ -33,6 +45,7 @@ export const supportAPI = {
     subject: string;
     message: string;
     pagePath?: string;
+    priority?: FeedbackPriority;
   }) {
     return unwrap<FeedbackSubmission>(await apiClient.post('/support/feedback', input));
   },
@@ -42,9 +55,22 @@ export const supportAPI = {
   async inbox() {
     return unwrap<FeedbackInboxItem[]>(await apiClient.get('/support/feedback'));
   },
+  async agents() {
+    return unwrap<FeedbackAgent[]>(await apiClient.get('/support/feedback/agents'));
+  },
   async updateStatus(id: string, status: FeedbackStatus) {
     return unwrap<FeedbackInboxItem>(
       await apiClient.patch(`/support/feedback/${encodeURIComponent(id)}/status`, { status }),
+    );
+  },
+  async updatePriority(id: string, priority: FeedbackPriority) {
+    return unwrap<FeedbackInboxItem>(
+      await apiClient.patch(`/support/feedback/${encodeURIComponent(id)}/priority`, { priority }),
+    );
+  },
+  async assign(id: string, userId: string | null) {
+    return unwrap<FeedbackInboxItem>(
+      await apiClient.patch(`/support/feedback/${encodeURIComponent(id)}/assignee`, { userId }),
     );
   },
   async messages(id: string) {

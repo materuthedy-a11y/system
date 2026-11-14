@@ -190,8 +190,8 @@ export class FinancialReportQueryDto {
   @IsDateString()
   dateTo?: string;
   @IsOptional()
-  @IsEnum(['DAILY', 'WEEKLY', 'MONTHLY'])
-  groupBy?: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  @IsEnum(['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'])
+  groupBy?: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
   @IsOptional()
   @IsString()
   customerId?: string;

@@ -160,7 +160,7 @@ export class PaymentsService {
                 processedAt: new Date(),
               },
             });
-            await this.refreshReferencePaymentState(tx, reference, businessId, userId, payment);
+            await this.refreshReferencePaymentState(tx, reference, businessId, userId);
             await this.audit(
               tx,
               businessId,
@@ -289,7 +289,6 @@ export class PaymentsService {
     ref: any,
     businessId: string,
     userId: string,
-    payment: any,
   ) {
     if (ref.invoiceId) {
       const paid = await tx.payment.aggregate({
@@ -1053,16 +1052,30 @@ export class PaymentsService {
       (p) => p.paymentDate >= range.start && p.paymentDate <= range.end,
     );
     const groupBy = filter.groupBy || 'DAILY';
+    const businessSettings = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true, settings: { select: { weekStartsOn: true } } },
+    });
+    const timezone = businessSettings?.timezone || 'UTC';
+    const weekStartsOn = businessSettings?.settings?.weekStartsOn || 'MONDAY';
     const keyFor = (date: Date) => {
-      const d = new Date(date);
-      if (groupBy === 'MONTHLY')
-        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(date);
+      const part = (type: string) => parts.find((value) => value.type === type)?.value || '00';
+      const year = Number(part('year'));
+      const month = Number(part('month'));
+      const day = Number(part('day'));
+      if (groupBy === 'MONTHLY') return `${year}-${String(month).padStart(2, '0')}`;
+      if (groupBy === 'QUARTERLY') return `${year}-Q${Math.floor((month - 1) / 3) + 1}`;
+      if (groupBy === 'YEARLY') return String(year);
       if (groupBy === 'WEEKLY') {
-        d.setUTCHours(0, 0, 0, 0);
-        d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-        return d.toISOString().slice(0, 10);
+        const localDay = new Date(Date.UTC(year, month - 1, day));
+        const startDay = weekStartsOn === 'SUNDAY' ? 0 : 1;
+        localDay.setUTCDate(localDay.getUTCDate() - ((localDay.getUTCDay() - startDay + 7) % 7));
+        return localDay.toISOString().slice(0, 10);
       }
-      return d.toISOString().slice(0, 10);
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     };
     const grouped = new Map<string, { inflows: number; outflows: number }>();
     for (const payment of selected) {
@@ -1180,18 +1193,28 @@ export class PaymentsService {
       include: { supplier: true },
     });
     const ids = pos.map((p) => p.id);
-    const payments = await this.prisma.payment.findMany({
-      where: {
-        businessId,
-        poId: { in: ids },
-        status: { in: ACTIVE_PAYMENT_STATUSES },
-        paymentDate: { lte: asOf },
-      },
-    });
+    const [payments, supplierReturns] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: {
+          businessId,
+          poId: { in: ids },
+          status: { in: ACTIVE_PAYMENT_STATUSES },
+          paymentDate: { lte: asOf },
+        },
+      }),
+      this.prisma.purchaseReturn.findMany({
+        where: { businessId, purchaseOrderId: { in: ids }, status: 'APPROVED', approvedAt: { lte: asOf } },
+        select: { purchaseOrderId: true, totalReturnAmount: true },
+      }),
+    ]);
     const paid = this.sumBy(payments, (p) => p.poId!);
+    const returned = new Map<string, number>();
+    for (const item of supplierReturns) {
+      returned.set(item.purchaseOrderId, (returned.get(item.purchaseOrderId) || 0) + item.totalReturnAmount);
+    }
     const bySupplier = new Map<string, any>();
     for (const po of pos) {
-      const balance = roundMoney(po.totalAmount - (paid.get(po.id) || 0));
+      const balance = roundMoney(po.totalAmount - (paid.get(po.id) || 0) - (returned.get(po.id) || 0));
       if (balance <= 0) continue;
       const terms = Number((po.supplier.paymentTerms || '').match(/\d+/)?.[0] || 0);
       const due = new Date(po.orderDate);
@@ -1381,7 +1404,7 @@ export class PaymentsService {
       : null;
     if (filter.periodId && !period) throw new NotFoundException('Accounting period not found');
     const asOf = period ? period.endDate : this.parseAsOf(filter.dateAs);
-    const [sales, returns, pos, expenses, payments, supplierReturns] = await Promise.all([
+    const [sales, returns, pos, expenses, payments, supplierReturns, business] = await Promise.all([
       this.prisma.salesInvoice.findMany({
         where: { businessId, status: { notIn: ['DRAFT', 'CANCELLED'] }, issuedDate: { lte: asOf } },
       }),
@@ -1401,6 +1424,7 @@ export class PaymentsService {
         where: { businessId, status: 'APPROVED', approvedAt: { lte: asOf } },
         select: { purchaseOrderId: true, totalReturnAmount: true },
       }),
+      this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } }),
     ]);
     const inventoryValuation = await this.inventory.getStockValuationReport(businessId, '', {});
     const inflows = roundMoney(
@@ -1462,6 +1486,7 @@ export class PaymentsService {
     return {
       period: period?.period || 'As of ' + asOf.toISOString().slice(0, 10),
       asOf,
+      currency: business?.currency || 'TZS',
       totalSalesAmount,
       totalSalesTaxAmount: roundMoney(sales.reduce((s, i) => s + i.taxAmount, 0)),
       totalPurchasesAmount,

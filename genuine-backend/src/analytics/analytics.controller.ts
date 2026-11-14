@@ -40,6 +40,15 @@ export class AnalyticsController {
     private readonly notifications: NotificationsService,
   ) {}
 
+  @Get('report-settings')
+  @RequirePermission('reports.view')
+  @ApiOperation({ summary: 'Get business date, currency and grouping settings for reports' })
+  reportSettings(@Business() businessId: string, @UserId() userId: string) {
+    return this.run('report-settings', businessId, userId, {}, () =>
+      this.analytics.getReportSettings(businessId),
+    );
+  }
+
   @Get('dashboard/executive')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('reports.view')

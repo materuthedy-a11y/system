@@ -20,13 +20,13 @@ export interface InboxNotification {
 export interface InboxPage { data: InboxNotification[]; unreadCount: number; total: number; page: number; limit: number; totalPages: number; }
 export interface InAppPreference { eventType: NotificationEventType; inAppEnabled: boolean; }
 export interface NotificationLogPage {
-  data: Array<{ id: string; type: NotificationType; eventType: NotificationEventType; status: string; subject: string; attemptCount: number; createdAt: string; recipientCount: number; sentCount: number; failedCount: number }>;
+  data: Array<{ id: string; type: NotificationType; eventType: NotificationEventType | 'SMS_TEST'; status: string; subject: string; attemptCount: number; createdAt: string; recipientCount: number; sentCount: number; failedCount: number }>;
   total: number; page: number; limit: number; totalPages: number;
 }
 export interface NotificationLogDetail {
-  id: string; type: NotificationType; eventType: NotificationEventType | 'PASSWORD_RESET'; status: string;
+  id: string; type: NotificationType; eventType: NotificationEventType | 'PASSWORD_RESET' | 'SMS_TEST'; status: string;
   subject: string; body: string; attemptCount: number;
-  recipients: Array<{ status: string; failureReason?: string | null }>;
+  recipients: Array<{ status: string; phoneNumber?: string | null; providerId?: string | null; failureReason?: string | null }>;
   logs: Array<{ status: string; message: string; timestamp: string; responseCode?: number | null }>;
 }
 export interface EmailProviderConfig { provider: 'SMTP' | 'SENDGRID'; fromEmail: string; fromName: string; configured: true; }
@@ -38,6 +38,8 @@ export const notificationEventLabels: Record<NotificationEventType, string> = {
   LOW_STOCK: 'Low stock', PURCHASE_ORDER_APPROVED: 'Purchase order approved',
   SALES_INVOICE_ISSUED: 'Sales invoice issued', EXPENSE_APPROVED: 'Expense approved', REPORT_GENERATED: 'Report generated',
 };
+export const notificationEventLabel = (eventType: NotificationEventType | 'PASSWORD_RESET' | 'SMS_TEST' | string) =>
+  eventType === 'SMS_TEST' ? 'SMS provider test' : notificationEventLabels[eventType as NotificationEventType] || eventType;
 
 export const notificationsAPI = {
   async inbox(filters: { unreadOnly?: boolean; archivedOnly?: boolean; search?: string; page?: number; limit?: number } = {}) {

@@ -10,7 +10,7 @@ type AnimatedNumberProps = {
 };
 
 /** Counts KPI values smoothly while keeping the final value available to assistive tech. */
-export function AnimatedNumber({ value, format, duration = 950, className }: AnimatedNumberProps) {
+export function AnimatedNumber({ value, format, duration = 1700, className }: AnimatedNumberProps) {
   const [displayValue, setDisplayValue] = useState(0);
   const previousValue = useRef<number | null>(null);
   const formatRef = useRef(format);
@@ -28,12 +28,16 @@ export function AnimatedNumber({ value, format, duration = 950, className }: Ani
 
     let frame = 0;
     let startTime = 0;
+    let lastPaint = 0;
     const animate = (time: number) => {
       if (!startTime) startTime = time;
       const progress = Math.min(1, (time - startTime) / duration);
       const eased = 1 - Math.pow(1 - progress, 4);
       const nextValue = startValue + (target - startValue) * eased;
-      setDisplayValue(progress === 1 ? target : nextValue);
+      if (progress === 1 || time - lastPaint >= 32) {
+        setDisplayValue(progress === 1 ? target : nextValue);
+        lastPaint = time;
+      }
       if (progress < 1) frame = window.requestAnimationFrame(animate);
       else previousValue.current = target;
     };

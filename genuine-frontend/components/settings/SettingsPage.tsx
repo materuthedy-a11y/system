@@ -61,18 +61,27 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
     if (!canViewSettings) { setLoading(false); return; }
     setLoading(true); setError('');
     try {
-      const results = await Promise.all([
-        settingsAPI.getProfile(), settingsAPI.getGeneral(), settingsAPI.locations(), settingsAPI.paymentMethods(),
-        settingsAPI.taxRates(), settingsAPI.expenseCategories(), productsAPI.categories(true), productsAPI.units(true),
+      const [profileResult, generalResult] = await Promise.all([settingsAPI.getProfile(), settingsAPI.getGeneral()]);
+      setProfile(profileResult);
+      if (user?.businessId) setBusinessProfile(user.businessId, profileResult);
+      setGeneral(generalResult);
+      cacheBusinessDateSettings({ ...generalResult, timezone: profileResult.timezone, language: profileResult.language, financialYear: profileResult.financialYear });
+
+      // A settings viewer should still see sections that loaded successfully when
+      // an unrelated optional lookup fails (for example, a category list).
+      const results = await Promise.allSettled([
+        settingsAPI.locations(), settingsAPI.paymentMethods(), settingsAPI.taxRates(), settingsAPI.expenseCategories(),
+        productsAPI.categories(true), productsAPI.units(true),
       ]);
-      setProfile(results[0]);
-      if (user?.businessId) setBusinessProfile(user.businessId, results[0]);
-      setGeneral(results[1]); setLocations(results[2]); setMethods(results[3]);
+      const sectionNames = ['locations', 'payment methods', 'tax rates', 'expense categories', 'product categories', 'units'];
+      const failedSections = results.flatMap((result, index) => result.status === 'rejected' ? [sectionNames[index]] : []);
+      if (failedSections.length) notify.error(`Could not load ${failedSections.join(', ')}. Refresh settings to try again.`);
+      const value = <T,>(index: number, fallback: T): T => results[index].status === 'fulfilled' ? results[index].value as T : fallback;
+      setLocations(value(0, [])); setMethods(value(1, []));
       try { setLocationManagers((await settingsAPI.users({ status: 'ACTIVE' })).filter((member) => member.isActive)); }
       catch { setLocationManagers([]); }
-      cacheBusinessDateSettings({ ...results[1], timezone: results[0].timezone, language: results[0].language, financialYear: results[0].financialYear });
-      setTaxRates(results[4]); setExpenseCategories(results[5]); setProductCategories(results[6]); setUnits(results[7]);
-    } catch (cause) { setError(getApiError(cause, 'Settings could not be loaded. Check your connection and permissions.')); }
+      setTaxRates(value(2, [])); setExpenseCategories(value(3, [])); setProductCategories(value(4, [])); setUnits(value(5, []));
+    } catch (cause) { const message = getApiError(cause, 'Settings could not be loaded. Check your connection and permissions.'); setError(message); notify.error(message); }
     finally { setLoading(false); }
   }, [canViewSettings, setBusinessProfile, user?.businessId]);
   useEffect(() => { void load(); }, [load]);
@@ -87,7 +96,9 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
   async function selectBusinessLogo(file?: File) {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) {
-      setError('Choose a JPG, PNG or WebP image under 8 MB.');
+      const message = 'Choose a JPG, PNG or WebP image under 8 MB.';
+      setError(message);
+      notify.error(message);
       return;
     }
     setError(''); setMessage(''); setBusy(true);
@@ -111,7 +122,7 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
         const reader = new FileReader(); reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read the prepared image.')); reader.onerror = () => reject(new Error('Could not read the prepared image.')); reader.readAsDataURL(blob!);
       });
       setDraft((current) => ({ ...current, logoUrl: dataUrl }));
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not prepare the business logo.'); }
+    } catch (cause) { const message = cause instanceof Error ? cause.message : 'Could not prepare the business logo.'; setError(message); notify.error(message); }
     finally { setBusy(false); }
   }
   async function toggleLocation(item: Location) { if (!canEdit) return; setBusy(true); setError(''); try { await settingsAPI.updateLocation(item.id, { isActive: !item.isActive }); await load(); setMessage('Location status updated.'); notify.success('Location status updated.'); } catch (cause) { const message = getApiError(cause, 'Could not update location.'); setError(message); notify.error(message); } finally { setBusy(false); } }
@@ -139,7 +150,7 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
   const currentTitle = sections.find((item) => item.id === activeSection)?.title || (hasAccessManagement ? 'Team access' : 'Settings');
   const currentLogoUrl = String(draft.logoUrl ?? profile?.logoUrl ?? '').trim();
   if (!canViewSettings && !hasAccessManagement) return <main className="mx-auto max-w-3xl rounded-2xl border border-amber-300 bg-white p-6 text-sm text-[#373c32] dark:border-amber-800 dark:bg-[#1d201d] dark:text-white"><h1 className="text-xl font-bold">Access required</h1><p className="mt-2">Your account does not have permission to view business settings or manage team access.</p></main>;
-  return <div className="mx-auto w-full max-w-7xl space-y-5 px-1 pb-12">
+  return <div className="settings-page mx-auto w-full max-w-7xl space-y-5 px-1 pb-12">
     <header className="rounded-2xl border border-[#e7e9e2] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#1d201d] sm:p-7">
       <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">{canViewSettings ? 'Configuration' : 'Team access'}</p>
       <div className="mt-2 flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold tracking-tight text-[#20231f] dark:text-white">{canViewSettings ? 'Settings' : 'Team access'}</h1><p className="mt-1 text-sm text-[#687064] dark:text-white/60">{canViewSettings ? 'Business profile, locations, tax and the options used by sales and finance.' : 'Manage team access and roles assigned to this workspace.'}</p></div>{canViewSettings ? <button type="button" onClick={() => void load()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#d8ddd4] px-3 text-sm font-semibold text-[#41483e] hover:bg-[#f7f7f1] dark:border-white/10 dark:text-white"><RefreshCw size={15}/> Refresh</button> : null}</div>

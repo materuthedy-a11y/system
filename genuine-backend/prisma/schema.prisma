@@ -114,6 +114,7 @@ model User {
   notificationPreferences NotificationPreference[]
   notificationRecipients NotificationRecipient[]
   feedbackSubmissions    FeedbackSubmission[]    @relation("FeedbackSubmittedBy")
+  assignedFeedback      FeedbackSubmission[]    @relation("FeedbackAssignedTo")
   feedbackMessages       FeedbackMessage[]       @relation("FeedbackMessageSender")
 
   @@unique([businessId, email])
@@ -1410,15 +1411,19 @@ model FeedbackSubmission {
   subject        String
   message        String            @db.Text
   pagePath       String?
+  priority       String            @default("NORMAL")
+  assignedToId   String?
   status         String            @default("OPEN")
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   submittedBy    User?             @relation("FeedbackSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  assignedTo     User?             @relation("FeedbackAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   messages       FeedbackMessage[]
 
   @@index([businessId, status, createdAt])
   @@index([businessId, submittedById, createdAt])
+  @@index([businessId, assignedToId, status])
 }
 
 model FeedbackMessage {

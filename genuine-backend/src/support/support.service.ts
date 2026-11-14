@@ -13,6 +13,8 @@ const feedbackFields = {
   subject: true,
   message: true,
   pagePath: true,
+  priority: true,
+  assignedToId: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -48,6 +50,7 @@ export class SupportService {
           subject: dto.subject.trim(),
           message: dto.message.trim(),
           pagePath: dto.pagePath?.trim() || null,
+          priority: dto.priority || 'NORMAL',
         },
         select: feedbackFields,
       });
@@ -84,7 +87,23 @@ export class SupportService {
         ...feedbackFields,
         submitterName: true,
         submitterEmail: true,
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
+    });
+  }
+
+  async listAgents(businessId: string) {
+    return this.prisma.user.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        OR: [
+          { permissions: { some: { key: 'settings.edit' } } },
+          { userRoles: { some: { role: { permissions: { some: { key: 'settings.edit' } } } } } },
+        ],
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true, email: true },
     });
   }
 
@@ -123,9 +142,9 @@ export class SupportService {
         where: { id: submission.id },
         data: {
           updatedAt: new Date(),
-          ...(isAdmin && submission.status === 'OPEN'
+          ...(isAdmin && ['OPEN', 'WAITING_ON_USER'].includes(submission.status)
             ? { status: 'IN_PROGRESS' }
-            : !isAdmin && submission.status === 'RESOLVED'
+            : !isAdmin && ['WAITING_ON_USER', 'RESOLVED', 'CLOSED'].includes(submission.status)
               ? { status: 'OPEN' }
               : {}),
         },
@@ -179,7 +198,65 @@ export class SupportService {
 
     return this.prisma.feedbackSubmission.findFirstOrThrow({
       where: { id, businessId },
-      select: { ...feedbackFields, submitterName: true, submitterEmail: true },
+      select: {
+        ...feedbackFields,
+        submitterName: true,
+        submitterEmail: true,
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+  }
+
+  async updatePriority(businessId: string, id: string, priority: string) {
+    const result = await this.prisma.feedbackSubmission.updateMany({
+      where: { id, businessId },
+      data: { priority },
+    });
+    if (!result.count) throw new NotFoundException('Feedback submission not found');
+    return this.prisma.feedbackSubmission.findFirstOrThrow({
+      where: { id, businessId },
+      select: {
+        ...feedbackFields,
+        submitterName: true,
+        submitterEmail: true,
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
+    });
+  }
+
+  async assign(businessId: string, id: string, userId?: string | null) {
+    const submission = await this.prisma.feedbackSubmission.findFirst({
+      where: { id, businessId },
+      select: { id: true },
+    });
+    if (!submission) throw new NotFoundException('Feedback submission not found');
+    if (userId) {
+      const agent = await this.prisma.user.findFirst({
+        where: {
+          id: userId,
+          businessId,
+          isActive: true,
+          OR: [
+            { permissions: { some: { key: 'settings.edit' } } },
+            { userRoles: { some: { role: { permissions: { some: { key: 'settings.edit' } } } } } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!agent) throw new NotFoundException('Active help desk agent not found in this business');
+    }
+    await this.prisma.feedbackSubmission.update({
+      where: { id },
+      data: { assignedToId: userId || null },
+    });
+    return this.prisma.feedbackSubmission.findFirstOrThrow({
+      where: { id, businessId },
+      select: {
+        ...feedbackFields,
+        submitterName: true,
+        submitterEmail: true,
+        assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
+      },
     });
   }
 }

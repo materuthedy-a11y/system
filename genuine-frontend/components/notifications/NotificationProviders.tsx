@@ -57,7 +57,10 @@ export function NotificationProviders() {
 
   async function sendTestSms(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving('sms-test'); setError('');
-    try { await notificationsAPI.testSms(testPhone.trim()); notify.success('Test SMS accepted. Check the recipient phone.'); }
+    try {
+      const result = await notificationsAPI.testSms(testPhone.trim());
+      notify.success(`${result.message}${result.providerId ? ` · provider ID ${result.providerId}` : ''}. Check the recipient phone.`);
+    }
     catch (cause) { const message = getApiError(cause, 'Test SMS could not be sent.'); setError(message); notify.error(message); }
     finally { setSaving(''); }
   }
@@ -78,11 +81,11 @@ export function NotificationProviders() {
         {smsProvider !== 'TWILIO' && smsProvider !== 'AFRICAS_TALKING' ? <label className="text-xs font-semibold">API key<input required type="password" autoComplete="new-password" value={smsKey} onChange={(event) => setSmsKey(event.target.value)} className={field}/></label> : null}
         {smsProvider === 'EHUB' ? <label className="text-xs font-semibold">API secret<input required type="password" autoComplete="new-password" value={smsApiSecret} onChange={(event) => setSmsApiSecret(event.target.value)} className={field}/></label> : null}
       </div>
-      <div className="mt-3 rounded-lg bg-[#f4f7ed] p-3 text-xs leading-5 text-[#4e5b3f] dark:bg-[#20251b] dark:text-[#d5dec8]"><p>{smsInfo.hint}</p><a href={smsInfo.docs} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 font-semibold underline">Provider docs and account setup <ExternalLink size={12}/></a><p className="mt-2">Free-trial credits, sender-ID approval and current prices depend on the provider account; check its dashboard before sending. API credentials are sent only from Mizania’s backend.</p></div>
+      <div className="mt-3 rounded-lg bg-[#f4f7ed] p-3 text-xs leading-5 text-[#4e5b3f] dark:bg-[#20251b] dark:text-[#d5dec8]"><p>{smsInfo.hint}</p><a href={smsInfo.docs} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 font-semibold underline">Provider docs and account setup <ExternalLink size={12}/></a><p className="mt-2">This is an outbound SMS connection for system notifications and the test button; it cannot receive replies. Help & feedback conversations stay inside Mizania. Free-trial credits, sender-ID approval and current prices depend on the provider account; check its dashboard before sending. API credentials are sent only from Mizania’s backend.</p></div>
       <button type="submit" disabled={saving === 'sms'} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-600">{saving === 'sms' ? <Loader2 size={15} className="animate-spin"/> : <Save size={15}/>}Save SMS settings</button>
     </form>
 
     {smsReady ? <form onSubmit={(event) => void sendTestSms(event)} className="rounded-xl border border-[#d8dfd5] p-4 dark:border-white/10"><h3 className="text-sm font-bold">Test SMS connection</h3><p className="mt-1 text-xs leading-5 text-[#687368] dark:text-white/55">This sends one real SMS and may use provider credits.</p><div className="mt-3 flex flex-col gap-3 sm:flex-row"><label className="min-w-0 flex-1 text-xs font-semibold">Recipient phone number<input required value={testPhone} onChange={(event) => setTestPhone(event.target.value)} placeholder={smsProvider === 'SASISMS' ? '2557… (no +) or 07…' : '+2557…'} className={field}/></label><button type="submit" disabled={saving === 'sms-test'} className="inline-flex min-h-10 items-center justify-center gap-2 self-end rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-60 dark:bg-emerald-600">{saving === 'sms-test' ? <Loader2 size={15} className="animate-spin"/> : <Send size={15}/>}Send test</button></div></form> : null}
-    <p className="text-[11px] leading-5 text-[#687368] dark:text-white/50">The configured provider handles password reset and notification SMS. Delivery is asynchronous; check the notification delivery log for accepted or failed attempts.</p>
+    <p className="text-[11px] leading-5 text-[#687368] dark:text-white/50">The configured provider handles password reset and system notification SMS. Delivery is asynchronous; the delivery log records provider acceptance or failure. A provider acceptance is not a carrier delivery receipt.</p>
   </div>;
 }

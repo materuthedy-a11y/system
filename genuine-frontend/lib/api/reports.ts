@@ -21,12 +21,20 @@ export type ReportType =
   | 'TRIAL_BALANCE'
   | 'FINANCIAL_SUMMARY';
 export type ReportFormat = 'CSV' | 'EXCEL' | 'PDF' | 'JSON';
+export interface ReportSettingsContext {
+  currency: string;
+  timezone: string;
+  financialYear: string;
+  dateFormat: string;
+  weekStartsOn: 'MONDAY' | 'SUNDAY';
+}
 
 export interface ReportPage<T> {
   data: T[];
   total: number;
   page: number;
   limit: number;
+  currency?: string;
 }
 
 export interface ReportMetric {
@@ -159,6 +167,7 @@ export interface FinancialReport {
 export interface FinancialSummaryReport {
   period: string;
   asOf: string;
+  currency: string;
   totalSalesAmount: number;
   totalSalesTaxAmount: number;
   totalPurchasesAmount: number;
@@ -191,6 +200,7 @@ async function get<T>(path: string, params?: Record<string, string | number | un
 }
 
 export const reportsAPI = {
+  settings: () => get<ReportSettingsContext>('/analytics/report-settings'),
   executive: (range: ReportRange) => get<ExecutiveReport>('/analytics/dashboard/executive', range),
   sales: (range: ReportRange) => get<SalesReport>('/analytics/dashboard/sales', range),
   products: (range: ReportRange, page = 1, limit = 20, sortBy = 'REVENUE') => get<ReportPage<ProductReportRow>>('/analytics/products', { dateFrom: range.dateFrom, dateTo: range.dateTo, page, limit, sortBy }),
@@ -209,7 +219,7 @@ export const reportsAPI = {
   payablesAgeing: (dateAs: string) => get<Record<string, unknown>>('/payments/reports/payables-ageing', { dateAs }),
   financialSummary: (dateAs: string) => get<FinancialSummaryReport>('/payments/reports/financial-summary', { dateAs }),
   trialBalance: (dateAs: string) => get<OperationalTrialBalance>('/payments/reports/trial-balance', { dateAs }),
-  async export(reportType: ReportType, format: ReportFormat, range: ReportRange, options?: { channelBy?: string; metric?: string; method?: string; periods?: number }) {
+  async export(reportType: ReportType, format: ReportFormat, range: ReportRange, options?: { channelBy?: string; sortBy?: string; segmentBy?: string; metric?: string; method?: string; periods?: number }) {
     const response = await apiClient.get('/analytics/export', {
       params: { reportType, format, ...range, ...options },
       responseType: 'blob',

@@ -603,14 +603,60 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async sendTestSms(businessId: string, userId: string, dto: TestSMSConfigDto) {
+    const to = dto.to.trim();
+    let providerId: string | undefined;
     try {
-      const providerId = await this.sendSms(businessId, dto.to.trim(), 'Mizania SMS delivery test. If you received this message, your SMS provider is connected.', `test-${randomBytes(12).toString('hex')}`);
-      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST', description: 'TEST SMS provider connection accepted' } });
-      return { message: 'Test SMS accepted by the provider', providerId };
+      providerId = await this.sendSms(businessId, to, 'Mizania SMS delivery test. If you received this message, your SMS provider is connected.', `test-${randomBytes(12).toString('hex')}`);
     } catch (error) {
-      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST_FAILED', description: 'TEST SMS provider connection failed' } });
+      const failureMessage = this.safeError(error).slice(0, 1000);
+      try {
+        await this.recordSmsTestDelivery(businessId, to, 'FAILED', failureMessage);
+        await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST_FAILED', afterData: JSON.stringify({ failure: failureMessage }), description: 'TEST SMS provider connection failed' } });
+      } catch (loggingError) {
+        this.logError(loggingError);
+      }
       throw error;
     }
+    let deliveryLogged = false;
+    let auditLogged = false;
+    try {
+      await this.recordSmsTestDelivery(businessId, to, 'SENT', 'Provider accepted the test SMS.', providerId);
+      deliveryLogged = true;
+    } catch (loggingError) {
+      this.logError(loggingError);
+    }
+    try {
+      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST', afterData: JSON.stringify({ providerId: providerId || null }), description: 'TEST SMS provider connection accepted' } });
+      auditLogged = true;
+    } catch (loggingError) {
+      this.logError(loggingError);
+    }
+    // The SMS has already been accepted; never report it as failed or invite a
+    // duplicate send just because a local log or audit write could not be saved.
+    const message = deliveryLogged
+      ? auditLogged ? 'Test SMS accepted and recorded in the delivery log' : 'Test SMS accepted and recorded in the delivery log; audit record could not be saved'
+      : 'Test SMS accepted by the provider, but its delivery log could not be saved. Check the server log before retrying.';
+    return { message, providerId };
+  }
+
+  private async recordSmsTestDelivery(businessId: string, to: string, status: 'SENT' | 'FAILED', message: string, providerId?: string) {
+    const logMessage = providerId ? `${message} Provider ID: ${providerId}` : message;
+    await this.prisma.notification.create({
+      data: {
+        businessId,
+        type: NotificationType.SMS,
+        eventType: 'SMS_TEST',
+        status,
+        subject: 'SMS provider test',
+        body: 'Mizania SMS delivery test. If you received this message, your SMS provider is connected.',
+        idempotencyKey: null,
+        attemptCount: 1,
+        lastAttemptAt: new Date(),
+        sentAt: status === 'SENT' ? new Date() : null,
+        recipients: { create: [{ phoneNumber: to, name: 'SMS test recipient', status, sentAt: status === 'SENT' ? new Date() : null, failureReason: status === 'FAILED' ? message : null, providerId: providerId || null }] },
+        logs: { create: [{ recipient: to, status, message: logMessage }] },
+      },
+    });
   }
 
   async publishEvent(input: EventInput) {
@@ -1191,8 +1237,9 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
               notificationId,
               recipient: recipient.email || recipient.phoneNumber || '',
               status: 'SENT',
-              message: 'Provider accepted the message',
-              responseCode: 200,
+              message: providerId
+                ? `Provider accepted the message. Provider ID: ${providerId}`
+                : 'Provider accepted the message; no provider message ID was returned.',
             },
           }),
         ]);
@@ -1339,7 +1386,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const data = (await response.json().catch(() => ({}))) as { sid?: string; message?: string };
       if (!response.ok)
         throw new Error(
-          `Twilio request failed (${response.status}): ${(data.message || 'provider error').slice(0, 300)}`,
+          `Twilio request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.accountSid, secret.apiKey])}`,
         );
       return data.sid;
     }
@@ -1350,7 +1397,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const response = await fetch('https://api.africastalking.com/version1/messaging', { method: 'POST', headers: { apiKey: secret.apiKey || '', Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(15000) });
       const data = (await response.json().catch(() => ({}))) as { SMSMessageData?: { Recipients?: Array<{ status?: string; messageId?: string; statusCode?: number }> } };
       const recipient = data.SMSMessageData?.Recipients?.[0];
-      if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101)) throw new Error(`Africa's Talking request failed (${response.status}): ${(recipient?.status || 'provider error').slice(0, 300)}`);
+      if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101)) throw new Error(`Africa's Talking request failed (${response.status}): ${this.safeProviderMessage(recipient?.status, [secret.username, secret.apiKey])}`);
       return recipient?.messageId;
     }
 
@@ -1371,7 +1418,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const data = await response.json().catch(() => ({})) as { success?: boolean; data?: { id?: string; status?: string }; error?: { code?: string; message?: string } };
       if (!response.ok || data.success === false) {
         const code = data.error?.code || `http_${response.status}`;
-        const providerMessage = data.error?.message?.replace(/[\r\n\t]+/g, ' ').replace(/\bsk_(?:live|test)_[A-Za-z0-9_-]+\b/gi, '[redacted API key]').slice(0, 240);
+        const providerMessage = this.safeProviderMessage(data.error?.message, [secret.apiKey], 240);
         const sourceAddressMismatch = /source_address filter mismatch/i.test(data.error?.message || '');
         const reason: Record<string, string> = {
           unauthorized: 'The SasiSMS API key is invalid, revoked or not authorized.',
@@ -1395,7 +1442,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       if (!secret.apiKey) throw new ConflictException('DARSMS API key is missing; save the provider settings again');
       const response = await fetch('https://dev.darsms.co.tz/api/v1/integrations/sms/send', { method: 'POST', headers: { 'X-API-Key': secret.apiKey || '', 'Content-Type': 'application/json' }, body: JSON.stringify({ senderId: config.fromNumber || 'DARSMS', to: [to], message: body }), signal: AbortSignal.timeout(15000) });
       const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { messageIds?: string[]; batchId?: string } };
-      if (!response.ok || data.success === false) throw new Error(`DARSMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      if (!response.ok || data.success === false) throw new Error(`DARSMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`);
       return data.data?.messageIds?.[0] || data.data?.batchId;
     }
 
@@ -1408,7 +1455,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       const signature = createHmac('sha256', secret.apiSecret || '').update(payload).digest('hex');
       const response = await fetch(`https://sms.ehub.co.tz${path}`, { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'X-Timestamp': timestamp, 'X-Signature': signature, 'Content-Type': 'application/json' }, body: rawBody, signal: AbortSignal.timeout(15000) });
       const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { message_id?: string } };
-      if (!response.ok || data.success === false) throw new Error(`eHUB SMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      if (!response.ok || data.success === false) throw new Error(`eHUB SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey, secret.apiSecret])}`);
       return data.data?.message_id;
     }
 
@@ -1416,7 +1463,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       if (!secret.apiKey) throw new ConflictException('Sakura SMS API key is missing; save the provider settings again');
       const response = await fetch('https://sms.sakuragroup.co.tz/api/v1/sms/send', { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
       const data = await response.json().catch(() => ({})) as { status?: string; message?: string; message_id?: string };
-      if (!response.ok || (data.status && data.status !== 'success' && data.status !== 'queued')) throw new Error(`Sakura SMS request failed (${response.status}): ${(data.message || 'provider rejected the message').slice(0, 300)}`);
+      if (!response.ok || (data.status && data.status !== 'success' && data.status !== 'queued')) throw new Error(`Sakura SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`);
       return data.message_id;
     }
 
@@ -1469,6 +1516,15 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         'Set NOTIFICATION_CONFIG_ENCRYPTION_KEY to at least 32 characters',
       );
     return createHash('sha256').update(secret).digest();
+  }
+
+  private safeProviderMessage(message: string | undefined, secrets: Array<string | undefined>, maxLength = 300) {
+    let safeMessage = (message || 'provider rejected the message').replace(/[\r\n\t]+/g, ' ')
+      .replace(/\bsk_(?:live|test)_[A-Za-z0-9_-]+\b/gi, '[redacted API key]');
+    for (const secret of secrets) {
+      if (secret && secret.length >= 4) safeMessage = safeMessage.split(secret).join('[redacted credential]');
+    }
+    return safeMessage.slice(0, maxLength);
   }
 
   private escapeHtml(value: string) {

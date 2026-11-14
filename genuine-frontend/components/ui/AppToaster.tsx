@@ -7,7 +7,7 @@ type NoticeKind = 'success' | 'error' | 'warning' | 'info';
 
 const styles: Record<NoticeKind, { icon: typeof CheckCircle2; accent: string; tint: string }> = {
   success: { icon: CheckCircle2, accent: '#16734a', tint: '#e9f7ef' },
-  error: { icon: AlertCircle, accent: '#bd3f36', tint: '#fff0ed' },
+  error: { icon: AlertCircle, accent: '#dc2626', tint: '#fecaca' },
   warning: { icon: AlertTriangle, accent: '#a56a08', tint: '#fff7df' },
   info: { icon: Info, accent: '#3468a8', tint: '#edf5ff' },
 };

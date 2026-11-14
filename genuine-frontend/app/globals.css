@@ -82,10 +82,10 @@ a[href][class*="hover:bg"]:hover p:first-of-type {
   text-underline-offset: 0.2em;
 }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
-  outline: 3px solid rgb(201 230 0 / 75%);
+  outline: 3px solid rgb(196 154 53 / 72%);
   outline-offset: 2px;
 }
-::selection { background: rgb(201 230 0 / 38%); }
+::selection { background: rgb(196 154 53 / 28%); }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { border-radius: 999px; background: #c9cbc4; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -126,28 +126,28 @@ html.dark .dashboard-sidebar-scrollbar::-webkit-scrollbar-thumb:hover { backgrou
 .chart-line-draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: mizania-chart-draw 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: mizania-chart-draw 2.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .chart-area-reveal {
   transform-box: fill-box;
   transform-origin: center bottom;
-  animation: mizania-chart-area-reveal 750ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: mizania-chart-area-reveal 1.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .chart-donut-reveal {
-  animation: mizania-chart-donut-reveal 850ms ease-out both;
+  animation: mizania-chart-donut-reveal 1.25s ease-out both;
 }
 .chart-point-appear {
   transform-box: fill-box;
   transform-origin: center;
-  animation: mizania-chart-point-appear 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: mizania-chart-point-appear 780ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .chart-bar-rise {
   transform-origin: center bottom;
-  animation: mizania-chart-bar-rise 850ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: mizania-chart-bar-rise 1.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .chart-progress-fill {
   transform-origin: left center;
-  animation: mizania-chart-progress-grow 800ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: mizania-chart-progress-grow 1.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -180,8 +180,8 @@ html.dark body {
 }
 
 html.dark button:not(:disabled):hover {
-  filter: brightness(1.12);
-  box-shadow: 0 5px 16px rgb(0 0 0 / 28%);
+  filter: brightness(1.05);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 22%);
 }
 
 html.dark button.feedback-primary {
@@ -515,3 +515,132 @@ html.dark [class*="bg-[#eaf2ff"] {
 
 html.dark svg text[fill="#858880"] { fill: #aab2a6; }
 html.dark svg text[fill="#30342e"] { fill: #d3d8d0; }
+
+/* Keep danger/error states easy to spot across the app in both themes. */
+html:not(.dark) [class~="bg-rose-50"],
+html:not(.dark) [class~="bg-rose-50/90"],
+html:not(.dark) [class~="bg-rose-100"],
+html:not(.dark) [class~="bg-red-50"],
+html:not(.dark) [class~="bg-red-100"],
+html:not(.dark) [class*="bg-[#fff0ed"],
+html:not(.dark) [class*="bg-[#fff7f5"],
+html:not(.dark) [class*="bg-[#fff8f6"],
+html:not(.dark) [class*="bg-[#fff5f3"],
+html:not(.dark) [class*="bg-[#fff0f2"] {
+  background-color: #fee2e2 !important;
+}
+
+html:not(.dark) [class~="border-rose-200"],
+html:not(.dark) [class~="border-rose-300"],
+html:not(.dark) [class~="border-red-200"],
+html:not(.dark) [class~="border-red-300"],
+html:not(.dark) [class*="border-[#efd4cf"],
+html:not(.dark) [class*="border-[#efcfcb"] {
+  border-color: #f87171 !important;
+}
+
+html:not(.dark) [class~="text-rose-700"],
+html:not(.dark) [class~="text-rose-800"],
+html:not(.dark) [class~="text-red-700"],
+html:not(.dark) [class~="text-red-800"] {
+  color: #991b1b !important;
+}
+
+html.dark [class~="bg-rose-50"],
+html.dark [class~="bg-rose-50/90"],
+html.dark [class~="bg-rose-100"],
+html.dark [class~="bg-red-50"],
+html.dark [class~="bg-red-100"],
+html.dark [class*="bg-[#fff0ed"],
+html.dark [class*="bg-[#fff7f5"],
+html.dark [class*="bg-[#fff8f6"],
+html.dark [class*="bg-[#fff5f3"],
+html.dark [class*="bg-[#fff0f2"] {
+  background-color: #3b1717 !important;
+}
+
+html.dark [class~="border-rose-200"],
+html.dark [class~="border-rose-300"],
+html.dark [class~="border-rose-900"],
+html.dark [class~="border-rose-950/70"],
+html.dark [class~="border-red-200"],
+html.dark [class~="border-red-300"],
+html.dark [class*="border-[#efd4cf"],
+html.dark [class*="border-[#efcfcb"] {
+  border-color: #b91c1c !important;
+}
+
+html.dark [class~="text-rose-700"],
+html.dark [class~="text-rose-800"],
+html.dark [class~="text-red-700"],
+html.dark [class~="text-red-800"] {
+  color: #fca5a5 !important;
+}
+
+/* Use a calm red for orange/amber accent typography in light mode. */
+html:not(.dark) [class~="text-amber-700"],
+html:not(.dark) [class~="text-amber-800"],
+html:not(.dark) [class~="text-amber-900"],
+html:not(.dark) [class~="text-orange-700"],
+html:not(.dark) [class~="text-orange-800"],
+html:not(.dark) [class~="text-orange-900"],
+html:not(.dark) [class*="text-[#c24e00"],
+html:not(.dark) [class*="text-[#a56a08"],
+html:not(.dark) [class*="text-[#93600c"],
+html:not(.dark) [class*="text-[#98700b"],
+html:not(.dark) [class*="text-[#8b681b"],
+html:not(.dark) [class*="text-[#79570d"],
+html:not(.dark) [class*="text-[#81600e"],
+html:not(.dark) [class*="text-[#76570c"],
+html:not(.dark) [class*="text-[#874400"],
+html:not(.dark) [class*="text-[#8a6822"],
+html:not(.dark) [class*="text-[#926100"] {
+  color: #b54742 !important;
+}
+
+html.dark [class~="text-emerald-300"],
+html.dark [class~="text-emerald-200"],
+html.dark [class~="text-green-300"],
+html.dark [class~="text-green-200"] { color: #9ac9ae !important; }
+
+html.dark [class~="text-blue-300"],
+html.dark [class~="text-sky-300"],
+html.dark [class~="text-cyan-300"] { color: #a5c2df !important; }
+
+html.dark [class~="text-violet-300"],
+html.dark [class~="text-purple-300"],
+html.dark [class~="text-fuchsia-300"] { color: #c2afd8 !important; }
+
+html.dark [class~="text-rose-300"],
+html.dark [class~="text-red-300"],
+html.dark [class~="text-pink-300"] { color: #e39a96 !important; }
+
+html.dark [class~="border-rose-900"],
+html.dark [class~="border-red-900"],
+html.dark [class~="border-amber-900"],
+html.dark [class~="border-orange-900"] { border-color: rgb(255 255 255 / 14%) !important; }
+
+html.dark [class~="bg-rose-50"],
+html.dark [class~="bg-rose-50/90"],
+html.dark [class~="bg-rose-100"],
+html.dark [class~="bg-red-50"],
+html.dark [class~="bg-red-100"] { background-color: #301d1c !important; }
+
+/* Keep the selected settings section easy to spot in dark mode without a
+   bright gold fill, and soften the high-contrast text and action button. */
+html.dark .settings-page [class~="dark:text-white"] { color: #e2e5df !important; }
+html.dark .settings-page nav[aria-label="Settings sections"] button[aria-current="page"],
+html.dark .settings-page nav[aria-label="Team access sections"] button[aria-current="page"] {
+  background-color: #342f24 !important;
+  color: #e1c985 !important;
+  box-shadow: inset 3px 0 #b99a55, 0 0 0 1px rgb(185 154 85 / 18%) !important;
+}
+html.dark .settings-page button.bg-amber-500 {
+  background-color: #d19332 !important;
+  color: #282319 !important;
+}
+html.dark .settings-page button.bg-amber-500:hover {
+  background-color: #daa34c !important;
+  filter: none;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+}

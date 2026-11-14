@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Download, FileSpreadsheet, FileText, Loader2, RefreshCw, TrendingUp } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useReportsStore, type ReportTab, type ReportsData } from '@/store/reportsStore';
-import { reportsAPI, type ReportFormat, type ReportMetric, type ReportRange, type ReportType } from '@/lib/api/reports';
+import { reportsAPI, type ReportFormat, type ReportMetric, type ReportRange, type ReportSettingsContext, type ReportType } from '@/lib/api/reports';
 import { getApiError } from '@/lib/api';
-import { formatBusinessDate } from '@/lib/format/businessDate';
+import { cacheBusinessDateSettings, formatBusinessDate } from '@/lib/format/businessDate';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 
 const tabs: Array<{ id: ReportTab; label: string }> = [
@@ -43,6 +43,12 @@ const panelClass = 'min-w-0 rounded-2xl border border-[#e1e4dc] bg-white p-4 sha
 
 function localDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function businessToday(timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
+  return new Date(Number(part('year')), Number(part('month')) - 1, Number(part('day')));
 }
 
 function initialRange(): ReportRange {
@@ -102,10 +108,48 @@ function TrendBars({ labels, values, code }: { labels: string[]; values: number[
 }
 
 function PairedTrendBars({ labels, series, code }: { labels: string[]; series: Array<{ label: string; data: number[] }>; code: string }) {
-  const max = Math.max(1, ...series.flatMap((item) => item.data.map((value) => Math.abs(Number(value) || 0))));
+  const width = 760;
+  const height = 300;
+  const left = 86;
+  const right = 22;
+  const top = 24;
+  const bottom = 52;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const cleanSeries = series.map((item) => ({ ...item, data: labels.map((_, index) => Number(item.data[index]) || 0) }));
+  const maxValue = Math.max(0, ...cleanSeries.flatMap((item) => item.data));
+  const max = maxValue > 0 ? maxValue * 1.12 : 1;
+  const xAt = (index: number) => labels.length === 1 ? left + plotWidth / 2 : left + (index / (labels.length - 1)) * plotWidth;
+  const yAt = (value: number) => top + (1 - Math.max(0, value) / max) * plotHeight;
+  const pointsFor = (item: { label: string; data: number[] }) => item.data.map((value, index) => ({ x: xAt(index), y: yAt(value), value, label: labels[index] }));
+  const linePath = (points: Array<{ x: number; y: number }>) => points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+  const colors = cleanSeries.map((item) => /expense/i.test(item.label) ? '#e89112' : '#07845b');
+  const visibleLabels = labels.map((_, index) => index).filter((index) => index === 0 || index === labels.length - 1 || index % Math.max(1, Math.ceil(labels.length / 5)) === 0);
+  const compactAmount = (value: number) => `${code} ${new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value)}`;
   if (!labels.length) return <div className="grid min-h-40 place-items-center text-sm text-[#70786d] dark:text-[#aab2a5]">No trend points for this period.</div>;
-  const colors = ['bg-emerald-600 dark:bg-emerald-500', 'bg-amber-500 dark:bg-amber-400'];
-  return <div className="flex min-h-48 items-end gap-2 overflow-x-auto border-b border-[#dfe4da] px-1 pt-5 dark:border-white/10">{labels.map((label, index) => <div key={`${label}-${index}`} className="flex min-w-14 flex-1 flex-col items-center justify-end gap-2"><div className="flex h-36 w-full items-end justify-center gap-1">{series.map((item, seriesIndex) => { const value = Number(item.data[index]) || 0; return <div key={`${item.label}-${value}`} className={`chart-bar-rise w-4 max-w-1/3 rounded-t-md ${colors[seriesIndex % colors.length]}`} style={{ height: `${Math.max(value ? 4 : 2, Math.abs(value) / max * 120)}px`, animationDelay: `${Math.min(index * 60 + seriesIndex * 90, 550)}ms` }} title={`${item.label}: ${currency(value, code)}`} />; })}</div><span className="max-w-16 truncate pb-2 text-[9px] text-[#687064] dark:text-[#aab2a5]" title={label}>{formatPeriodLabel(label || '—')}</span></div>)}</div>;
+  return <div className="mt-4 min-w-0">
+    <div className="flex items-center justify-between gap-3 pb-1 text-[10px] text-[#687064] dark:text-[#aab2a5]"><span>Amount ({code})</span><span>{labels.length} periods</span></div>
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`Revenue and expenses line chart across ${labels.length} periods, in ${code}`} className="h-56 w-full sm:h-72">
+      <defs><linearGradient id="report-revenue-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#07845b" stopOpacity="0.2"/><stop offset="100%" stopColor="#07845b" stopOpacity="0.01"/></linearGradient></defs>
+      {[0, 1, 2, 3].map((step) => {
+        const y = top + (step / 3) * plotHeight;
+        const value = max - (step / 3) * max;
+        return <g key={step}><line x1={left} x2={width - right} y1={y} y2={y} className="stroke-[#e5e9e2] dark:stroke-white/10" strokeDasharray={step === 3 ? undefined : '3 6'}/><text x={left - 10} y={y + 4} textAnchor="end" className="fill-[#697368] dark:fill-[#b6c0b5]" fontSize="11">{compactAmount(value)}</text></g>;
+      })}
+      {cleanSeries.map((item, index) => {
+        const points = pointsFor(item);
+        const path = linePath(points);
+        const area = `${path} L ${points[points.length - 1].x} ${top + plotHeight} L ${points[0].x} ${top + plotHeight} Z`;
+        return <g key={item.label}>
+          {index === 0 ? <path d={area} className="chart-area-reveal" fill="url(#report-revenue-fill)"/> : null}
+          <path d={path} pathLength={1} className="chart-line-draw" fill="none" stroke={colors[index]} strokeWidth={index === 0 ? 3.5 : 3} strokeLinecap="round" strokeLinejoin="round" style={{ animationDelay: `${index * 160}ms` }}/>
+          {points.map((point, pointIndex) => <circle key={`${item.label}-${point.label}-${pointIndex}`} className="chart-point-appear" style={{ animationDelay: `${350 + pointIndex * 45 + index * 100}ms` }} cx={point.x} cy={point.y} r={labels.length <= 10 ? 4 : 2.8} fill="white" stroke={colors[index]} strokeWidth="2"><title>{`${formatPeriodLabel(point.label)} · ${item.label}: ${currency(point.value, code)}`}</title></circle>)}
+        </g>;
+      })}
+      {visibleLabels.map((index) => <text key={`${labels[index]}-${index}`} x={xAt(index)} y={height - 13} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} className="fill-[#697368] dark:fill-[#b6c0b5]" fontSize="11">{formatPeriodLabel(labels[index] || '—')}</text>)}
+    </svg>
+    <ul className="sr-only" aria-label="Revenue and expense values by period">{labels.map((label, index) => <li key={`${label}-${index}`}>{formatPeriodLabel(label)}: {cleanSeries.map((item) => `${item.label} ${currency(item.data[index], code)}`).join(', ')}.</li>)}</ul>
+  </div>;
 }
 
 function MetricDefinition({ metric, code, index }: { metric: ReportMetric; code: string; index: number }) {
@@ -142,43 +186,75 @@ export default function ReportsPage() {
   const [range, setRange] = useState<ReportRange>(initialRange);
   const [preset, setPreset] = useState('month');
   const [exportFormat, setExportFormat] = useState<ReportFormat>('PDF');
-  const [exportType, setExportType] = useState<ReportType>('DASHBOARD');
+  const [exportType, setExportType] = useState<ReportType>(() => exportChoices[tab][0]?.type || 'DASHBOARD');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [currencyCode, setCurrencyCode] = useState('TZS');
+  const [reportSettings, setReportSettings] = useState<ReportSettingsContext | null>(null);
   const panel = panels[tab];
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    if (requestedTab && tabs.some((item) => item.id === requestedTab) && requestedTab !== tab) {
-      useReportsStore.setState({ tab: requestedTab as ReportTab, page: 1 });
+    if (requestedTab && tabs.some((item) => item.id === requestedTab)) {
+      const nextTab = requestedTab as ReportTab;
+      if (nextTab !== useReportsStore.getState().tab) useReportsStore.setState({ tab: nextTab, page: 1 });
+      setExportType(exportChoices[nextTab][0]?.type || 'DASHBOARD');
     }
   }, []);
 
+  useEffect(() => {
+    if (!canView) return;
+    let active = true;
+    reportsAPI.settings().then((settings) => {
+      if (!active) return;
+      setReportSettings(settings);
+      setCurrencyCode(settings.currency);
+      cacheBusinessDateSettings({ ...settings });
+      const today = businessToday(settings.timezone);
+      setRange((current) => current.dateTo === localDate(new Date())
+        ? { ...current, dateFrom: localDate(new Date(today.getFullYear(), today.getMonth(), 1)), dateTo: localDate(today) }
+        : current);
+    }).catch(() => {
+      if (active) setExportError('Could not load business report settings. Date presets may be unavailable until you refresh.');
+    });
+    return () => { active = false; };
+  }, [canView, user?.id, user?.businessId]);
+
   const choosePreset = useCallback((value: string) => {
     setPage(1);
-    const today = new Date();
+    const today = businessToday(reportSettings?.timezone || 'UTC');
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     let groupBy: ReportRange['groupBy'] = 'DAILY';
     if (value === 'last-month') start.setMonth(start.getMonth() - 1);
     if (value === 'last-month') { const lastDay = new Date(today.getFullYear(), today.getMonth(), 0); setRange({ dateFrom: localDate(new Date(lastDay.getFullYear(), lastDay.getMonth(), 1)), dateTo: localDate(lastDay), groupBy: 'DAILY' }); setPreset(value); return; }
     if (value === 'quarter') { start.setMonth(Math.floor(today.getMonth() / 3) * 3, 1); groupBy = 'WEEKLY'; }
     if (value === 'year') {
-      const financialYear = typeof window === 'undefined' ? 'CALENDAR' : (localStorage.getItem('mizania.business-settings') || '{}');
+      const financialYear = reportSettings?.financialYear || 'CALENDAR';
       let startMonth = 0;
-      try { const key = JSON.parse(financialYear).financialYear; startMonth = key === 'JULY' ? 6 : key === 'APRIL' ? 3 : 0; } catch { startMonth = 0; }
+      startMonth = financialYear === 'JULY' ? 6 : financialYear === 'APRIL' ? 3 : 0;
       const year = today.getMonth() < startMonth ? today.getFullYear() - 1 : today.getFullYear();
       start.setFullYear(year, startMonth, 1); groupBy = 'MONTHLY';
     }
     setRange({ dateFrom: localDate(start), dateTo: localDate(today), groupBy });
     setPreset(value);
-  }, [setPage]);
+  }, [setPage, reportSettings]);
 
   useEffect(() => {
     clear();
     if (canView) void load(tab, range);
   }, [canView, user?.id, user?.businessId, tab, range, page, pageSize, productSortBy, customerSegmentBy, load, clear, channelBy, forecastMetric, forecastMethod]);
-  useEffect(() => { if (data?.kind === 'overview') setCurrencyCode(data.executive.currency || 'TZS'); if (data?.kind === 'sales') setCurrencyCode(data.sales.currency || 'TZS'); }, [data]);
+  useEffect(() => {
+    const reportCurrency = data?.kind === 'overview' ? data.executive.currency
+      : data?.kind === 'sales' ? data.sales.currency
+      : data?.kind === 'products' ? data.products.currency
+      : data?.kind === 'customers' ? data.customers.currency
+      : data?.kind === 'suppliers' ? data.suppliers.currency
+      : data?.kind === 'finance' ? data.financialSummary.currency
+      : data?.kind === 'inventory' ? data.inventory.currency
+      : data?.kind === 'trends' ? String(data.forecast.currency || data.trends.currency || '')
+      : undefined;
+    if (reportCurrency) setCurrencyCode(reportCurrency);
+  }, [data]);
 
   const refresh = () => { if (canView) void load(tab, range); };
   const chooseTab = (id: ReportTab) => { if (id !== tab) { useReportsStore.setState({ tab: id, page: 1 }); setExportType(panels[id].exportType); } };
@@ -189,6 +265,8 @@ export default function ReportsPage() {
     try {
       const result = await reportsAPI.export(exportType, exportFormat, range, {
         channelBy: exportType === 'SALES_BY_CHANNEL' ? channelBy : undefined,
+        sortBy: exportType === 'PRODUCT_PERFORMANCE' ? productSortBy : undefined,
+        segmentBy: exportType === 'CUSTOMER_ANALYTICS' ? customerSegmentBy : undefined,
         metric: exportType === 'TREND_ANALYSIS' || exportType === 'FORECAST' ? forecastMetric : undefined,
         method: exportType === 'FORECAST' ? forecastMethod : undefined,
         periods: exportType === 'FORECAST' ? 3 : exportType === 'TREND_ANALYSIS' ? 12 : undefined,
@@ -203,7 +281,7 @@ export default function ReportsPage() {
   const rangeInvalid = Boolean(range.dateFrom && range.dateTo && range.dateFrom > range.dateTo);
   const reportLabel = useMemo(() => `${formatBusinessDate(range.dateFrom)} – ${formatBusinessDate(range.dateTo)}`, [range.dateFrom, range.dateTo]);
 
-  if (!canView) return <section className={`${panelClass} mx-auto mt-8 max-w-2xl`}><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#fff0ed] text-[#a33c35] dark:bg-[#3a211e] dark:text-[#ff9d92]"><AlertCircle size={19}/></span><div><h1 className="text-lg font-bold text-[#252b23] dark:text-white">Reports access required</h1><p className="mt-1 text-sm leading-6 text-[#626b60] dark:text-[#b1b8ad]">Your account does not have permission to view business reports. Contact your business administrator.</p></div></div></section>;
+  if (!canView) return <section className={`${panelClass} mx-auto mt-8 max-w-2xl`}><div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#dc2626] text-white dark:bg-[#b91c1c] dark:text-white"><AlertCircle size={19}/></span><div><h1 className="text-lg font-bold text-[#252b23] dark:text-white">Reports access required</h1><p className="mt-1 text-sm leading-6 text-[#626b60] dark:text-[#b1b8ad]">Your account does not have permission to view business reports. Contact your business administrator.</p></div></div></section>;
 
   return <div className="min-w-0 space-y-5 sm:space-y-6">
     <section className="flex min-w-0 flex-col gap-4 rounded-2xl border border-[#dec98b] bg-[#fff9e9] p-4 shadow-sm shadow-amber-950/[0.04] dark:border-[#6b531b] dark:bg-[#282317] sm:flex-row sm:items-end sm:justify-between sm:p-6">
@@ -211,7 +289,7 @@ export default function ReportsPage() {
       <div className="flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">Period<select aria-label="Report period" className={inputClass} value={preset} onChange={(event) => choosePreset(event.target.value)}><option value="month">This month</option><option value="last-month">Last month</option><option value="quarter">This quarter</option><option value="year">This financial year</option><option value="custom">Custom range</option></select></label>
         <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">From<input aria-label="Report start date" className={inputClass} type="date" value={range.dateFrom} onChange={(event) => changeDate('dateFrom', event.target.value)}/></label>
-        <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">To<input aria-label="Report end date" className={inputClass} type="date" value={range.dateTo} onChange={(event) => changeDate('dateTo', event.target.value)}/></label><label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">Group by<select aria-label="Report grouping" className={inputClass} value={range.groupBy || 'DAILY'} onChange={(event) => setRange((current) => ({ ...current, groupBy: event.target.value as ReportRange['groupBy'] }))}>{(tab === 'finance' ? ['DAILY', 'WEEKLY', 'MONTHLY'] : ['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']).map((group) => <option key={group} value={group}>{labelOf(group)}</option>)}</select></label>
+        <label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">To<input aria-label="Report end date" className={inputClass} type="date" value={range.dateTo} onChange={(event) => changeDate('dateTo', event.target.value)}/></label><label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#5f675d] dark:text-[#bbc2b5]">Group by<select aria-label="Report grouping" className={inputClass} value={range.groupBy || 'DAILY'} onChange={(event) => setRange((current) => ({ ...current, groupBy: event.target.value as ReportRange['groupBy'] }))}>{['DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'].map((group) => <option key={group} value={group}>{labelOf(group)}</option>)}</select></label>
         <button type="button" onClick={refresh} disabled={loading || rangeInvalid} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#24251f] px-3.5 text-sm font-semibold text-white transition hover:bg-[#3a3a30] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500 disabled:cursor-wait disabled:opacity-60 dark:bg-[#d8b454] dark:text-[#201b0e] dark:hover:bg-[#e4c56d]">{loading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={15}/>}<span className="hidden sm:inline">{loading ? 'Loading' : 'Refresh'}</span></button>
       </div>
     </section>

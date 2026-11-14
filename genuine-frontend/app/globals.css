@@ -644,3 +644,13 @@ html.dark .settings-page button.bg-amber-500:hover {
   filter: none;
   box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
 }
+
+/* Explicit theme selection wins over the broad dark-mode remapping above.
+   Keep the active section recognizable across report, inventory, finance,
+   purchase, and notification tab strips. */
+html.dark [data-theme-tab-active="true"] {
+  background-color: #4b3716 !important;
+  border-color: rgb(255 220 130 / 38%) !important;
+  color: #ffdc82 !important;
+  box-shadow: inset 0 0 0 1px rgb(255 220 130 / 20%), 0 1px 3px rgb(0 0 0 / 24%) !important;
+}

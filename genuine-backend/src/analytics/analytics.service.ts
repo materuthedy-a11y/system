@@ -233,7 +233,7 @@ export class AnalyticsService {
           'Cumulative active ledger inflows minus outflows through the selected as-of date.',
         inventoryValue: `Inventory service valuation using ${valuation.costingMethod}.`,
         inventoryValuationTiming:
-          'Current stock snapshot at inventoryAsOf; selected date range applies to period flows, not historical inventory valuation.',
+          'Current stock snapshot as of the inventory date shown above; selected date range applies to period flows, not historical inventory valuation.',
       },
     };
   }
@@ -330,6 +330,13 @@ export class AnalyticsService {
         0,
       ),
     );
+    const customerCreditAmount = round(
+      invoices.reduce((sum, invoice) => {
+        const paid = paidByInvoice.get(invoice.id) || 0;
+        const returned = returnByInvoice.get(invoice.id) || 0;
+        return sum + Math.max(0, paid + returned - invoice.totalAmount);
+      }, 0),
+    );
     const totalQuantity = round(
       invoices.reduce(
         (sum, invoice) => sum + invoice.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
@@ -378,6 +385,7 @@ export class AnalyticsService {
         averageOrderValue: invoices.length ? round(revenue / invoices.length) : 0,
         paidAmount: round([...paidByInvoice.values()].reduce((sum, value) => sum + value, 0)),
         outstandingAmount: outstanding,
+        customerCreditAmount,
         unpaidInvoiceCount: invoices.filter(
           (invoice) =>
             invoice.totalAmount -
@@ -1244,9 +1252,39 @@ export class AnalyticsService {
       case 'DASHBOARD':
         report = await this.getExecutiveDashboard(businessId, common);
         break;
-      case 'SALES_DASHBOARD':
-        report = await this.getSalesDashboard(businessId, common);
+      case 'SALES_DASHBOARD': {
+        const groupBy = filter.groupBy || 'DAILY';
+        const channelBy = filter.channelBy || 'LOCATION';
+        const range = await this.getDateRange(businessId, filter);
+        const [sales, channels, revenueTrend] = await Promise.all([
+          this.getSalesDashboard(businessId, common),
+          this.getSalesByChannel(businessId, { ...common, channelBy }),
+          this.series(businessId, 'REVENUE', range, groupBy),
+        ]);
+        const channelLabels = {
+          LOCATION: 'Location',
+          SALESPERSON: 'Salesperson',
+          CUSTOMER_TYPE: 'Customer type',
+        } as const;
+        const groupLabels = {
+          DAILY: 'Daily',
+          WEEKLY: 'Weekly',
+          MONTHLY: 'Monthly',
+          QUARTERLY: 'Quarterly',
+          YEARLY: 'Yearly',
+        } as const;
+        report = {
+          ...sales,
+          channelBy: channelLabels[channelBy] || channelBy,
+          groupBy: groupLabels[groupBy] || groupBy,
+          salesByChannel: channels,
+          revenueTrend: revenueTrend.map((point) => ({
+            period: point.period,
+            revenue: point.value,
+          })),
+        };
         break;
+      }
       case 'INVENTORY_DASHBOARD':
         report = await this.getInventoryDashboard(businessId, common);
         break;
@@ -2240,24 +2278,39 @@ export class AnalyticsService {
       if (value && typeof value === 'object' && !(value instanceof Date)) {
         const record = value as Record<string, unknown>;
         if ('value' in record && ('label' in record || 'name' in record)) {
-          metrics.push({ Metric: record.label ?? record.name ?? this.exportLabel(key), Value: record.value, Unit: record.unit ?? '', Trend: record.trend ?? '', Status: record.status ?? '' });
+          metrics.push({
+            Metric: record.label ?? record.name ?? this.exportLabel(key),
+            Value: record.value,
+            Unit: record.unit ?? '',
+            ...(record.previousValue !== undefined ? { 'Previous Value': record.previousValue } : {}),
+            ...(record.changePercent !== undefined ? { 'Change Percent': record.changePercent ?? '' } : {}),
+            Trend: record.trend ?? '',
+            Status: record.status ?? '',
+          });
           return;
         }
         const labels = Array.isArray(record.labels) ? record.labels : Array.isArray(record.periods) ? record.periods : null;
         if (labels) {
           const series: Record<string, unknown[]> = {};
+          const consumed = new Set(['labels', 'periods']);
           for (const [seriesKey, seriesValue] of Object.entries(record)) {
             if (seriesKey === 'labels' || seriesKey === 'periods') continue;
-            if (Array.isArray(seriesValue) && seriesValue.length === labels.length) series[seriesKey] = seriesValue;
-            else if (Array.isArray(seriesValue) && seriesValue.every((item) => item && typeof item === 'object' && Array.isArray((item as any).data))) {
+            if (Array.isArray(seriesValue) && seriesValue.every((item) => item && typeof item === 'object' && Array.isArray((item as any).data))) {
+              consumed.add(seriesKey);
               for (const item of seriesValue as Array<{ label?: string; name?: string; data: unknown[] }>) series[String(item.label ?? item.name ?? 'Series')] = item.data;
+            } else if (Array.isArray(seriesValue) && seriesValue.length === labels.length) {
+              consumed.add(seriesKey);
+              series[seriesKey] = seriesValue;
             }
           }
           const columns = Object.keys(series);
           if (columns.length) {
             addRows([...path, key].filter(Boolean).join(' '), labels.map((label, index) => ({ Period: label, ...Object.fromEntries(columns.map((column) => [this.exportLabel(column), series[column][index]])) })));
-            return;
           }
+          for (const [childKey, child] of Object.entries(record)) {
+            if (!consumed.has(childKey)) visit(childKey, child, [...path, key].filter(Boolean));
+          }
+          return;
         }
         for (const [childKey, child] of Object.entries(record)) visit(childKey, child, [...path, key].filter(Boolean));
         return;
@@ -2376,7 +2429,14 @@ export class AnalyticsService {
   private toPdf(report: unknown, title: string): Buffer {
     const width = 842; const height = 595; const margin = 36; const contentWidth = width - margin * 2;
     const pages: string[][] = [[]]; let commands = pages[0]; let y = height - 42;
-    const safe = (value: unknown) => this.exportValue(value).normalize('NFKD').replace(/[^\x20-\x7E]/g, '?');
+    const safe = (value: unknown) => (typeof value === 'number' && Number.isFinite(value)
+      ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+      : this.exportValue(value))
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[·•]/g, ' / ')
+      .replace(/[–—]/g, '-')
+      .replace(/[^\x20-\x7E]/g, '');
     const escaped = (value: string) => value.replace(/([\\()])/g, '\\$1');
     const drawText = (value: string, x: number, baseline: number, size = 8, color = '0.16 0.18 0.15') => commands.push(`${color} rg BT /F1 ${size} Tf ${x.toFixed(1)} ${baseline.toFixed(1)} Td (${escaped(value)}) Tj ET`);
     const drawRect = (x: number, top: number, w: number, h: number, color: string) => commands.push(`${color} rg ${x.toFixed(1)} ${(top-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);
@@ -2391,32 +2451,96 @@ export class AnalyticsService {
     };
     drawRect(0, height, width, 7, '0.98 0.58 0.04');
     drawText('MIZANIA  |  BUSINESS REPORT', margin, y, 8, '0.35 0.38 0.33'); y -= 22;
-    drawText(this.exportLabel(title), margin, y, 22, '0.10 0.12 0.10'); y -= 20;
+    drawText(title === 'DASHBOARD' ? 'Executive Overview' : this.exportLabel(title), margin, y, 22, '0.10 0.12 0.10'); y -= 20;
     drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 26;
-    const sections = this.exportSections(report);
+    let sections = this.exportSections(report).map((section) => {
+      const internalIdHeaders = new Set(
+        section.title === 'Top Customers'
+          ? section.headers.filter((header) => /^customer\s+id$/i.test(header))
+          : section.title === 'Sales By Channel'
+            ? section.headers.filter((header) => /^channel\s+id$/i.test(header))
+            : [],
+      );
+      if (!internalIdHeaders.size) return section;
+      return {
+        ...section,
+        headers: section.headers.filter((header) => !internalIdHeaders.has(header)),
+        rows: section.rows.map((row) =>
+          Object.fromEntries(
+            Object.entries(row).filter(([header]) => !internalIdHeaders.has(header)),
+          ),
+        ),
+      };
+    });
+    if (title === 'DASHBOARD') {
+      // The Executive Overview PDF follows the visible Overview report. Keep
+      // its summary, definitions, revenue/expense series, and top products;
+      // hidden cash/customer series and the duplicate internal KPI catalogue
+      // remain available in structured exports and the dedicated report tabs.
+      sections = sections.map((section) => {
+        if (section.title.toLowerCase() === 'charts top products') {
+          return {
+            ...section,
+            title: 'Top Products',
+            headers: section.headers.map((header) => header === 'Period' ? 'Product' : header),
+            rows: section.rows.map((row) => ({ Product: row.Period, Revenue: row.Revenue, Quantity: row.Quantity })),
+          };
+        }
+        if (section.title === 'Charts') return { ...section, title: 'Revenue and Expenses' };
+        return section;
+      });
+      sections = sections.filter((section) =>
+        ['Key figures', 'Report details', 'Revenue and Expenses', 'Top Products'].includes(section.title),
+      );
+    }
     for (const section of sections) {
-      const columnWidths = section.headers.map(() => contentWidth / Math.max(section.headers.length, 1));
+      const columnWeights = section.headers.map((header) => {
+        const label = header.toLowerCase();
+        if (/^channel$/.test(label)) return 2.5;
+        if (/(formula|definition|description|message|notes|reason)/.test(label)) return 3;
+        if (/(name|product|customer|supplier|account|field|metric|period|date|invoice|location|category)/.test(label)) return 2;
+        if (/(status|trend|unit|quantity|count|percent|margin|sku)/.test(label)) return 1.15;
+        return 1.5;
+      });
+      const totalColumnWeight = columnWeights.reduce((sum, weight) => sum + weight, 0) || 1;
+      const tableContentWidth = contentWidth - 10;
+      const columnWidths = columnWeights.map((weight) => tableContentWidth * weight / totalColumnWeight);
+      const rows = section.rows.length ? section.rows : [{ Status: 'No data for the selected period' }];
+      const preparedRows = rows.map((row, rowIndex) => {
+        const cells = section.headers.map((header, index) =>
+          wrap(row[header], Math.floor((columnWidths[index] - 10) / 7)),
+        );
+        return {
+          rowIndex,
+          cells,
+          height: Math.max(25, Math.max(1, ...cells.map((cell) => cell.length)) * 14 + 10),
+        };
+      });
+      const completeSectionHeight = 28 + 29 + preparedRows.reduce((sum, row) => sum + row.height, 0) + 12;
+      const remainingPageHeight = y - 42;
+      const freshPageHeight = height - 38 - 42;
+      if (completeSectionHeight <= freshPageHeight && completeSectionHeight > remainingPageHeight) newPage();
       if (y < 75) newPage();
       drawRect(margin, y + 12, contentWidth, 22, '0.98 0.95 0.87');
       drawText(this.exportLabel(section.title), margin + 8, y - 3, 14, '0.42 0.24 0.02'); y -= 28;
       const drawHeader = () => {
         if (y < 55) newPage();
-        drawRect(margin, y + 13, contentWidth, 27, '0.17 0.18 0.16');
+        const headerCells = section.headers.map((header, index) =>
+          wrap(this.exportLabel(header), Math.floor((columnWidths[index] - 10) / 7)),
+        );
+        const headerHeight = Math.max(27, Math.max(1, ...headerCells.map((cell) => cell.length)) * 14 + 10);
+        drawRect(margin, y + 13, contentWidth, headerHeight, '0.17 0.18 0.16');
         let x = margin + 5;
-        section.headers.forEach((header, index) => {
-          const headerLines = wrap(this.exportLabel(header), Math.floor(columnWidths[index] / 6));
-          headerLines.slice(0, 2).forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 12, 12, '1 1 1'));
+        headerCells.forEach((headerLines, index) => {
+          headerLines.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12, '1 1 1'));
           x += columnWidths[index];
         });
-        y -= 29;
+        y -= headerHeight + 2;
       };
       drawHeader();
-      const rows = section.rows.length ? section.rows : [{ Status: 'No data for the selected period' }];
-      rows.forEach((row, rowIndex) => {
-        const cells = section.headers.map((header, index) => wrap(row[header], Math.floor(columnWidths[index] / 6)));
-        const lineCount = Math.max(1, ...cells.map((cell) => cell.length)); const rowHeight = Math.max(25, lineCount * 14 + 10);
+      preparedRows.forEach(({ rowIndex, cells, height: rowHeight }) => {
         if (y - rowHeight < 42) { newPage(); drawHeader(); }
-        if (rowIndex % 2) drawRect(margin, y + 7, contentWidth, rowHeight, '0.965 0.97 0.955');
+        if (rowIndex % 2) drawRect(margin, y + 10, contentWidth, rowHeight, '0.965 0.97 0.955');
         let x = margin + 5;
         cells.forEach((cell, index) => { cell.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12)); x += columnWidths[index]; });
         y -= rowHeight;

@@ -268,10 +268,10 @@ export class SalesService {
     }
     const page = Math.max(1, Math.floor(Number(filter.page) || 1));
     const limit = Math.min(100, Math.max(1, Math.floor(Number(filter.limit) || 20)));
-    const invoiceDate: Prisma.DateTimeFilter = {};
-    if (filter.dateFrom) invoiceDate.gte = this.dateBound(filter.dateFrom, false);
-    if (filter.dateTo) invoiceDate.lt = this.dateBound(filter.dateTo, true);
-    if (invoiceDate.gte && invoiceDate.lt && invoiceDate.gte >= invoiceDate.lt)
+    const selectedDate: Prisma.DateTimeFilter = {};
+    if (filter.dateFrom) selectedDate.gte = this.dateBound(filter.dateFrom, false);
+    if (filter.dateTo) selectedDate.lt = this.dateBound(filter.dateTo, true);
+    if (selectedDate.gte && selectedDate.lt && selectedDate.gte >= selectedDate.lt)
       throw new BadRequestException('dateFrom must be on or before dateTo');
     const where: Prisma.SalesInvoiceWhereInput = {
       businessId,
@@ -285,7 +285,9 @@ export class SalesService {
           { customer: { name: { contains: filter.search, mode: 'insensitive' } } },
         ],
       }),
-      ...(Object.keys(invoiceDate).length > 0 && { invoiceDate }),
+      ...(Object.keys(selectedDate).length > 0 && (filter.dateBasis === 'ISSUED'
+        ? { issuedDate: selectedDate }
+        : { invoiceDate: selectedDate })),
       ...(filter.status === 'OVERDUE'
         ? {
             status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
@@ -299,6 +301,7 @@ export class SalesService {
       invoiceNumber: { invoiceNumber: direction },
       totalAmount: { totalAmount: direction },
       invoiceDate: { invoiceDate: direction },
+      issuedDate: { issuedDate: direction },
       dueDate: { dueDate: direction },
       createdAt: { createdAt: direction },
     };

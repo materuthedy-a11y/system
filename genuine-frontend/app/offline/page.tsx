@@ -26,7 +26,7 @@ export default function OfflinePage() {
         </div>
 
         <div className="mt-9 flex items-start gap-4">
-          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#eadcae] bg-gradient-to-br from-[#fff4cd] to-[#f4e5ae] text-[#88620d] shadow-inner shadow-[#a77a1d]/10 dark:border-[#67552d] dark:from-[#3c321e] dark:to-[#2b261d] dark:text-[#f0d98f]">
+          <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-[#f0b9b5] bg-gradient-to-br from-[#fff1f0] to-[#fbdad7] text-[#b42318] shadow-inner shadow-[#b42318]/10 dark:border-[#713b39] dark:from-[#3b2222] dark:to-[#291b1b] dark:text-[#ff7770]">
             <WifiOff size={25} strokeWidth={1.8} aria-hidden="true" />
           </span>
           <div className="min-w-0 pt-0.5">

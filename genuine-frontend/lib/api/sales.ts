@@ -223,7 +223,8 @@ export interface SalesInvoiceFilters {
   status?: InvoiceStatus;
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: 'invoiceNumber' | 'totalAmount' | 'invoiceDate' | 'dueDate' | 'createdAt';
+  dateBasis?: 'INVOICE' | 'ISSUED';
+  sortBy?: 'invoiceNumber' | 'totalAmount' | 'invoiceDate' | 'issuedDate' | 'dueDate' | 'createdAt';
   sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;

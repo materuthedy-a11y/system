@@ -31,7 +31,11 @@ export class SalesInvoiceFilterDto {
   dateTo?: string;
 
   @IsOptional()
-  @IsIn(['invoiceNumber', 'totalAmount', 'invoiceDate', 'dueDate', 'createdAt'])
+  @IsIn(['INVOICE', 'ISSUED'])
+  dateBasis?: 'INVOICE' | 'ISSUED';
+
+  @IsOptional()
+  @IsIn(['invoiceNumber', 'totalAmount', 'invoiceDate', 'issuedDate', 'dueDate', 'createdAt'])
   sortBy?: string;
 
   @IsOptional()

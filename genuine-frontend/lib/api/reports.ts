@@ -77,6 +77,7 @@ export interface SalesReport {
     averageOrderValue: number;
     paidAmount: number;
     outstandingAmount: number;
+    customerCreditAmount: number;
     unpaidInvoiceCount: number;
   };
   topCustomers: Array<{ customerId: string; customerName: string; revenue: number; invoiceCount: number }>;

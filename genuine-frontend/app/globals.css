@@ -654,3 +654,73 @@ html.dark [data-theme-tab-active="true"] {
   color: #ffdc82 !important;
   box-shadow: inset 0 0 0 1px rgb(255 220 130 / 20%), 0 1px 3px rgb(0 0 0 / 24%) !important;
 }
+
+/* Shared mint and sand surfaces for search/filter panels and grouped forms.
+   Inputs stay on their own neutral surface so text and controls remain clear. */
+:root {
+  --surface-mint: #edf7f1;
+  --surface-mint-border: #d2e7da;
+  --surface-mint-row: #f4faf6;
+  --surface-sand: #fbf7eb;
+  --surface-sand-border: #ebddb9;
+}
+html.dark {
+  --surface-mint: #18231c;
+  --surface-mint-border: #354b3b;
+  --surface-mint-row: #1d2921;
+  --surface-sand: #242116;
+  --surface-sand-border: #51472d;
+}
+.ui-filter-surface,
+.ui-form-mint {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+form > .ui-form-sand,
+.ui-form-sand {
+  background-color: var(--surface-sand) !important;
+  border-color: var(--surface-sand-border) !important;
+}
+.ui-form-row {
+  background-color: var(--surface-mint-row) !important;
+}
+[aria-label*="filters" i] {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+[role="search"] {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+form[class*="rounded"]:not([role="dialog"]) {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+form > section[class*="border"]:not([role="dialog"]) {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+/* Sand is an intentional second form surface and must win over the generic
+   mint rule above, including on deeply nested forms and in dark mode. */
+form > .ui-form-sand,
+.ui-form-sand {
+  background-color: var(--surface-sand) !important;
+  border-color: var(--surface-sand-border) !important;
+}
+html.dark:not([data-photo-theme="true"]) .ui-filter-surface,
+html.dark:not([data-photo-theme="true"]) .ui-form-mint,
+html.dark:not([data-photo-theme="true"]) [aria-label*="filters" i],
+html.dark:not([data-photo-theme="true"]) [role="search"],
+html.dark:not([data-photo-theme="true"]) form[class*="rounded"]:not([role="dialog"]),
+html.dark:not([data-photo-theme="true"]) form > section[class*="border"]:not([role="dialog"]) {
+  background-color: var(--surface-mint) !important;
+  border-color: var(--surface-mint-border) !important;
+}
+html.dark:not([data-photo-theme="true"]) form > .ui-form-sand,
+html.dark:not([data-photo-theme="true"]) .ui-form-sand {
+  background-color: var(--surface-sand) !important;
+  border-color: var(--surface-sand-border) !important;
+}
+html.dark:not([data-photo-theme="true"]) .ui-form-row {
+  background-color: var(--surface-mint-row) !important;
+}

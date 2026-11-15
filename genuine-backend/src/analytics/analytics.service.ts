@@ -748,7 +748,7 @@ export class AnalyticsService {
         include: {
           items: {
             include: {
-              product: { include: { category: true } },
+              product: { include: { category: true, defaultUnit: { select: { name: true } } } },
             },
           },
         },
@@ -777,6 +777,7 @@ export class AnalyticsService {
       productSku: string;
       categoryId: string;
       categoryName: string;
+      unit: string;
       quantity: number;
       revenue: number;
       cogs: number;
@@ -791,6 +792,7 @@ export class AnalyticsService {
         productSku: product.sku,
         categoryId: product.categoryId,
         categoryName: product.category?.name || 'Uncategorized',
+        unit: product.defaultUnit?.name || 'Units',
         quantity: 0,
         revenue: 0,
         cogs: 0,
@@ -834,7 +836,7 @@ export class AnalyticsService {
           (
             await this.prisma.product.findMany({
               where: { businessId, id: { in: productIds } },
-              include: { category: true },
+              include: { category: true, defaultUnit: { select: { name: true } } },
             })
           ).map((product) => [product.id, product]),
         )
@@ -889,6 +891,7 @@ export class AnalyticsService {
           productSku: row.productSku,
           categoryId: row.categoryId,
           categoryName: row.categoryName,
+          currentStock: round(row.currentStock),
           quantity: round(row.quantity),
           revenue,
           cogs,
@@ -896,7 +899,7 @@ export class AnalyticsService {
           marginPercent: revenue > MONEY_EPSILON ? round((profit / revenue) * 100) : 0,
           inventoryTurnover: turnover,
           estimatedDaysOfInventory: turnover && turnover > 0 ? round(rangeDays / turnover) : null,
-          unit: 'Units',
+          unit: row.unit,
         };
       });
     const sortBy = filter.sortBy || 'REVENUE';
@@ -911,7 +914,11 @@ export class AnalyticsService {
         Number(b[sortKey[sortBy]]) - Number(a[sortKey[sortBy]]) ||
         a.productName.localeCompare(b.productName),
     );
-    return { ...this.paginate(results, filter.page || 1, filter.limit || 20), currency: business.currency };
+    return {
+      ...this.paginate(results, filter.page || 1, filter.limit || 20),
+      period: range.periodName,
+      currency: business.currency,
+    };
   }
 
   async getCustomerAnalytics(businessId: string, filter: CustomerAnalyticsFilterDto) {
@@ -1328,7 +1335,12 @@ export class AnalyticsService {
           throw new BadRequestException(
             'Product export exceeds 10,000 rows; narrow the date range',
           );
-        report = productReport;
+        report = {
+          period: productReport.period,
+          currency: productReport.currency,
+          total: productReport.total,
+          products: productReport.data,
+        };
         break;
       }
       case 'CUSTOMER_ANALYTICS': {
@@ -2230,7 +2242,7 @@ export class AnalyticsService {
 
   private toCsv(report: unknown) {
     const cell = (raw: unknown) => {
-      let value = this.exportValue(raw);
+      let value = raw === null || raw === undefined ? '—' : this.exportValue(raw);
       if (typeof raw !== 'number' && /^[=+@\-\t\r]/.test(value)) value = `'${value}`;
       return `"${value.replace(/"/g, '""')}"`;
     };
@@ -2283,7 +2295,7 @@ export class AnalyticsService {
             Value: record.value,
             Unit: record.unit ?? '',
             ...(record.previousValue !== undefined ? { 'Previous Value': record.previousValue } : {}),
-            ...(record.changePercent !== undefined ? { 'Change Percent': record.changePercent ?? '' } : {}),
+            ...(record.changePercent !== undefined ? { 'Change Percent': record.changePercent } : {}),
             Trend: record.trend ?? '',
             Status: record.status ?? '',
           });
@@ -2354,7 +2366,7 @@ export class AnalyticsService {
     for (const section of this.exportSections(report)) {
       allRows.push({ values: [section.title], style: 1 });
       allRows.push({ values: section.headers.map((header) => this.exportLabel(header)), style: 2 });
-      for (const row of section.rows) allRows.push({ values: section.headers.map((header) => row[header] ?? ''), style: 0 });
+      for (const row of section.rows) allRows.push({ values: section.headers.map((header) => row[header] ?? '—'), style: 0 });
       allRows.push({ values: [], style: 0 });
     }
     const columnName = (index: number) => {
@@ -2364,6 +2376,18 @@ export class AnalyticsService {
       }
       return name;
     };
+    const maxColumns = allRows.reduce((max, row) => Math.max(max, row.values.length), 0);
+    const columnWidths = Array.from({ length: maxColumns }, (_, colIndex) => {
+      const maxLength = allRows.reduce((max, row) => {
+        const value = row.values[colIndex];
+        const text = value instanceof Date ? value.toISOString() : String(value ?? '');
+        return Math.max(max, text.length);
+      }, 0);
+      return Math.min(48, Math.max(12, maxLength + 2));
+    });
+    const worksheetColumns = `<cols>${columnWidths
+      .map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`)
+      .join('')}</cols>`;
     const xmlEscape = (value: string) =>
       value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(
         /[<>&"']/g,
@@ -2416,7 +2440,7 @@ export class AnalyticsService {
       ],
       [
         'xl/worksheets/sheet1.xml',
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><sheetData>${sheetRows}</sheetData></worksheet>`,
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="18"/>${worksheetColumns}<sheetData>${sheetRows}</sheetData></worksheet>`,
       ],
       [
         'xl/styles.xml',
@@ -2429,9 +2453,11 @@ export class AnalyticsService {
   private toPdf(report: unknown, title: string): Buffer {
     const width = 842; const height = 595; const margin = 36; const contentWidth = width - margin * 2;
     const pages: string[][] = [[]]; let commands = pages[0]; let y = height - 42;
-    const safe = (value: unknown) => (typeof value === 'number' && Number.isFinite(value)
-      ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
-      : this.exportValue(value))
+    const safe = (value: unknown) => (value === null || value === undefined
+      ? '—'
+      : typeof value === 'number' && Number.isFinite(value)
+        ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+        : this.exportValue(value))
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[·•]/g, ' / ')
@@ -2455,11 +2481,9 @@ export class AnalyticsService {
     drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 26;
     let sections = this.exportSections(report).map((section) => {
       const internalIdHeaders = new Set(
-        section.title === 'Top Customers'
-          ? section.headers.filter((header) => /^customer\s+id$/i.test(header))
-          : section.title === 'Sales By Channel'
-            ? section.headers.filter((header) => /^channel\s+id$/i.test(header))
-            : [],
+        section.headers.filter((header) =>
+          /^(?:business|category|channel|customer|location|product|supplier)\s+id$/i.test(header),
+        ),
       );
       if (!internalIdHeaders.size) return section;
       return {
@@ -2513,7 +2537,7 @@ export class AnalyticsService {
         return {
           rowIndex,
           cells,
-          height: Math.max(25, Math.max(1, ...cells.map((cell) => cell.length)) * 14 + 10),
+          height: Math.max(22, Math.max(1, ...cells.map((cell) => cell.length)) * 14 + 8),
         };
       });
       const completeSectionHeight = 28 + 29 + preparedRows.reduce((sum, row) => sum + row.height, 0) + 12;

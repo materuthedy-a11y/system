@@ -34,6 +34,7 @@ export interface ReportPage<T> {
   total: number;
   page: number;
   limit: number;
+  period?: string;
   currency?: string;
 }
 
@@ -87,6 +88,7 @@ export interface ProductReportRow {
   productId: string;
   productName: string;
   productSku: string;
+  categoryId: string;
   categoryName: string;
   quantity: number;
   revenue: number;

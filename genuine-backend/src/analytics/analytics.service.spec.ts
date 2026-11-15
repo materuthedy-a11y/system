@@ -9,6 +9,7 @@ describe('AnalyticsService product performance', () => {
       sku: 'A',
       categoryId: 'category-a',
       category: { name: 'Drinks' },
+      defaultUnit: { name: 'Bottle' },
       buyingPrice: 10,
     };
     const productB = {
@@ -17,6 +18,7 @@ describe('AnalyticsService product performance', () => {
       sku: 'B',
       categoryId: 'category-b',
       category: { name: 'Snacks' },
+      defaultUnit: { name: 'Pack' },
       buyingPrice: 5,
     };
     const prisma = {
@@ -36,7 +38,7 @@ describe('AnalyticsService product performance', () => {
         }]),
       },
       inventoryMovement: { findMany: jest.fn().mockResolvedValue([]) },
-      stockBalance: { findMany: jest.fn().mockResolvedValue([]) },
+      stockBalance: { findMany: jest.fn().mockResolvedValue([{ productId: 'product-a', quantity: 3 }]) },
       product: { findMany: jest.fn().mockResolvedValue([productA]) },
     };
     const service = new AnalyticsService(prisma as any, {} as any, {} as any);
@@ -50,9 +52,10 @@ describe('AnalyticsService product performance', () => {
     } as any);
 
     expect(result.data).toEqual(expect.arrayContaining([
-      expect.objectContaining({ productId: 'product-a', revenue: 49, quantity: 1 }),
-      expect.objectContaining({ productId: 'product-b', revenue: 36, quantity: 1 }),
+      expect.objectContaining({ productId: 'product-a', revenue: 49, quantity: 1, currentStock: 3, unit: 'Bottle' }),
+      expect.objectContaining({ productId: 'product-b', revenue: 36, quantity: 1, currentStock: 0, unit: 'Pack' }),
     ]));
+    expect(result.period).toBe('2026-09-01 to 2026-09-30');
     expect(result.data.reduce((sum, product) => sum + product.revenue, 0)).toBe(85);
   });
 });
@@ -142,18 +145,56 @@ describe('AnalyticsService PDF export', () => {
     expect(pdf.match(/\/Type \/Page /g)).toHaveLength(1);
   });
 
-  it('keeps a short customer table together instead of orphaning its final row', () => {
+  it('omits internal product and category IDs from the human-facing product PDF', () => {
+    const pdf = (service as any).toPdf({
+      period: '2026-11-01 to 2026-11-15', currency: 'TZS', total: 1,
+      products: [{
+        productId: 'internal-product-id', productName: 'PH21 Stock and Returns Test Product',
+        productSku: 'PH21-BEV-001', categoryId: 'internal-category-id', categoryName: 'Beverages',
+        quantity: 6, revenue: 16776, cogs: 10000, profit: 6776, marginPercent: 40.4,
+        inventoryTurnover: null, estimatedDaysOfInventory: null, unit: 'Units',
+      }],
+    }, 'PRODUCT_PERFORMANCE').toString('ascii');
+
+    expect(pdf).toContain('(2026-11-01 to 2026-11-15) Tj');
+    expect(pdf).toContain('(PH21 Stock) Tj');
+    expect(pdf).toContain('(PH21-BEV-00) Tj');
+    expect(pdf).toContain('(Beverages) Tj');
+    expect(pdf).not.toContain('internal-product-id');
+    expect(pdf).not.toContain('internal-category-id');
+    expect(pdf).not.toContain('Product Id');
+    expect(pdf).not.toContain('Category Id');
+  });
+
+  it('includes the selected period and products but does not export API pagination metadata', async () => {
+    const getProductPerformance = jest.spyOn(service, 'getProductPerformance').mockResolvedValue({
+      period: '2026-11-01 to 2026-11-15', currency: 'TZS', total: 1,
+      page: 1, limit: 10000,
+      data: [{ productName: 'Product A', productSku: 'A-1', revenue: 100 }],
+    } as any);
+
+    const result = await service.exportReport('business-a', {
+      reportType: 'PRODUCT_PERFORMANCE', format: 'CSV',
+      dateFrom: '2026-11-01', dateTo: '2026-11-15',
+    } as any);
+    const csv = result.content.toString();
+    getProductPerformance.mockRestore();
+
+    expect(csv).toContain('2026-11-01 to 2026-11-15');
+    expect(csv).toContain('Product A');
+    expect(csv).not.toContain('"Page"');
+    expect(csv).not.toContain('"Limit"');
+  });
+
+  it('fits a short customer table on one page instead of orphaning its final row', () => {
     const pdf = (service as any).toPdf(
       salesReport(['Customer Alpha', 'Customer Beta', 'Customer Gamma']),
       'SALES_DASHBOARD',
     ).toString('ascii');
-    const pageOneFooter = pdf.indexOf('(Page 1 of 2)');
-    const pageTwoFooter = pdf.indexOf('(Page 2 of 2)');
-
-    expect(pdf.match(/\/Type \/Page /g)).toHaveLength(2);
-    expect(pdf.indexOf('Customer Alpha')).toBeGreaterThan(pageOneFooter);
-    expect(pdf.indexOf('Customer Gamma')).toBeGreaterThan(pageOneFooter);
-    expect(pdf.indexOf('Customer Gamma')).toBeLessThan(pageTwoFooter);
+    expect(pdf.match(/\/Type \/Page /g)).toHaveLength(1);
+    expect(pdf).toContain('Customer Alpha');
+    expect(pdf).toContain('Customer Gamma');
+    expect(pdf).toContain('(Page 1 of 1)');
   });
 
   it('exports visible executive report data without internal duplicate KPI rows', () => {
@@ -188,6 +229,41 @@ describe('AnalyticsService PDF export', () => {
     expect(pdf).not.toContain('KPI Details');
     expect(pdf).not.toContain('Long duplicate KPI');
     expect(pdf.match(/\/Type \/Page /g)!.length).toBeLessThanOrEqual(2);
+  });
+
+  it('keeps a one-row Top Products section on the revenue page instead of creating a mostly empty final page', () => {
+    const periods = Array.from({ length: 15 }, (_, index) => `2026-11-${String(index + 1).padStart(2, '0')}`);
+    const dashboard = {
+      period: '2026-11-01 to 2026-11-15',
+      currency: 'TZS',
+      summary: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [
+        `metric${index}`,
+        { label: `Metric ${index}`, value: index * 1000, unit: 'TZS', trend: 'UP', status: 'GOOD' },
+      ])),
+      charts: {
+        periods,
+        revenueVsExpenses: [
+          { label: 'Revenue', data: periods.map((_, index) => index === 2 ? 17700 : index === 3 ? 3540 : 0) },
+          { label: 'Expenses', data: periods.map(() => 0) },
+        ],
+        topProducts: { labels: ['PH21 Stock and Returns Test Product'], revenue: [16776], quantity: [6] },
+      },
+      definitions: {
+        revenue: 'Issued invoice totals less accepted customer returns in the selected period.',
+        profit: 'Net income from the existing income statement (revenue less inventory-movement COGS and approved/paid expenses).',
+        purchases: 'Non-draft, non-cancelled purchase order totals by order date; this is procurement volume, not COGS.',
+        cashPosition: 'Cumulative active ledger inflows minus outflows through the selected as-of date.',
+        inventoryValue: 'Inventory service valuation using WEIGHTED_AVERAGE.',
+        inventoryValuationTiming: 'Current stock snapshot as of the inventory date shown above; selected date range applies to period flows, not historical inventory valuation.',
+      },
+    };
+    const pdf = (service as any).toPdf(dashboard, 'DASHBOARD').toString('ascii');
+
+    expect(pdf.match(/\/Type \/Page /g)).toHaveLength(3);
+    expect(pdf).toContain('Top Products');
+    expect(pdf).toContain('PH21 Stock and Returns Test Product');
+    expect(pdf).toContain('(Page 3 of 3)');
+    expect(pdf).not.toContain('(Page 4 of 4)');
   });
 
   it('retains each nested executive chart series in export sections', () => {
@@ -243,8 +319,14 @@ describe('AnalyticsService PDF export', () => {
         customerCreditAmount: 1770,
         unpaidInvoiceCount: 4,
       },
+      summary: {
+        totalRevenue: {
+          label: 'Total Revenue', value: 17700, unit: 'TZS', previousValue: 0,
+          changePercent: null, trend: 'UP', status: 'GOOD',
+        },
+      },
       topCustomers: [{ customerId: 'customer-a', customerName: 'Customer Alpha', revenue: 14160, invoiceCount: 6 }],
-    });
+    } as any);
     jest.spyOn(service, 'getSalesByChannel').mockResolvedValue([{
       channelId: 'location-a', channel: 'Main Warehouse', revenue: 17700, quantity: 5,
       profit: 7700, transactionCount: 7, averageOrderValue: 2528.57, marginPercent: 43.5, growthRate: null,
@@ -281,6 +363,7 @@ describe('AnalyticsService PDF export', () => {
     expect(pdfText).not.toContain('Percent Change');
     expect(pdfText).not.toContain('23:59:59');
     expect(pdfText).toContain('(Main Warehouse) Tj');
+    expect(pdfText).toContain('(-) Tj');
     expect(pdfText).not.toContain('Channel Id');
 
     const json = await service.exportReport('business-a', { ...baseFilter, format: 'JSON' } as any);
@@ -306,10 +389,15 @@ describe('AnalyticsService PDF export', () => {
       offset = bodyStart + compressedSize;
     }
     const workbookText = workbookXml.join('\n');
+    const changePercentCell = workbookText.match(/<c r="E3"[^>]*>[\s\S]*?<\/c>/)?.[0];
+    expect(changePercentCell).toContain('—');
     expect(workbookText).toContain('Sales By Channel');
     expect(workbookText).toContain('Main Warehouse');
     expect(workbookText).toContain('Revenue Trend');
     expect(workbookText).toContain('2026-11-03');
+    expect(workbookText).toContain('—');
+    expect(workbookText).toContain('customWidth="1"');
+    expect(workbookText).not.toContain('state="frozen"');
     expect(workbookText).not.toContain('Moving Average');
     expect(workbookText).not.toContain('Percent Change');
   });
@@ -319,12 +407,14 @@ describe('AnalyticsService PDF export', () => {
       customerName: '=HYPERLINK("https://example.invalid")',
       note: 'line one, line two',
       currency: 'T"ZS',
+      availableRate: null,
     }) as string;
 
     expect(csv.charCodeAt(0)).toBe(0xfeff);
     expect(csv).toContain("'=HYPERLINK(\"\"https://example.invalid\"\")");
     expect(csv).toContain('"line one, line two"');
     expect(csv).toContain('"T""ZS"');
+    expect(csv).toContain('"—"');
     expect(csv).toContain('\r\n');
   });
 });

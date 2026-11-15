@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Download, FileClock, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Download, FileClock, FileText, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import { auditAPI, type AuditEvent, type AuditFilters } from '@/lib/api/audit';
 import { getApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -40,6 +40,8 @@ export default function AuditLogPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'csv'>('pdf');
+  const [exportScope, setExportScope] = useState<'all' | 'filtered'>('filtered');
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [draft, setDraft] = useState({ q: '', action: '', entityType: '', dateFrom: '', dateTo: '' });
@@ -63,15 +65,16 @@ export default function AuditLogPage() {
     setFilters({ q: draft.q.trim() || undefined, action: draft.action.trim() || undefined, entityType: draft.entityType.trim() || undefined, dateFrom: draft.dateFrom || undefined, dateTo: draft.dateTo || undefined });
   }
 
-  async function exportCsv() {
+  async function exportFile(format: 'csv' | 'pdf') {
     if (!canExport) return;
     setExporting(true); setError('');
     try {
-      const response = await auditAPI.export(filters);
+      const exportFilters = exportScope === 'filtered' ? filters : {};
+      const response = format === 'pdf' ? await auditAPI.exportPdf(exportFilters) : await auditAPI.export(exportFilters);
       const blob = response.data as Blob;
       const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = 'mizania-audit-log.csv'; anchor.click();
-      URL.revokeObjectURL(url);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `mizania-audit-log.${format}`; anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) { setError(getApiError(cause, 'Could not export audit records.')); }
     finally { setExporting(false); }
   }
@@ -81,7 +84,7 @@ export default function AuditLogPage() {
   return <main className="mx-auto w-full max-w-7xl space-y-5 px-1 pb-12">
     <header className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-5 dark:border-emerald-900/40 dark:bg-[#17231b] sm:p-7">
       <p className="text-xs font-extrabold uppercase tracking-[0.15em] text-emerald-800 dark:text-emerald-300">Security · Business history</p>
-      <div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight text-[#20231f] dark:text-white sm:text-3xl">Audit log</h1><p className="mt-1 max-w-3xl text-sm text-[#606b5f] dark:text-white/65">Trace recorded business changes and security actions by user and time. Passwords, tokens and credential fields are hidden.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void load()} disabled={loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-300 px-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Refresh</button>{canExport ? <button type="button" onClick={() => void exportCsv()} disabled={exporting} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-800 px-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-700"><Download size={15}/>{exporting ? 'Exporting…' : 'Export CSV'}</button> : null}</div></div>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight text-[#20231f] dark:text-white sm:text-3xl">Audit log</h1><p className="mt-1 max-w-3xl text-sm text-[#606b5f] dark:text-white/65">Trace recorded business changes and security actions by user and time. Passwords, tokens and credential fields are hidden.</p></div><div className="flex flex-wrap items-end gap-2"><button type="button" onClick={() => void load()} disabled={loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-300 px-3 text-sm font-semibold text-emerald-950 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:text-emerald-200 dark:hover:bg-emerald-950/40"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Refresh</button>{canExport ? <><label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#687064] dark:text-white/60"><span>Export range</span><select aria-label="Export range" value={exportScope} onChange={(event) => setExportScope(event.target.value as 'all' | 'filtered')} className={`${field} min-w-36`}><option value="filtered">Applied filters</option><option value="all">All events</option></select></label><label className="grid gap-1 text-[10px] font-bold uppercase tracking-wide text-[#687064] dark:text-white/60"><span>Format</span><select aria-label="Export format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as 'pdf' | 'csv')} className={`${field} min-w-28`}><option value="pdf">PDF</option><option value="csv">CSV</option></select></label><button type="button" onClick={() => void exportFile(exportFormat)} disabled={exporting} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-800 px-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-700">{exportFormat === 'pdf' ? <FileText size={15}/> : <Download size={15}/>} {exporting ? 'Exporting…' : `Export ${exportFormat.toUpperCase()}`}</button></> : null}</div></div>
     </header>
 
     <section className={`${panel} ui-filter-surface p-4 sm:p-5`}>

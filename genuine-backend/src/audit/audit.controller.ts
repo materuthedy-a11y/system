@@ -32,6 +32,17 @@ export class AuditController {
     return response.status(HttpStatus.OK).send(`\uFEFF${csv}`);
   }
 
+  @Get('export/pdf')
+  @RequirePermission('audit.export')
+  @ApiOperation({ summary: 'Export this business audit events as a redacted PDF' })
+  async exportPdf(@Business() businessId: string, @Query() query: AuditQuery, @Res() response: Response) {
+    const pdf = await this.audit.exportPdf(businessId, query);
+    response.setHeader('Content-Type', 'application/pdf');
+    response.setHeader('Content-Disposition', 'attachment; filename="mizania-audit-log.pdf"');
+    response.setHeader('Cache-Control', 'private, no-store');
+    return response.status(HttpStatus.OK).send(pdf);
+  }
+
   @Get(':id')
   @RequirePermission('audit.view')
   @ApiOperation({ summary: 'Get an audit event from this business' })

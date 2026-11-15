@@ -139,4 +139,121 @@ export class AuditService {
     ].map(csvCell).join(','));
     return [heading.map(csvCell).join(','), ...lines].join('\r\n');
   }
+
+  async exportPdf(businessId: string, query: AuditQuery) {
+    const where = { businessId, ...this.filters(query) };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({
+        where,
+        include: { user: { select: { email: true, firstName: true, lastName: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 10_000,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    const width = 595.28;
+    const height = 841.89;
+    const margin = 42;
+    const contentWidth = width - margin * 2;
+    const pages: string[][] = [[]];
+    let commands = pages[0];
+    let y = height - 48;
+    const safe = (value: unknown) => (value == null ? '—' : typeof value === 'string' ? value : JSON.stringify(value))
+      .normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[·•]/g, ' / ').replace(/[–—]/g, '-')
+      .replace(/[^\x20-\x7E]/g, '');
+    const escaped = (value: string) => value.replace(/([\\()])/g, '\\$1');
+    const drawText = (value: string, x: number, baseline: number, size = 10, color = '0.15 0.18 0.15') => {
+      commands.push(`${color} rg BT /F1 ${size} Tf ${x.toFixed(1)} ${baseline.toFixed(1)} Td (${escaped(value)}) Tj ET`);
+    };
+    const drawRect = (x: number, top: number, w: number, h: number, color: string) => {
+      commands.push(`${color} rg ${x.toFixed(1)} ${(top - h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);
+    };
+    const wrap = (value: unknown, maxChars: number) => {
+      const output: string[] = [];
+      let line = '';
+      for (const word of safe(value).split(/\s+/)) {
+        const chunks = word.match(new RegExp(`.{1,${Math.max(4, maxChars)}}`, 'g')) || [''];
+        for (const chunk of chunks) {
+          if (line && `${line} ${chunk}`.length > maxChars) { output.push(line); line = chunk; }
+          else line = line ? `${line} ${chunk}` : chunk;
+        }
+      }
+      if (line || output.length === 0) output.push(line);
+      return output;
+    };
+    const newPage = () => { pages.push([]); commands = pages[pages.length - 1]; y = height - 42; };
+    const drawBanner = () => {
+      drawRect(0, height, width, 7, '0.00 0.52 0.39');
+      drawText('MIZANIA  |  SECURITY AND BUSINESS HISTORY', margin, height - 34, 8, '0.00 0.42 0.32');
+      drawText('Audit log', margin, height - 58, 22, '0.10 0.13 0.11');
+      drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, height - 76, 9, '0.38 0.42 0.38');
+      drawText(`${total.toLocaleString('en-US')} matching events${total > rows.length ? ` · showing newest ${rows.length.toLocaleString('en-US')}` : ''}`, margin, height - 91, 9, '0.38 0.42 0.38');
+      y = height - 112;
+    };
+    drawBanner();
+    if (total > rows.length) {
+      drawRect(margin, y + 9, contentWidth, 27, '0.99 0.95 0.86');
+      drawText(`This PDF contains the newest ${rows.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} matching events. Use CSV for the full export.`, margin + 8, y - 8, 9, '0.42 0.29 0.05');
+      y -= 37;
+    }
+    const filterSummary = [
+      query.dateFrom ? `From ${query.dateFrom}` : '', query.dateTo ? `To ${query.dateTo}` : '',
+      query.action ? `Action ${query.action}` : '', query.entityType ? `Record ${query.entityType}` : '', query.q ? `Search ${query.q}` : '',
+    ].filter(Boolean).join('  |  ');
+    if (filterSummary) {
+      drawText(`Filters: ${wrap(filterSummary, 95).join(' ')}`, margin, y, 9, '0.28 0.32 0.28');
+      y -= 18;
+    }
+    if (rows.length === 0) drawText('No audit events match these filters.', margin, y - 8, 11);
+    rows.forEach((row, index) => {
+      const actor = row.user ? `${row.user.firstName} ${row.user.lastName}`.trim() : row.actorName || 'Former user';
+      const email = row.user?.email || row.actorEmail || '';
+      const title = `${row.action}  |  ${row.entityType}`;
+      const meta = `${row.createdAt.toISOString()} UTC  |  ${actor}${email ? ` · ${email}` : ''}`;
+      const record = `Record: ${row.entityId || '—'}${row.ipAddress ? `  |  IP: ${row.ipAddress}` : ''}`;
+      const before = safe(safeJson(row.beforeData));
+      const after = safe(safeJson(row.afterData));
+      const maxDetail = 3200;
+      const details = [
+        ...wrap(row.description || 'No description recorded.', 88).map((line) => `Details: ${line}`),
+        ...wrap(`Before: ${before.length > maxDetail ? `${before.slice(0, maxDetail)} [PDF text shortened; see CSV for full value]` : before}`, 88),
+        ...wrap(`After: ${after.length > maxDetail ? `${after.slice(0, maxDetail)} [PDF text shortened; see CSV for full value]` : after}`, 88),
+        ...(row.userAgent ? wrap(`Device: ${row.userAgent}`, 88) : []),
+      ];
+      const blockHeight = 16 + 13 + details.length * 12 + 10;
+      if (y - blockHeight < 38) { newPage(); drawBanner(); }
+      drawRect(margin, y + 8, contentWidth, 20, '0.90 0.96 0.93');
+      drawText(title, margin + 8, y - 5, 11, '0.00 0.38 0.29');
+      y -= 23;
+      drawText(meta, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 13;
+      drawText(record, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 12;
+      details.forEach((line) => { drawText(line, margin + 6, y, 8.5); y -= 12; });
+      y -= 8;
+      if (index < rows.length - 1) {
+        commands.push(`0.83 0.87 0.83 RG 0.5 w ${margin} ${y + 4} m ${width - margin} ${y + 4} l S`);
+      }
+    });
+    const objects: string[] = [];
+    const addObject = (value: string) => { objects.push(value); return objects.length; };
+    const catalogId = addObject('');
+    const pagesId = addObject('');
+    const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>');
+    const pageIds: number[] = [];
+    pages.forEach((pageCommands, index) => {
+      pageCommands.push(`0.42 0.45 0.40 rg BT /F1 8 Tf ${width - margin - 55} 20 Td (Page ${index + 1} of ${pages.length}) Tj ET`);
+      const stream = pageCommands.join('\n');
+      const streamId = addObject(`<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`);
+      pageIds.push(addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${streamId} 0 R >>`));
+    });
+    objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+    objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
+    let pdf = '%PDF-1.4\n';
+    const offsets = [0];
+    objects.forEach((object, index) => { offsets.push(Buffer.byteLength(pdf, 'ascii')); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+    const xrefOffset = Buffer.byteLength(pdf, 'ascii');
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, '0')} 00000 n \n`; });
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+    return Buffer.from(pdf, 'ascii');
+  }
 }

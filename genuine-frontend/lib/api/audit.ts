@@ -20,4 +20,5 @@ export const auditAPI = {
   async list(filters: AuditFilters = {}) { return unwrap<AuditPage>(await apiClient.get('/audit-logs', { params: filters })); },
   async detail(id: string) { return unwrap<AuditEvent>(await apiClient.get(`/audit-logs/${encodeURIComponent(id)}`)); },
   async export(filters: Omit<AuditFilters, 'page' | 'limit'> = {}) { return apiClient.get('/audit-logs/export', { params: filters, responseType: 'blob' }); },
+  async exportPdf(filters: Omit<AuditFilters, 'page' | 'limit'> = {}) { return apiClient.get('/audit-logs/export/pdf', { params: filters, responseType: 'blob' }); },
 };

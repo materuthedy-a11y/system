@@ -483,16 +483,24 @@ export class AnalyticsService {
     };
   }
 
-  async getInventoryDashboard(businessId: string, filter: DashboardFilterDto) {
+  async getInventoryDashboard(
+    businessId: string,
+    filter: DashboardFilterDto,
+    includeAllLowStock = false,
+  ) {
     const range = await this.getDateRange(businessId, filter);
-    const [valuation, lowStock, movements, products, stockRows] = await Promise.all([
+    const [valuation, lowStock, movements, products, stockRows, business] = await Promise.all([
       this.inventory.getStockValuationReport(businessId, '', { page: 1, limit: 100 }),
-      this.inventory.getLowStockReport(businessId, '', { page: 1, limit: 10, type: 'BOTH' }),
+      this.inventory.getLowStockReport(businessId, '', {
+        page: 1,
+        limit: includeAllLowStock ? 10000 : 10,
+        type: 'BOTH',
+      }),
       this.prisma.inventoryMovement.findMany({
         where: {
           businessId,
           createdAt: { gte: range.startDate, lte: range.endDate },
-          type: 'SALE',
+          type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] },
         },
         include: { product: { select: { id: true, name: true, sku: true } } },
       }),
@@ -504,6 +512,7 @@ export class AnalyticsService {
         where: { location: { businessId } },
         select: { productId: true, locationId: true, quantity: true },
       }),
+      this.businessInfo(businessId),
     ]);
     const topMap = new Map<
       string,
@@ -516,12 +525,18 @@ export class AnalyticsService {
         sku: movement.product.sku,
         quantity: 0,
       };
-      row.quantity += Math.abs(movement.quantity);
+      const movedQuantity = Math.abs(movement.quantity);
+      row.quantity += movement.type === 'SALE' ? movedQuantity : -movedQuantity;
       topMap.set(movement.productId, row);
     }
+    if (includeAllLowStock && lowStock.total > 10000)
+      throw new BadRequestException(
+        'Inventory export exceeds 10,000 low-stock rows; use the inventory detail report to narrow the results',
+      );
     return {
       period: range.periodName,
       asOf: new Date(),
+      currency: business.currency,
       metrics: {
         activeProducts: products.length,
         stockKeepingUnitsWithStock: new Set(
@@ -530,13 +545,24 @@ export class AnalyticsService {
         totalQuantity: round(stockRows.reduce((sum, row) => sum + row.quantity, 0)),
         inventoryValue: valuation.totalValue,
         lowStockCount: lowStock.total,
-        locationCount: new Set(stockRows.map((row) => row.locationId)).size,
+        locationCount: new Set(
+          stockRows.filter((row) => Number(row.quantity) > 0).map((row) => row.locationId),
+        ).size,
       },
       costingMethod: valuation.costingMethod,
       lowStockItems: lowStock.data,
       topMovingProducts: [...topMap.values()]
+        .filter((item) => item.quantity > MONEY_EPSILON)
         .sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name))
         .slice(0, 5),
+      definitions: {
+        inventoryValue: `Current inventory valuation snapshot using ${valuation.costingMethod}; it is not historical for the selected dates.`,
+        totalQuantity: 'Sum of current stock balances across business locations.',
+        lowStockItems: includeAllLowStock
+          ? 'All active product-location pairs at or below the configured minimum or reorder threshold; export is capped at 10,000 rows.'
+          : `First ${lowStock.data.length} active product-location pairs at or below the configured minimum or reorder threshold; ${lowStock.total} total match(es).`,
+        topMovingProducts: 'Net units dispatched during the selected period after received customer returns and cancelled-sale reversals; only positive net movement is ranked.',
+      },
     };
   }
 
@@ -686,12 +712,20 @@ export class AnalyticsService {
     } else {
       const window = Math.min(3, values.length);
       const sample = values.slice(-window);
-      predicted = Array.from({ length: horizon }, () => {
-        const moving = sample.reduce((sum, value) => sum + value, 0) / sample.length;
-        sample.shift();
-        sample.push(moving);
-        return moving;
-      });
+      let residualSquares = 0;
+      let residualCount = 0;
+      for (let index = window; index < values.length; index += 1) {
+        const oneStepForecast =
+          values.slice(index - window, index).reduce((sum, value) => sum + value, 0) / window;
+        residualSquares += (values[index] - oneStepForecast) ** 2;
+        residualCount += 1;
+      }
+      if (residualCount) intervalError = Math.sqrt(residualSquares / residualCount);
+      // A standard multi-step moving-average forecast only uses observed values.
+      // Reusing each prediction as a future observation creates a false slope
+      // (for example, a one-off revenue spike makes each later forecast rise).
+      const moving = sample.reduce((sum, value) => sum + value, 0) / sample.length;
+      predicted = Array(horizon).fill(moving);
     }
     const allowNegative = filter.metric === 'PROFIT';
     const forecast = predicted.map((raw, index) => {
@@ -712,6 +746,10 @@ export class AnalyticsService {
     return {
       metric: filter.metric,
       currency: business.currency,
+      unit:
+        filter.metric === 'SALES_QUANTITY' || filter.metric === 'CUSTOMER_COUNT'
+          ? 'Units'
+          : 'Currency',
       method,
       startDate: range.startDate,
       endDate: range.endDate,
@@ -1383,7 +1421,7 @@ export class AnalyticsService {
         break;
       }
       case 'INVENTORY_DASHBOARD':
-        report = await this.getInventoryDashboard(businessId, common);
+        report = await this.getInventoryDashboard(businessId, common, true);
         break;
       case 'INCOME_STATEMENT':
         report = await this.payments.getIncomeStatement(
@@ -2608,7 +2646,7 @@ export class AnalyticsService {
     drawRect(0, height, width, 7, '0.98 0.58 0.04');
     drawText('MIZANIA  |  BUSINESS REPORT', margin, y, 8, '0.35 0.38 0.33'); y -= 22;
     drawText(title === 'DASHBOARD' ? 'Executive Overview' : this.exportLabel(title), margin, y, 22, '0.10 0.12 0.10'); y -= 20;
-    drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 26;
+    drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 15;
     if (title === 'CUSTOMER_ANALYTICS' && report && typeof report === 'object' && !Array.isArray(report)) {
       const customerReport = report as Record<string, unknown>;
       drawText(`Period ${safe(customerReport.period)}  |  Currency ${safe(customerReport.currency)}  |  Rank by ${safe(customerReport.segmentBy)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 15;
@@ -2617,6 +2655,21 @@ export class AnalyticsService {
       const supplierReport = report as Record<string, unknown>;
       drawText(`Period ${safe(supplierReport.period)}  |  Currency ${safe(supplierReport.currency)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 15;
       drawText(`As of ${safe(supplierReport.asOf).slice(0, 10)}  |  Suppliers ${safe(supplierReport.total)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 20;
+    } else if (title === 'INVENTORY_DASHBOARD' && report && typeof report === 'object' && !Array.isArray(report)) {
+      const inventoryReport = report as Record<string, any>;
+      const metrics = inventoryReport.metrics || {};
+      drawText(`Period ${safe(inventoryReport.period)}  |  Currency ${safe(inventoryReport.currency)}  |  As of ${safe(inventoryReport.asOf).slice(0, 10)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
+      drawText(`Costing ${safe(inventoryReport.costingMethod)}  |  Active products ${safe(metrics.activeProducts)}  |  SKUs with stock ${safe(metrics.stockKeepingUnitsWithStock)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
+      drawText(`On hand ${safe(metrics.totalQuantity)}  |  Stock value ${safe(inventoryReport.currency)} ${safe(metrics.inventoryValue)}  |  Low-stock pairs ${safe(metrics.lowStockCount)}  |  Locations with stock ${safe(metrics.locationCount)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
+      const definitions = inventoryReport.definitions || {};
+      const notes = [definitions.inventoryValue, definitions.lowStockItems, definitions.topMovingProducts].filter(Boolean);
+      for (const note of notes) {
+        for (const line of wrap(note, 145)) {
+          drawText(line, margin, y, 9, '0.35 0.38 0.33');
+          y -= 11;
+        }
+      }
+      y -= 7;
     }
     let pdfReport = report;
     if (['CUSTOMER_ANALYTICS', 'SUPPLIER_ANALYTICS'].includes(title) && report && typeof report === 'object' && !Array.isArray(report)) {
@@ -2776,6 +2829,64 @@ export class AnalyticsService {
       });
       sections = sections.filter((section) => section.title !== 'Report details');
     }
+    if (title === 'INVENTORY_DASHBOARD') {
+      const inventoryLabels: Record<string, string> = {
+        Sku: 'SKU',
+        'Product Name': 'Product',
+        'Location Name': 'Location',
+        Quantity: 'Qty',
+        'Minimum Stock': 'Min',
+        'Reorder Level': 'Reorder',
+        'Below Minimum': 'Below min',
+        'At Or Below Reorder Level': 'At reorder',
+        'Days To Stockout': 'Stockout',
+      };
+      sections = sections.map((section) => {
+        if (section.title !== 'Low Stock Items') return section;
+        const headers = section.headers.map((header) => inventoryLabels[header] || header);
+        return {
+          ...section,
+          headers,
+          rows: section.rows.map((row) =>
+            Object.fromEntries(section.headers.map((header, index) => [headers[index], row[header]])),
+          ),
+        };
+      });
+      // Summary metrics and snapshot definitions are printed below the title;
+      // keep the first data table with them instead of orphaning the title on
+      // a mostly empty first page to fit the verbose flattened detail table.
+      sections = sections.filter((section) => section.title !== 'Report details');
+    }
+    if (title === 'FORECAST' && report && typeof report === 'object') {
+      const forecastReport = report as Record<string, unknown>;
+      if (forecastReport.unit !== 'Units' && typeof forecastReport.currency === 'string') {
+        const currencyCode = forecastReport.currency;
+        const formatAmount = (value: unknown) =>
+          typeof value === 'number'
+            ? `${currencyCode} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`
+            : value;
+        sections = sections.map((section) => {
+          if (section.title === 'Forecast') {
+            return {
+              ...section,
+              rows: section.rows.map((row) => ({
+                ...row,
+                Predicted: formatAmount(row.Predicted),
+                'Low Confidence': formatAmount(row['Low Confidence']),
+                'High Confidence': formatAmount(row['High Confidence']),
+              })),
+            };
+          }
+          if (section.title === 'Historical Periods') {
+            return {
+              ...section,
+              rows: section.rows.map((row) => ({ ...row, Value: formatAmount(row.Value) })),
+            };
+          }
+          return section;
+        });
+      }
+    }
     for (const section of sections) {
       const columnWeights = section.headers.map((header) => {
         const label = header.toLowerCase();
@@ -2801,6 +2912,14 @@ export class AnalyticsService {
           };
           return supplierWeights[label] || 1;
         }
+        if (title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items') {
+          const inventoryWeights: Record<string, number> = {
+            sku: 1.6, product: 2.4, location: 1.7, qty: 0.65, min: 0.9,
+            reorder: 1.25, 'below min': 1.45, 'at reorder': 1.7,
+            stockout: 1.5,
+          };
+          return inventoryWeights[label] || 1;
+        }
         if (/^channel$/.test(label)) return 2.5;
         if (/(formula|definition|description|message|notes|reason)/.test(label)) return 3;
         if (/(name|product|customer|supplier|account|field|metric|period|date|invoice|location|category)/.test(label)) return 2;
@@ -2809,7 +2928,12 @@ export class AnalyticsService {
       });
       const totalColumnWeight = columnWeights.reduce((sum, weight) => sum + weight, 0) || 1;
       const tableContentWidth = contentWidth - 10;
-      const columnGap = title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers' ? 10 : 0;
+      const columnGap =
+        title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers'
+          ? 10
+          : title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items'
+            ? 8
+            : 0;
       const weightedColumnWidth = Math.max(0, tableContentWidth - columnGap * Math.max(0, columnWeights.length - 1));
       const columnWidths = columnWeights.map((weight) => weightedColumnWidth * weight / totalColumnWeight);
       const rows = section.rows.length ? section.rows : [{ Status: 'No data for the selected period' }];
@@ -2821,6 +2945,8 @@ export class AnalyticsService {
           ? 6.2
           : title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers'
             ? 4.0
+          : title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items'
+            ? 7.5
           : 7;
       const preparedRows = rows.map((row, rowIndex) => {
         const cells = section.headers.map((header, index) =>
@@ -2835,7 +2961,11 @@ export class AnalyticsService {
       const completeSectionHeight = 28 + 29 + preparedRows.reduce((sum, row) => sum + row.height, 0) + 12;
       const remainingPageHeight = y - 42;
       const freshPageHeight = height - 38 - 42;
-      if (completeSectionHeight <= freshPageHeight && completeSectionHeight > remainingPageHeight) newPage();
+      if (
+        !(title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items') &&
+        completeSectionHeight <= freshPageHeight &&
+        completeSectionHeight > remainingPageHeight
+      ) newPage();
       if (y < 75) newPage();
       drawRect(margin, y + 12, contentWidth, 22, '0.98 0.95 0.87');
       drawText(this.exportLabel(section.title), margin + 8, y - 3, 14, '0.42 0.24 0.02'); y -= 28;

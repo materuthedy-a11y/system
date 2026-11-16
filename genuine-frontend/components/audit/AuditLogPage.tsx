@@ -95,7 +95,7 @@ export default function AuditLogPage() {
         <label><span className="sr-only">Record type</span><input value={draft.entityType} onChange={(event) => setDraft({ ...draft, entityType: event.target.value })} className={`${field} w-full`} placeholder="Record type"/></label>
         <label><span className="sr-only">From date</span><input type="date" value={draft.dateFrom} onChange={(event) => setDraft({ ...draft, dateFrom: event.target.value })} className={`${field} w-full`} aria-label="From date"/></label>
         <label><span className="sr-only">To date</span><input type="date" value={draft.dateTo} onChange={(event) => setDraft({ ...draft, dateTo: event.target.value })} className={`${field} w-full`} aria-label="To date"/></label>
-        <div className="flex justify-end sm:col-span-2 xl:col-span-6"><button className="min-h-10 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white hover:bg-[#405641] dark:bg-emerald-900">Apply filters</button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2 xl:col-span-6"><p className="text-xs text-[#687064] dark:text-white/60">Set From/To and Apply filters, then export with “Applied filters”. Leave dates blank for all dates, or choose “All events” to ignore every filter.</p><button className="min-h-10 rounded-xl bg-[#20211f] px-4 text-sm font-semibold text-white hover:bg-[#405641] dark:bg-emerald-900">Apply filters</button></div>
       </form>
     </section>
 

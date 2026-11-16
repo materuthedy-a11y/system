@@ -12,7 +12,7 @@ export interface AuditQuery {
   dateTo?: string;
 }
 
-const sensitiveKey = /(password|token|secret|api.?key|credential|authorization|cookie|refresh.?token|reset.?token|hash)/i;
+const sensitiveKey = /(password|token|secret|api.?key|private.?key|access.?key|signing.?key|encryption.?key|credential|authorization|bearer|cookie|session|refresh.?token|reset.?token|recovery.?code|otp|mfa|hash|salt)/i;
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
@@ -118,13 +118,17 @@ export class AuditService {
   }
 
   async exportCsv(businessId: string, query: AuditQuery) {
-    const rows = await this.prisma.auditLog.findMany({
-      where: { businessId, ...this.filters(query) },
-      include: { user: { select: { email: true, firstName: true, lastName: true } } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 10_000,
-    });
-    const heading = ['Timestamp (UTC)', 'Actor', 'Email', 'Action', 'Record type', 'Record ID', 'Description', 'IP address', 'Before', 'After'];
+    const where = { businessId, ...this.filters(query) };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({
+        where,
+        include: { user: { select: { email: true, firstName: true, lastName: true } } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 10_000,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    const heading = ['Timestamp (UTC)', 'Actor', 'Email', 'Action', 'Record type', 'Record ID', 'Description', 'IP address', 'User agent', 'Before', 'After'];
     const lines = rows.map((row) => [
       row.createdAt.toISOString(),
       row.user ? `${row.user.firstName} ${row.user.lastName}`.trim() : row.actorName,
@@ -134,10 +138,24 @@ export class AuditService {
       row.entityId,
       row.description,
       row.ipAddress,
+      row.userAgent,
       safeJson(row.beforeData),
       safeJson(row.afterData),
     ].map(csvCell).join(','));
-    return [heading.map(csvCell).join(','), ...lines].join('\r\n');
+    const filters = [
+      query.dateFrom ? `From: ${query.dateFrom}` : '', query.dateTo ? `To: ${query.dateTo}` : '',
+      query.action ? `Action: ${query.action}` : '', query.entityType ? `Record type: ${query.entityType}` : '',
+      query.q ? `Search: ${query.q}` : '', query.userId ? `User ID: ${query.userId}` : '',
+    ].filter(Boolean);
+    const metadata = [
+      ['Export summary', 'Value'].map(csvCell).join(','),
+      [csvCell('Matching events'), csvCell(total)].join(','),
+      [csvCell('Exported events'), csvCell(rows.length)].join(','),
+      [csvCell('Truncated'), csvCell(total > rows.length ? 'Yes — newest 10,000 only' : 'No')].join(','),
+      ...(filters.length ? [[csvCell('Applied filters'), csvCell(filters.join(' | '))].join(',')] : []),
+      '',
+    ];
+    return [...metadata, heading.map(csvCell).join(','), ...lines].join('\r\n');
   }
 
   async exportPdf(businessId: string, query: AuditQuery) {
@@ -193,12 +211,12 @@ export class AuditService {
     drawBanner();
     if (total > rows.length) {
       drawRect(margin, y + 9, contentWidth, 27, '0.99 0.95 0.86');
-      drawText(`This PDF contains the newest ${rows.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} matching events. Use CSV for the full export.`, margin + 8, y - 8, 9, '0.42 0.29 0.05');
+      drawText(`This PDF contains the newest ${rows.length.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} matching events. Narrow the date range to export the rest.`, margin + 8, y - 8, 9, '0.42 0.29 0.05');
       y -= 37;
     }
     const filterSummary = [
       query.dateFrom ? `From ${query.dateFrom}` : '', query.dateTo ? `To ${query.dateTo}` : '',
-      query.action ? `Action ${query.action}` : '', query.entityType ? `Record ${query.entityType}` : '', query.q ? `Search ${query.q}` : '',
+      query.action ? `Action ${query.action}` : '', query.entityType ? `Record ${query.entityType}` : '', query.q ? `Search ${query.q}` : '', query.userId ? `User ${query.userId}` : '',
     ].filter(Boolean).join('  |  ');
     if (filterSummary) {
       drawText(`Filters: ${wrap(filterSummary, 95).join(' ')}`, margin, y, 9, '0.28 0.32 0.28');
@@ -208,25 +226,30 @@ export class AuditService {
     rows.forEach((row, index) => {
       const actor = row.user ? `${row.user.firstName} ${row.user.lastName}`.trim() : row.actorName || 'Former user';
       const email = row.user?.email || row.actorEmail || '';
-      const title = `${row.action}  |  ${row.entityType}`;
-      const meta = `${row.createdAt.toISOString()} UTC  |  ${actor}${email ? ` · ${email}` : ''}`;
-      const record = `Record: ${row.entityId || '—'}${row.ipAddress ? `  |  IP: ${row.ipAddress}` : ''}`;
+      const titleLines = wrap(`${row.action}  |  ${row.entityType}`, 74);
+      const metaLines = wrap(`${row.createdAt.toISOString()} UTC  |  ${actor}${email ? ` · ${email}` : ''}`, 94);
+      const recordLines = wrap(`Record: ${row.entityId || '—'}${row.ipAddress ? `  |  IP: ${row.ipAddress}` : ''}`, 94);
       const before = safe(safeJson(row.beforeData));
       const after = safe(safeJson(row.afterData));
-      const maxDetail = 3200;
+      const maxDetail = 900;
+      const clipped = (value: unknown, max: number) => {
+        const text = safe(value);
+        return text.length > max ? `${text.slice(0, max)} [PDF shortened; see CSV for full value]` : text;
+      };
       const details = [
-        ...wrap(row.description || 'No description recorded.', 88).map((line) => `Details: ${line}`),
+        ...wrap(clipped(row.description || 'No description recorded.', 1200), 88).map((line) => `Details: ${line}`),
         ...wrap(`Before: ${before.length > maxDetail ? `${before.slice(0, maxDetail)} [PDF text shortened; see CSV for full value]` : before}`, 88),
         ...wrap(`After: ${after.length > maxDetail ? `${after.slice(0, maxDetail)} [PDF text shortened; see CSV for full value]` : after}`, 88),
-        ...(row.userAgent ? wrap(`Device: ${row.userAgent}`, 88) : []),
+        ...(row.userAgent ? wrap(`Device: ${clipped(row.userAgent, 300)}`, 88) : []),
       ];
-      const blockHeight = 16 + 13 + details.length * 12 + 10;
+      const titleHeight = Math.max(20, titleLines.length * 13 + 8);
+      const blockHeight = titleHeight + metaLines.length * 11 + recordLines.length * 11 + details.length * 12 + 12;
       if (y - blockHeight < 38) { newPage(); drawBanner(); }
-      drawRect(margin, y + 8, contentWidth, 20, '0.90 0.96 0.93');
-      drawText(title, margin + 8, y - 5, 11, '0.00 0.38 0.29');
-      y -= 23;
-      drawText(meta, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 13;
-      drawText(record, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 12;
+      drawRect(margin, y + 8, contentWidth, titleHeight, '0.90 0.96 0.93');
+      titleLines.forEach((line, lineIndex) => drawText(line, margin + 8, y - 5 - lineIndex * 13, 11, '0.00 0.38 0.29'));
+      y -= titleHeight + 2;
+      metaLines.forEach((line) => { drawText(line, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 11; });
+      recordLines.forEach((line) => { drawText(line, margin + 6, y, 8.5, '0.34 0.37 0.34'); y -= 11; });
       details.forEach((line) => { drawText(line, margin + 6, y, 8.5); y -= 12; });
       y -= 8;
       if (index < rows.length - 1) {

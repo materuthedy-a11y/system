@@ -28,6 +28,11 @@ import {
 
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const ACTIVE_PAYMENT_STATUSES = ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'];
+const paymentDirection = (payment: {
+  direction?: string | null;
+  invoiceId?: string | null;
+  referenceType?: string | null;
+}) => payment.direction || (payment.invoiceId || payment.referenceType === 'SalesInvoice' ? 'INFLOW' : 'OUTFLOW');
 
 @Injectable()
 export class PaymentsService {
@@ -1041,8 +1046,7 @@ export class PaymentsService {
       },
       orderBy: [{ paymentDate: 'asc' }, { id: 'asc' }],
     });
-    const direction = (p: (typeof payments)[number]) =>
-      p.direction || (p.invoiceId || p.referenceType === 'SalesInvoice' ? 'INFLOW' : 'OUTFLOW');
+    const direction = paymentDirection;
     const openingBalance = roundMoney(
       payments
         .filter((p) => p.paymentDate < range.start)
@@ -1341,7 +1345,7 @@ export class PaymentsService {
       payments.reduce(
         (s, p) =>
           s +
-          ((p.direction || (p.invoiceId ? 'INFLOW' : 'OUTFLOW')) === 'INFLOW'
+          (paymentDirection(p) === 'INFLOW'
             ? p.amount
             : -p.amount),
         0,
@@ -1429,12 +1433,12 @@ export class PaymentsService {
     const inventoryValuation = await this.inventory.getStockValuationReport(businessId, '', {});
     const inflows = roundMoney(
       payments
-        .filter((p) => (p.direction || (p.invoiceId ? 'INFLOW' : 'OUTFLOW')) === 'INFLOW')
+        .filter((p) => paymentDirection(p) === 'INFLOW')
         .reduce((s, p) => s + p.amount, 0),
     );
     const outflows = roundMoney(
       payments
-        .filter((p) => (p.direction || (p.invoiceId ? 'INFLOW' : 'OUTFLOW')) === 'OUTFLOW')
+        .filter((p) => paymentDirection(p) === 'OUTFLOW')
         .reduce((s, p) => s + p.amount, 0),
     );
     const arPaid = this.sumBy(

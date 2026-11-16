@@ -61,6 +61,7 @@ function previousRange(range: ReportRange) {
 }
 
 let latestRequestId = 0;
+let activeDatasetKey = '';
 
 export const useReportsStore = create<ReportsState>((set) => ({
   data: null,
@@ -82,7 +83,10 @@ export const useReportsStore = create<ReportsState>((set) => ({
   setForecastMethod: (forecastMethod) => set({ forecastMethod }),
   load: async (tab, range) => {
     const requestId = ++latestRequestId;
-    set({ tab, loading: true, error: '' });
+    const datasetKey = `${tab}:${range.dateFrom}:${range.dateTo}`;
+    const nextPage = datasetKey === activeDatasetKey ? useReportsStore.getState().page : 1;
+    activeDatasetKey = datasetKey;
+    set({ tab, page: nextPage, loading: true, error: '' });
     const { channelBy, forecastMetric, forecastMethod, page, pageSize, productSortBy, customerSegmentBy } = useReportsStore.getState();
     const current = () => latestRequestId === requestId;
     try {

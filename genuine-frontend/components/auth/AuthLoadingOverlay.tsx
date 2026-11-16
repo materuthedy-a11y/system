@@ -20,8 +20,8 @@ export function AuthLoadingOverlay({ message }: { message: string }) {
               fill="none"
               stroke="#d8b454"
               strokeWidth="3.5"
-              strokeDasharray="72 261"
-              strokeLinecap="butt"
+              strokeDasharray="120 213"
+              strokeLinecap="round"
               className="origin-center animate-spin motion-reduce:animate-none"
               style={{ animationDuration: '3.8s' }}
             />
@@ -32,8 +32,8 @@ export function AuthLoadingOverlay({ message }: { message: string }) {
               fill="none"
               stroke="#e9dfbd"
               strokeWidth="3"
-              strokeDasharray="57 213"
-              strokeLinecap="butt"
+              strokeDasharray="95 175"
+              strokeLinecap="round"
               className="origin-center motion-reduce:animate-none"
               style={{ animation: 'auth-loader-spin 2.8s linear infinite reverse' }}
             />
@@ -44,8 +44,8 @@ export function AuthLoadingOverlay({ message }: { message: string }) {
               fill="none"
               stroke="#91b59d"
               strokeWidth="2.5"
-              strokeDasharray="42 165"
-              strokeLinecap="butt"
+              strokeDasharray="70 137"
+              strokeLinecap="round"
               className="origin-center animate-spin motion-reduce:animate-none"
               style={{ animationDuration: '2.1s' }}
             />

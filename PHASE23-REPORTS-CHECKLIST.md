@@ -15,9 +15,29 @@ Phase 23 is a reporting layer over existing business records. It must remain rea
 | Business settings | Currency, date/time display and financial-year preset | Use business currency and the saved date preferences. “This financial year” starts at the configured financial-year month. |
 | Permissions and audit | Reports page, API and exports | Viewing requires `reports.view`; downloads require `reports.export`. Successful reads/exports are audited; business ID comes from authenticated context. |
 
+### UI → API → data-source wiring map
+
+Use this map during code and Network-tab checks so every visible section is exercised through its actual endpoint and source records.
+
+| UI tab/section | Frontend API → backend endpoint | Main source records / dependencies |
+| --- | --- | --- |
+| Settings context + all tabs | `reportsAPI.settings` → `GET /analytics/report-settings` | Business currency, timezone, financial-year start, date format, week start |
+| Overview | `reportsAPI.executive` → `GET /analytics/dashboard/executive` | invoices/returns, expenses, purchase orders, payments/ledger, inventory valuation, product performance |
+| Sales | `sales`, `channels`, `trends` → `/analytics/dashboard/sales`, `/analytics/sales-by-channel`, `/analytics/trends` | issued invoices/items, received returns, payments, customer/location/salesperson, reporting series |
+| Products | `products` → `GET /analytics/products`; export → `/analytics/export` | invoice items, accepted returns, inventory movements/costs, StockBalance, product/category/unit master |
+| Customers | `customers` → `GET /analytics/customers`; export → `/analytics/export` | customers, invoices/items, payments, returns, latest activity/segment calculations |
+| Suppliers | `suppliers` → `GET /analytics/suppliers`; export → `/analytics/export` | suppliers, purchase orders/items, accepted GRNs/inspection and supplier returns |
+| Finance | `income-statement`, `cash-flow`, `financial-summary`, `trial-balance`, `receivables-ageing`, `payables-ageing`, `expense-breakdown`, `compare-periods` | payments/ledger, invoices/returns, purchase orders/returns, expenses, inventory valuation, customers/suppliers |
+| Inventory | `inventory` → `GET /analytics/dashboard/inventory`; detail link → `/dashboard/inventory/reports` | active products, stock balances/movements, thresholds, current valuation method |
+| Trends & forecast | `trends`, `forecast` → `/analytics/trends`, `/analytics/forecast` | monthly/daily business series; 24-period training window for forecast, metric/method/horizon parameters |
+| Any report export | `reportsAPI.export` → `GET /analytics/export` | selected report type/format/range plus channel, sort, segment, metric/method and period options; `reports.export`; access audit |
+| Account → Audit log export | audit UI → `GET /audit-logs/export` or `/audit-logs/export/pdf` | business-scoped AuditLog rows, applied filters, credential redaction, `audit.export` |
+
 ### Known accounting/data limits shown in the UI
 
 - Inventory valuation is a live snapshot and must show its `asOf` time.
+- Product `currentStock` is an all-location live balance, not historical closing stock for the selected range. Product turnover must derive the range opening/closing quantities from signed inventory movements and keep full precision for the estimated-days calculation.
+- Product quantity is normalized when an invoice is saved, but invoice lines do not retain a historical unit-name snapshot. If a product's default/base unit changes later, historical unit labels may be ambiguous; disclose this and decide whether transaction-level unit snapshots plus a migration are required before claiming historical unit reporting is exact.
 - Cash flow shows recorded payment movements, not a bank reconciliation.
 - The current trial-balance endpoint is explicitly an operational balance summary. There is no complete double-entry general ledger or statutory trial balance yet.
 - Forecasts are model estimates based on monthly history, not promised outcomes. Inventory forecasting is not supported by the endpoint.
@@ -59,12 +79,13 @@ Code checks and browser acceptance are tracked separately. A successful build do
 | 23.15 | Reconcile top-customer/product growth, repeat-purchase frequency and recency to source transactions | Partial: frequency/recency and growth data exist; explicit repeat-customer KPI needs confirmation | Pending |
 | 23.16 | Reconcile each metric, chart and export to source records; include zero, empty, negative-profit, returns, supplier credits and no-baseline cases | Code/UI reconciliation not demonstrated | Pending |
 | 23.17 | Resolve/implement or explicitly defer the proposal gaps listed above | Gap register open | Pending |
+| 23.18 | Audit history export: format, date range vs all events, filter propagation, redaction, tenant scoping, and truncation disclosure | PDF/CSV and UI scope selectors implemented; 3 focused export tests pass | Pending browser/API |
 
 ## Verification
 
 - [x] Frontend `pnpm exec tsc --noEmit` passes after final edits.
 - [x] Backend `pnpm exec tsc --noEmit` passes after final edits.
-- [x] Backend `pnpm exec nest build` passes after final edits.
+- [ ] Nest production build after Supplier/Finance edits: `nest build` could not clean/recreate `genuine-backend/dist` (`EPERM`); backend/frontend `tsc --noEmit` and an isolated emit of the full backend source into a temporary directory pass. Re-run Nest build when the local dist directory is writable/not in use.
 - [ ] Frontend production `next build`: current workspace config blocks builds unless `NEXT_PUBLIC_API_URL` is set to a real HTTPS API URL ending `/api/v1`; TypeScript and targeted ESLint pass, but this production build has not passed for the current edits.
 - [x] Rendered a representative two-page dashboard PDF and inspected its layout; verified the generated XLSX is a valid ZIP package with parseable XML parts and sampled the UTF-8 CSV output.
 - [x] `git diff --check` passes (line-ending notices are not whitespace errors).
@@ -110,11 +131,22 @@ Record the task ID, selected tab, date range, account role, visible result and a
 ### 23.5–23.7 Product, customer and supplier analytics
 
 - [ ] Products: change sort between revenue, quantity, profit and margin; move through first/middle/last pages; reconcile SKU/category, sold quantity, net line revenue, COGS, margin, current stock and no-movement values.
-- [ ] Customers: change revenue/frequency/loyalty/recency segmentation and pages; confirm inactive/archived accounts are excluded, last transaction/recency is correct, and repeat-customer claims are not inferred from a score.
-- [ ] Suppliers: compare purchase activity to non-draft/non-cancelled orders; verify accepted/rejected/damaged quantities from accepted GRNs, lead time/on-time values only where source dates exist, and null/coverage labels where evidence is missing.
+- [ ] Product movement logic: compare opening/closing balances derived from all signed movement types (purchases, sales, returns, reversals, adjustments, and transfers netted across locations) with stock ledger history; verify future movements are backed out of historical closing stock.
+- [ ] Product return edge cases: accepted returns in the range, returns for earlier-period sales, return-only rows, negative net quantity/revenue/COGS, and undefined margin where revenue is non-positive; ensure net COGS is never clipped to zero.
+- [ ] Product days estimate: confirm it uses unrounded turnover and selected-period days; reconcile the supplied artifact's old 250-day output against the refreshed backend result before accepting the new value.
+- [ ] Product exports: latest CSV, Excel and PDF include `inventoryAsOf` plus metric definitions and reconcile revenue 16,776 − COGS 12,000 = profit 4,776 (28.47% margin) and 242.5 estimated days. The supplied PDF still overlaps SKU and Category; a code-rendered PDF after the column-width fix was visually verified, but the browser download must be repeated. JSON was not included in the latest upload; compare all four formats before accepting.
+- [ ] Product unit disclosure: verify whether the base/default unit changed since the sample invoices. Because line items lack unit-name snapshots, either add a safe transaction snapshot/backfill strategy or keep the report explicit about the limitation.
+- [ ] Customers: reconcile active-customer scope, period invoice totals less accepted returns, invoice count, AOV, last purchase and inactivity as-of range end. Confirm all-active percentile denominator, tied midranks, loyalty/segment definitions, sorting options, and zero-invoice AOV=`—`. Compare to Sales Top Customers and test return-only / earlier-period purchases.
+- [ ] Customer exports: for PDF, Excel, CSV and JSON confirm selected period/as-of/currency/ranking/definitions and same customer rows; no page/limit leakage; check spreadsheet safety and readable PDF customer/code/date columns. Browser checks remain pending.
+- [x] Customer screen evidence for 01/11–16/11 reconciles: active rows 9; revenue totals 21,240 TZS and invoices 8 (Alpha 14,160/6, Beta 3,540/1, PH22 3,540/1), matching the latest known Sales totals; AOVs and inactivity days are arithmetically consistent. Six no-range-sale rows show `INACTIVE`. Fixed no-purchase lifetime loyalty score from a tie-derived 25% to 0; refresh before downloading to verify this updated value.
+- [x] Supplier code audit: include all business suppliers with qualifying history; select non-draft/non-cancelled PO cohort by order date; accepted value uses quantity-weighted PO line value after discount; include processed ACCEPTED/REJECTED GRN quantities through period end; do not treat missing expected dates as on-time; calculate expected-date coverage and mark risk UNKNOWN if incomplete. Definitions disclose freight/tax/later returns exclusion; exports omit pagination metadata and human-readable files hide internal IDs while JSON preserves them. Widened PDF Risk column so UNKNOWN stays on one line and does not touch Coverage.
+- [x] Finance audit: legacy payment direction falls back to both invoiceId and referenceType consistently; confirmed Cash flow closing balance equals Business position cash and operational cash amount for the legacy SalesInvoice fixture. The operational balance is still not a double-entry ledger and is labeled accordingly.
+- [ ] Suppliers: compare the displayed 5-PO example to its source purchase orders/discounts and processed GRNs. Re-export PDF/Excel/CSV/JSON after backend reload and verify same supplier values, definitions, JSON IDs, no pagination fields, readable PDF, and the actual browser data coverage/risk.
 
 ### 23.8–23.9 Finance reports
 
+- [x] Finance code audit: all seven report dropdown options route to their matching handlers; regression coverage exports each selection as PDF, Excel, CSV and JSON. Legacy invoice payments without an `invoiceId` now use `referenceType` consistently in cash flow, financial position and operational balance calculations.
+- [ ] Finance browser audit: exercise date/group dropdowns and all seven report export types with all four formats; reconcile displayed figures and files against saved source records.
 - [ ] Income statement: reconcile issued sales net of accepted returns, COGS from inventory movements, approved/paid expenses, gross profit and net income. Draft/rejected expenses must not be recognized.
 - [ ] Cash flow: reconcile opening balance + selected inflows − selected outflows = closing balance; verify voided payments are excluded and same-day ordering is stable.
 - [ ] Receivables and payables: check each aging bucket at the selected as-of date; subtract recorded sales-return credits, customer payments and approved supplier-return credits; total detail rows must equal summary totals and financial position.
@@ -132,6 +164,8 @@ Record the task ID, selected tab, date range, account role, visible result and a
 
 - [ ] For each report type that offers export, download CSV, Excel/XLSX, PDF and JSON. Confirm valid file signature/content type, readable data, stable column labels, selected date range and correct extension.
 - [ ] Export product performance under each selected sort; export customer analytics under each segment; export sales channel under each grouping; export trend and forecast under the selected metric/method/horizon.
+- [x] Customer Analytics PDF template: removed redundant definition dump/internal IDs, compacted report metadata, date-only purchase date, percentage-formatted loyalty and rebalanced 12pt landscape columns. A generated nine-customer sample renders all customer rows together on page 1 without overlap or mid-word clipping; metric guide is on page 2.
+- [ ] Customer Analytics re-export acceptance: supplied PDF showed 25% Loyalty Score for no-history customers while current backend logic defines 0%. Refresh/reload latest API, confirm six no-history rows show 0%, then re-export PDF and verify layout. Inspect Excel/CSV/JSON separately before accepting the Customer tab.
 - [ ] Verify large exports enforce the documented row cap with a useful error; verify text that begins with spreadsheet formula characters is escaped in CSV/XLSX.
 - [ ] PDF layout: check title, generated time, key figures, readable section/table headings, wrapped long values, landscape page width, repeated table headers after page breaks, alternating rows and page numbers; confirm no flattened JSON/debug keys or clipped text.
 - [ ] PDF typography and motion: inspect the 12 pt Times-compatible serif text at normal zoom and print scale; verify KPI counters and chart lines/bars take long enough to follow while `prefers-reduced-motion` still skips the animations.
@@ -140,6 +174,15 @@ Record the task ID, selected tab, date range, account role, visible result and a
 - [ ] JSON: confirm valid pretty-printed JSON preserves the API response shape and does not stringify data or change selected filters.
 - [ ] Exercise zero rows, one row, wide tables, long names/notes, Unicode text, negative and decimal values, many pages, every export type, and each format on phone/tablet/desktop download flows.
 - [ ] With `reports.view` but without `reports.export`, confirm exports are disabled in UI and denied by API. With both permissions, confirm a file downloads and a business-scoped audit event records type, range, format and result metadata.
+
+### 23.18 Audit history export (Account audit log)
+
+- [ ] Choose PDF or CSV; choose Applied filters or All events. With Applied filters, test an inclusive From/To date range plus action/search/type; with All events, confirm every filter is intentionally ignored.
+- [ ] Confirm CSV starts with UTF-8 BOM, includes export summary/count/filter metadata, and contains all audit fields including user agent plus redacted before/after values.
+- [ ] Confirm PDF is readable on A4 pages, repeats its report heading/page numbers, wraps long event text, and visibly identifies date filters and any 10,000-event cap.
+- [ ] Test more than 10,000 matching events: PDF and CSV must state the exact match/export counts and instruct the user to narrow dates to retrieve the rest; no silent truncation.
+- [ ] Confirm only `audit.export` can download (and its dependency on `audit.view`), business scope comes from authentication, and secret-like keys such as passwords, tokens, sessions, private/access keys, OTP/MFA and salts are redacted in both formats.
+- [ ] Confirm export failures surface a usable message and do not leave a stale blob/download URL or misleading success.
 
 ### 23.13–23.17 Security, responsiveness, reconciliation and scope
 
@@ -160,7 +203,21 @@ Record the task ID, selected tab, date range, account role, visible result and a
 - [x] Added a `reports.view`-protected report-settings endpoint, so reports-only users receive server-owned currency, timezone, financial-year, date-format and week-start context without Settings access; financial-year presets use that context, and weekly analytics/cash-flow buckets respect the saved week start. Date-only input boundaries remain UTC calendar dates for existing date-based records; report acceptance must verify timestamp fields against business timezone before final sign-off.
 - [ ] Manually verify date-only versus timestamp boundaries across report source fields and the timezone/date presets in 23.2; code integration alone is not an acceptance result.
 - [ ] Complete PDF, CSV, XLSX and JSON export acceptance in 23.12; generated exports were restructured in code, but no browser download has yet been accepted by the user.
-- [ ] Run full production builds, backend regression coverage, and manual API/export acceptance after this audit's code changes.
+- [x] Latest code checks after Finance audit: backend Jest 9 suites / 88 tests; backend/frontend TypeScript; focused backend ESLint; and `git diff --check` pass. The Supplier PDF partial-coverage sample was rendered and visually checked after the column-spacing fix.
+- [ ] Frontend production build remains unverified because `.env.production` has the placeholder HTTPS API URL; set the real deployment URL before release build.
+
+## Code audit additions (15 Nov 2026)
+
+- [x] Product performance reconstructs selected-range opening/closing stock from business-scoped signed movement totals and current balances; current-stock is labeled with `inventoryAsOf` and documented as a live all-location snapshot.
+- [x] Product turnover keeps raw precision for estimated days; net COGS preserves return-period reversals (including negative values), and margin is null when revenue is non-positive.
+- [x] Product PDF uses compact readable column headings, wider weighted columns, and omits internal product/category IDs while retaining SKU.
+- [x] Audit history now exposes PDF/CSV selection and Applied filters/All events scope; export summary counts disclose the 10,000-row cap, CSV includes user agent, and secret-key redaction covers private/access/session/OTP/MFA/salt fields.
+- [x] Product export now preserves inventory snapshot time and metric definitions in all four formats; Product PDF wrapping uses a conservative width estimate so COGS and estimated-days numbers are not split. Four format regression cases added.
+- [x] Customer analytics ranks against all active customers with midrank ties (rather than excluding never-purchased accounts or awarding all ties the maximum); return-aware range revenue and invoice count are defined separately, AOV is null when no invoice exists, last purchase is distinguished from returns, and loyalty scoring/segment thresholds are disclosed.
+- [x] Customer exports preserve period, as-of, ranking and metric definitions for PDF/Excel/CSV/JSON and omit page/limit internals; Customer PDF uses compact headings/date-only purchase date/wider customer and code columns; customer ranking control now says “Rank customers by”. 4-format regression tests pass.
+- [x] Backend regression after Finance audit: 9 Jest suites / 88 tests pass, including all seven Finance export dropdown selections in PDF/Excel/CSV/JSON and legacy payment-direction consistency across cash flow/position reports.
+- [ ] Nest production emit after latest Supplier edits: `nest build` hit `EPERM` while deleting protected `dist`; do not remove that active directory. Re-run when the local backend output path is writable.
+- [ ] Browser download/export tests and PDF render inspection remain; code-level checks do not mark the report flow browser-green.
 
 ## Recommended test order across the connected phases
 

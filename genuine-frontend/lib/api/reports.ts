@@ -35,7 +35,10 @@ export interface ReportPage<T> {
   page: number;
   limit: number;
   period?: string;
+  asOf?: string;
   currency?: string;
+  inventoryAsOf?: string;
+  definitions?: Record<string, string>;
 }
 
 export interface ReportMetric {
@@ -94,7 +97,7 @@ export interface ProductReportRow {
   revenue: number;
   cogs: number;
   profit: number;
-  marginPercent: number;
+  marginPercent: number | null;
   inventoryTurnover: number | null;
   estimatedDaysOfInventory: number | null;
   currentStock: number;
@@ -107,9 +110,9 @@ export interface CustomerReportRow {
   customerCode: string;
   customerType: string;
   totalRevenue: number;
-  transactionCount: number;
-  averageOrderValue: number;
-  lastTransactionDate: string | null;
+  invoiceCount: number;
+  averageOrderValue: number | null;
+  lastPurchaseDate: string | null;
   daysInactive: number | null;
   loyaltyScore: number;
   segment: string;

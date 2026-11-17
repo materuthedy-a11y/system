@@ -50,7 +50,7 @@ export class PermissionGuard implements CanActivate {
 
     if (!hasPermission) {
       const request = context.switchToHttp().getRequest();
-      if (request.method !== 'GET' && user.id && user.businessId) {
+      if (user.id && user.businessId) {
         try {
           await this.prisma.auditLog.create({ data: {
             businessId: user.businessId,

@@ -120,7 +120,7 @@ export default function EditPurchaseOrderPage() {
   if (!permissions.includes('purchases.edit')) return <Gate text="Your account is not allowed to edit purchase orders in this workspace."/>;
   if (loading) return <div className="flex items-center gap-2 rounded-2xl border bg-white p-8 text-sm text-[#73766f]"><Loader2 className="animate-spin" size={18}/>Loading draft purchase order…</div>;
   return <div className="mx-auto w-full max-w-4xl space-y-5">
-    <Link href={`/dashboard/purchases/orders/${id}`} className="inline-flex items-center gap-2 text-sm font-medium text-[#63685f] hover:text-[#20211f]"><ArrowLeft size={16}/>Back to purchase order</Link>
+    <Link href={`/dashboard/purchases/orders/${id}`} className="ui-back-link inline-flex items-center gap-2 text-sm font-medium text-[#63685f] hover:text-[#20211f]"><ArrowLeft size={16}/>Back to purchase order</Link>
     <header><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c24e00]">Purchases · {order?.poNumber}</p><h1 className="mt-2 text-3xl font-semibold">Edit purchase order</h1><p className="mt-2 text-sm text-[#73766f]">Changes are allowed while the order is DRAFT. Order date and PO number stay unchanged.</p></header>
     {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-[#efd4cf] bg-[#fff7f5] p-4 text-sm text-[#9b3730]"><AlertCircle size={18} className="mt-0.5 shrink-0"/>{error}</div>}
     {order && <form onSubmit={submit} className="space-y-5">

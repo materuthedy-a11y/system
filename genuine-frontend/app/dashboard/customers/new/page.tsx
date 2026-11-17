@@ -13,7 +13,7 @@ export default function NewCustomerPage() {
     <main className="mx-auto w-full max-w-4xl p-4 sm:p-6">
       <Link
         href="/dashboard/customers"
-        className="mb-5 inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-[#536052] transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white"
+        className="ui-back-link mb-5 inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-[#536052] transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-white/70 dark:hover:bg-white/5 dark:hover:text-white"
       >
         <ArrowLeft size={16} aria-hidden="true" />
         Back to customers

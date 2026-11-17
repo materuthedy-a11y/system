@@ -8,7 +8,7 @@ import { inventoryAPI, type InventoryLocationOption, type InventoryProductOption
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
-import { ErrorNotice, InventoryDenied, InventoryHeading, Panel, PrimaryLink, fieldClass, labelClass, useInventoryPermissions } from './InventoryPrimitives';
+import { ErrorNotice, InventoryDenied, InventoryHeading, Panel, fieldClass, labelClass, useInventoryPermissions } from './InventoryPrimitives';
 
 type Kind = 'adjustments' | 'transfers' | 'counts';
 type Line = { productId: string; quantity: string; reason: string; batchNumber: string; notes: string };
@@ -66,7 +66,7 @@ export function InventoryCreateForm({ kind }: { kind: Kind }) {
     finally { setSaving(false); }
   };
   return <div className="min-w-0 space-y-6">
-    <InventoryHeading title={copy.title} description={copy.description} actions={<PrimaryLink href={`/dashboard/inventory/${kind}`}><ArrowLeft size={15} className="mr-2"/>Back to {kind}</PrimaryLink>}/>
+    <InventoryHeading title={copy.title} description={copy.description} actions={<Link className="ui-back-link" href={`/dashboard/inventory/${kind}`}><ArrowLeft size={15}/>Back to {kind}</Link>}/>
     {error ? <ErrorNotice message={error}/> : null}
     <form onSubmit={submit} className="space-y-5">
       <Panel className="grid gap-4 p-4 sm:grid-cols-2 sm:p-5"><label className={labelClass}>Location{kind === 'transfers' ? ' · Source' : ''}<select disabled={loading} className={fieldClass} value={locationId} onChange={(e) => setLocationId(e.target.value)}><option value="">Choose location</option>{locations.map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>{kind === 'transfers' ? <label className={labelClass}>Destination location<select disabled={loading} className={fieldClass} value={toLocationId} onChange={(e) => setToLocationId(e.target.value)}><option value="">Choose destination</option>{locations.filter((x)=>x.id!==locationId).map((x)=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label> : null}<label className={`${labelClass} sm:col-span-2`}>Record notes (optional)<textarea className={`${fieldClass} min-h-20 py-2`} maxLength={1000} value={notes} onChange={(e)=>setNotes(e.target.value)} placeholder="Add context for the review or audit trail"/></label></Panel>

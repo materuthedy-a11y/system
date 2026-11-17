@@ -426,7 +426,7 @@ export function ProductForm({
         </p>
         <Link
           href={productHome}
-          className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-[#20211f] px-4 text-sm font-bold text-white"
+          className="ui-back-link mt-4"
         >
           Back to products
         </Link>
@@ -455,7 +455,7 @@ export function ProductForm({
         <div>
           <Link
             href={productHome}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-[#65705c] hover:text-[#20211f]"
+            className="ui-back-link inline-flex items-center gap-2 text-sm font-semibold text-[#65705c] hover:text-[#20211f]"
           >
             <ArrowLeft size={16} />
             Back to products

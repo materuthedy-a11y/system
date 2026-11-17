@@ -149,6 +149,12 @@ export interface InventoryReport {
   };
   lowStockItems: Array<Record<string, unknown>>;
   topMovingProducts: Array<{ productId: string; name: string; sku: string; quantity: number }>;
+  definitions?: {
+    inventoryValue?: string;
+    totalQuantity?: string;
+    lowStockItems?: string;
+    topMovingProducts?: string;
+  };
 }
 
 export interface FinancialReport {

@@ -155,9 +155,12 @@ Record the task ID, selected tab, date range, account role, visible result and a
 
 ### 23.10–23.11 Inventory and trends
 
-- [ ] Inventory report summary is business-wide; low stock and fast movers reconcile to inventory service/movements; current valuation has an `asOf` disclosure.
+- [x] Inventory code audit: counts stocked SKUs and locations only where on-hand quantity is positive; fast movers net received returns and cancelled-sale reversals; UI states that current valuation is a snapshot and that low stock is a 10-row preview. All low-stock matches are exported (up to the 10,000-row safety cap) in PDF, Excel, CSV and JSON with period/as-of/currency/costing definitions.
+- [x] Inventory PDF layout fix: removed the verbose flattened details table that orphaned the report title on page 1. Period, as-of, currency, costing method, inventory metrics and snapshot definitions now appear in the report header; the low-stock table begins on page 1 and carries across pages with repeated headings.
+- [ ] Inventory browser/source audit: reconcile 8 active products, 6 stocked SKUs, quantity 579, TZS 774,200 weighted-average value, 38 low-stock pairs, 2 positive-stock locations and fast movers to source movement/stock records; download and reconcile all four formats.
 - [ ] Follow inventory detail link and filter by each active location; do not treat active workspace location as an implicit report filter.
-- [ ] Trends: change metric and grouping, then forecast metric/method/horizon; confirm series labels, units, dates and empty-history handling.
+- [x] Trends code audit: historical series follows selected date range/grouping; forecasts use the latest 24 monthly periods and a three-month horizon. Fixed moving-average multi-step projections to use observed values only (prevents a false rising slope after a single spike); confidence uses rolling one-step residuals, lower bounds respect metric sign rules, and currency/units are identified in UI and PDF.
+- [ ] Trends browser/source audit: reconcile daily/weekly/monthly history to invoices and accepted returns; verify five metrics, three methods, confidence interval, 24-month forecast input window, three future buckets and insufficient-history behavior. Export Historical trend and Forecast in PDF, Excel, CSV and JSON and compare.
 - [ ] Forecast must state it is an estimate, identify its training window and limitations, and must not present unsupported inventory forecasts.
 
 ### 23.12 Export formats and selected filters
@@ -203,7 +206,7 @@ Record the task ID, selected tab, date range, account role, visible result and a
 - [x] Added a `reports.view`-protected report-settings endpoint, so reports-only users receive server-owned currency, timezone, financial-year, date-format and week-start context without Settings access; financial-year presets use that context, and weekly analytics/cash-flow buckets respect the saved week start. Date-only input boundaries remain UTC calendar dates for existing date-based records; report acceptance must verify timestamp fields against business timezone before final sign-off.
 - [ ] Manually verify date-only versus timestamp boundaries across report source fields and the timezone/date presets in 23.2; code integration alone is not an acceptance result.
 - [ ] Complete PDF, CSV, XLSX and JSON export acceptance in 23.12; generated exports were restructured in code, but no browser download has yet been accepted by the user.
-- [x] Latest code checks after Finance audit: backend Jest 9 suites / 88 tests; backend/frontend TypeScript; focused backend ESLint; and `git diff --check` pass. The Supplier PDF partial-coverage sample was rendered and visually checked after the column-spacing fix.
+- [x] Latest code checks after Trends/Forecast audit: backend Jest 9 suites / 102 tests; backend/frontend TypeScript; focused backend ESLint; and `git diff --check` pass. Supplier PDF partial-coverage sample was rendered and visually checked after the column-spacing fix.
 - [ ] Frontend production build remains unverified because `.env.production` has the placeholder HTTPS API URL; set the real deployment URL before release build.
 
 ## Code audit additions (15 Nov 2026)
@@ -215,9 +218,19 @@ Record the task ID, selected tab, date range, account role, visible result and a
 - [x] Product export now preserves inventory snapshot time and metric definitions in all four formats; Product PDF wrapping uses a conservative width estimate so COGS and estimated-days numbers are not split. Four format regression cases added.
 - [x] Customer analytics ranks against all active customers with midrank ties (rather than excluding never-purchased accounts or awarding all ties the maximum); return-aware range revenue and invoice count are defined separately, AOV is null when no invoice exists, last purchase is distinguished from returns, and loyalty scoring/segment thresholds are disclosed.
 - [x] Customer exports preserve period, as-of, ranking and metric definitions for PDF/Excel/CSV/JSON and omit page/limit internals; Customer PDF uses compact headings/date-only purchase date/wider customer and code columns; customer ranking control now says “Rank customers by”. 4-format regression tests pass.
-- [x] Backend regression after Finance audit: 9 Jest suites / 88 tests pass, including all seven Finance export dropdown selections in PDF/Excel/CSV/JSON and legacy payment-direction consistency across cash flow/position reports.
+- [x] Backend regression after Finance/Inventory/Trends audits: 9 Jest suites / 102 tests pass, including seven Finance dropdown reports, Inventory snapshot exports and Trends/Forecast exports in PDF/Excel/CSV/JSON, plus consistent legacy payment direction across cash flow/position reports.
 - [ ] Nest production emit after latest Supplier edits: `nest build` hit `EPERM` while deleting protected `dist`; do not remove that active directory. Re-run when the local backend output path is writable.
 - [ ] Browser download/export tests and PDF render inspection remain; code-level checks do not mark the report flow browser-green.
+
+## Permissions and backend integration re-audit (17 Nov 2026)
+
+- [x] Every `AnalyticsController` read endpoint is guarded by `reports.view`; its export endpoint requires `reports.export`. Finance report endpoints exposed by Payments also require `reports.view`.
+- [x] `reports.export` depends on `reports.view` for custom-role create/update and legacy-role normalization. JWT validation reloads the active user, role grants and direct grants from the database on every authenticated request; permission changes therefore cannot be bypassed by retaining a stale permission list in an access token.
+- [x] Report service calls use the authenticated `@Business()` context, and successful reads/exports write a business-scoped `AnalyticsReport` access record. Export audit metadata includes the selected format, range, filename and byte length.
+- [x] Permission denials on GET endpoints were not previously written to the authorization audit log. The guard now records denied reads as well as denied writes (and still fails closed if the audit write fails); authorization regression coverage was updated.
+- [x] Focused Reports permission and business authorization suites pass; backend/frontend TypeScript checks pass.
+- [ ] Browser/API permission matrix: no permission → 403/no data; `reports.view` only → view succeeds/export denied; both permissions → export succeeds; `reports.export` without view must be rejected at role configuration. Verify business A cannot access business B data.
+- [ ] Verify denied GET authorization events appear in the correct business audit log, and successful report access/export events contain only safe filter/result metadata.
 
 ## Recommended test order across the connected phases
 

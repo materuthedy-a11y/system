@@ -126,7 +126,14 @@ describe('Business user and role authorization boundaries', () => {
     };
 
     await expect(guard.canActivate(context as never)).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        businessId: 'business-a',
+        userId: 'salesperson-a',
+        entityType: 'Authorization',
+        action: 'ACCESS_DENIED',
+      }),
+    }));
   });
 
   it('allows the role list API when the user has one of its allowed access permissions', async () => {

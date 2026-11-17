@@ -132,13 +132,22 @@ export class InventoryService {
   ) {
     if (dto.minimumStock === undefined && dto.reorderLevel === undefined)
       throw new BadRequestException('Provide minimumStock or reorderLevel');
-    return this.prisma.$transaction(async (tx) => {
+    return this.serializableTransaction(async (tx) => {
       const product = await tx.product.findFirst({ where: { id: productId, businessId, status: 'ACTIVE' } });
       if (!product) throw new NotFoundException('Active product not found');
       const minimumStock = dto.minimumStock ?? product.minimumStock;
       const reorderLevel = dto.reorderLevel ?? product.reorderLevel;
       if (minimumStock > reorderLevel)
         throw new BadRequestException('Minimum stock cannot exceed reorder level');
+      if (minimumStock === product.minimumStock && reorderLevel === product.reorderLevel)
+        return {
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          minimumStock: product.minimumStock,
+          reorderLevel: product.reorderLevel,
+          buyingPrice: product.buyingPrice,
+        };
       const updated = await tx.product.update({
         where: { id: product.id },
         data: { minimumStock, reorderLevel },
@@ -486,12 +495,17 @@ export class InventoryService {
           throw new BadRequestException('Transfer quantities must be greater than zero');
         const product = await tx.product.findFirst({
           where: { id: line.productId, businessId, status: 'ACTIVE' },
+          include: { defaultUnit: { select: { name: true } } },
         });
         if (!product) throw new NotFoundException(`Active product ${line.productId} not found`);
+        const baseUnit = product.defaultUnit?.name || 'UNIT';
+        if (line.unit?.trim() && line.unit.trim().toLocaleLowerCase() !== baseUnit.toLocaleLowerCase()) {
+          throw new BadRequestException(`Inventory transfers use the product base unit (${baseUnit}); convert alternate units before transferring`);
+        }
         items.push({
           productId: product.id,
           quantity: line.quantity,
-          unit: line.unit || 'UNIT',
+          unit: baseUnit,
           batchNumber: line.batchNumber,
           notes: line.notes,
         });
@@ -1021,7 +1035,7 @@ export class InventoryService {
           const qty = round(p.stocks.find((s) => s.locationId === location.id)?.quantity || 0);
           const minimumStock = Math.max(p.minimumStock, globalThreshold);
           const reorderLevel = Math.max(p.reorderLevel, globalThreshold);
-          const belowMinimum = qty <= minimumStock;
+          const belowMinimum = qty < minimumStock;
           const reorder = qty <= reorderLevel;
           const include =
             filter.type === 'BELOW_MINIMUM'
@@ -1210,19 +1224,27 @@ export class InventoryService {
     return { data: rows, total, page, limit };
   }
 
-  async getInventoryDashboard(businessId: string) {
+  async getInventoryDashboard(businessId: string, userId: string) {
+    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const locationScope = accessibleIds ? { id: { in: accessibleIds } } : {};
+    const transferScope = accessibleIds
+      ? { fromLocationId: { in: accessibleIds }, toLocationId: { in: accessibleIds } }
+      : {};
+    const adjustmentScope = accessibleIds
+      ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } }
+      : {};
     const [balances, products, movements, pendingAdjustments, pendingTransfers, pendingCounts, settings] =
       await Promise.all([
         this.prisma.stockBalance.findMany({
-          where: { product: { businessId }, location: { businessId } },
-          include: { product: true, location: true },
+          where: { product: { businessId }, location: { businessId, ...locationScope } },
+          include: { product: { include: { defaultUnit: true } }, location: true },
         }),
         this.prisma.product.findMany({
           where: { businessId, status: 'ACTIVE' },
-          select: { id: true, minimumStock: true, reorderLevel: true },
+          select: { id: true, minimumStock: true, reorderLevel: true, defaultUnit: { select: { symbol: true } } },
         }),
         this.prisma.inventoryMovement.findMany({
-          where: { businessId, product: { businessId }, location: { businessId } },
+          where: { businessId, product: { businessId }, location: { businessId, ...locationScope } },
           include: {
             product: { select: { id: true, name: true, sku: true } },
             location: { select: { id: true, name: true } },
@@ -1231,19 +1253,19 @@ export class InventoryService {
           take: 10,
         }),
         this.prisma.stockAdjustment.count({
-          where: { businessId, status: { in: ['PENDING', 'DRAFT'] } },
+          where: { businessId, status: { in: ['PENDING', 'DRAFT'] }, ...adjustmentScope },
         }),
         this.prisma.stockTransfer.count({
-          where: { businessId, status: { in: ['DRAFT', 'SENT', 'PARTIAL'] } },
+          where: { businessId, status: { in: ['DRAFT', 'SENT', 'PARTIAL'] }, ...transferScope },
         }),
         this.prisma.physicalCount.count({
-          where: { businessId, status: { in: ['DRAFT', 'COMPLETED'] } },
+          where: { businessId, location: locationScope, status: { in: ['DRAFT', 'COMPLETED'] } },
         }),
         this.prisma.businessSettings.findUnique({ where: { businessId }, select: { lowStockThreshold: true } }),
       ]);
     const globalThreshold = settings?.lowStockThreshold ?? 0;
     const activeLocations = await this.prisma.location.findMany({
-      where: { businessId, isActive: true },
+      where: { businessId, isActive: true, ...locationScope },
       select: { id: true },
     });
     const balanceByKey = new Map(
@@ -1258,16 +1280,22 @@ export class InventoryService {
         ).length,
       0,
     );
-    const valuation = await this.getStockValuationReport(businessId, '', {
+    const unitByProductId = new Map(products.map((product) => [product.id, product.defaultUnit?.symbol || 'UNIT']));
+    const stockQuantityByUnit = new Map<string, number>();
+    for (const balance of balances) {
+      const unit = unitByProductId.get(balance.productId) || 'UNIT';
+      stockQuantityByUnit.set(unit, (stockQuantityByUnit.get(unit) ?? 0) + balance.quantity);
+    }
+    const valuation = await this.getStockValuationReport(businessId, userId, {
       page: 1,
       limit: 100,
     } as StockValuationReportDto);
-    const expiry = await this.getStockExpiryReport(businessId, '', {
+    const expiry = await this.getStockExpiryReport(businessId, userId, {
       page: 1,
       limit: 100,
       status: 'EXPIRED',
     } as ExpiryReportDto);
-    const soon = await this.getStockExpiryReport(businessId, '', {
+    const soon = await this.getStockExpiryReport(businessId, userId, {
       page: 1,
       limit: 100,
       status: 'EXPIRING_30_DAYS',
@@ -1275,9 +1303,15 @@ export class InventoryService {
     return {
       totalProducts: products.length,
       totalLocations: activeLocations.length,
-      totalStockUnits: round(balances.reduce((s, b) => s + b.quantity, 0)),
+      // Do not add unlike quantities (e.g. bottles and cartons) into one misleading KPI.
+      stockQuantitiesByUnit: [...stockQuantityByUnit.entries()]
+        .map(([unit, quantity]) => ({ unit, quantity: round(quantity) }))
+        .filter(({ quantity }) => quantity !== 0)
+        .sort((a, b) => a.unit.localeCompare(b.unit)),
       totalStockValue: valuation.totalValue,
-      lowStockBalances: lowStock,
+      // Missing StockBalance rows are implicitly zero and are included in this
+      // product/location pair count; the balances list itself only returns saved rows.
+      lowStockProductLocationPairs: lowStock,
       expiredBatchCount: expiry.total,
       expiringWithin30Days: soon.total,
       pendingAdjustments,

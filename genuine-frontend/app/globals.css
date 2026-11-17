@@ -724,3 +724,59 @@ html.dark:not([data-photo-theme="true"]) .ui-form-sand {
 html.dark:not([data-photo-theme="true"]) .ui-form-row {
   background-color: var(--surface-mint-row) !important;
 }
+
+/* Consistent, visible return/navigation links across dashboard pages. */
+a.ui-back-link,
+a.ui-nav-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  color: #047857;
+  font-weight: 600;
+  text-decoration: none;
+  text-underline-offset: 0.22em;
+  transition: color 160ms ease, background-color 160ms ease, text-decoration-color 160ms ease;
+}
+a.ui-back-link:hover,
+a.ui-nav-link:hover {
+  color: #065f46;
+  background-color: rgb(16 185 129 / 0.08);
+  text-decoration: underline;
+}
+a.ui-back-link:focus-visible,
+a.ui-nav-link:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 3px;
+}
+a.ui-back-link:active,
+a.ui-nav-link:active {
+  color: #064e3b;
+}
+html.dark a.ui-back-link,
+html.dark a.ui-nav-link {
+  color: #6ee7b7;
+}
+html.dark a.ui-back-link:hover,
+html.dark a.ui-nav-link:hover {
+  color: #a7f3d0;
+  background-color: rgb(16 185 129 / 0.12);
+}
+html.dark a.ui-back-link:focus-visible,
+html.dark a.ui-nav-link:focus-visible {
+  outline-color: #34d399;
+}
+a.ui-back-link > svg {
+  transition: transform 150ms ease;
+}
+a.ui-back-link:hover > svg {
+  transform: translateX(-2px);
+}
+a.ui-nav-link > svg {
+  transition: transform 150ms ease;
+}
+a.ui-nav-link:hover > svg {
+  transform: translateX(2px);
+}

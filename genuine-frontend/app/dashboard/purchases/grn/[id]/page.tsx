@@ -104,7 +104,7 @@ export default function GoodsReceivedNoteDetailPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-5">
-      <Link href={`/dashboard/purchases/orders/${grn.purchaseOrderId}`} className="inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-[#555a52] transition hover:bg-[#f5f6f2] hover:text-[#c24e00] hover:underline hover:underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c24e00] dark:text-[#d5d8d1] dark:hover:bg-[#222622] dark:hover:text-[#ffad66]"><ArrowLeft size={16} />Back to purchase order</Link>
+      <Link href={`/dashboard/purchases/orders/${grn.purchaseOrderId}`} className="ui-back-link inline-flex min-h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-[#555a52] transition hover:bg-[#f5f6f2] hover:text-[#c24e00] hover:underline hover:underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c24e00] dark:text-[#d5d8d1] dark:hover:bg-[#222622] dark:hover:text-[#ffad66]"><ArrowLeft size={16} />Back to purchase order</Link>
 
       {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-[#efd4cf] bg-[#fff7f5] p-4 text-sm text-[#9b3730] dark:border-[#533530] dark:bg-[#241a19] dark:text-[#ffaaa0]"><AlertCircle size={17} className="mt-0.5 shrink-0" />{error}</div>}
 

@@ -268,6 +268,250 @@ describe('AnalyticsService supplier analytics', () => {
   });
 });
 
+describe('AnalyticsService inventory dashboard', () => {
+  it('counts only positive-stock locations and ranks net sales after returns and reversals', async () => {
+    const startDate = new Date('2026-11-01T00:00:00.000Z');
+    const endDate = new Date('2026-11-15T23:59:59.999Z');
+    const prisma = {
+      business: { findUnique: jest.fn().mockResolvedValue({ id: 'business-a', currency: 'TZS' }) },
+      inventoryMovement: {
+        findMany: jest.fn().mockResolvedValue([
+          { type: 'SALE', quantity: -6, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
+          { type: 'CUSTOMER_RETURN', quantity: 1, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
+          { type: 'SALE_REVERSAL', quantity: 2, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
+          { type: 'CUSTOMER_RETURN', quantity: 2, productId: 'p2', product: { id: 'p2', name: 'Beta', sku: 'B' } },
+        ]),
+      },
+      product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
+      stockBalance: { findMany: jest.fn().mockResolvedValue([
+        { productId: 'p1', locationId: 'loc-a', quantity: 4 },
+        { productId: 'p2', locationId: 'loc-a', quantity: 0 },
+        { productId: 'p2', locationId: 'loc-b', quantity: -1 },
+        { productId: 'p2', locationId: 'loc-c', quantity: 2 },
+      ]) },
+    };
+    const inventory = {
+      getStockValuationReport: jest.fn().mockResolvedValue({ totalValue: 7800, costingMethod: 'WEIGHTED_AVERAGE' }),
+      getLowStockReport: jest.fn().mockResolvedValue({
+        data: [{ productId: 'p2', locationId: 'loc-a', quantity: 0 }], total: 12,
+      }),
+    };
+    const service = new AnalyticsService(prisma as any, {} as any, inventory as any);
+    jest.spyOn(service as any, 'getDateRange').mockResolvedValue({ startDate, endDate, periodName: '2026-11-01 to 2026-11-15' });
+
+    const result = await service.getInventoryDashboard('business-a', {
+      dateFrom: '2026-11-01', dateTo: '2026-11-15',
+    } as any);
+
+    expect(result.metrics).toEqual({
+      activeProducts: 2,
+      stockKeepingUnitsWithStock: 2,
+      totalQuantity: 5,
+      inventoryValue: 7800,
+      lowStockCount: 12,
+      locationCount: 2,
+    });
+    expect(result.currency).toBe('TZS');
+    expect(result.lowStockItems).toHaveLength(1);
+    expect(inventory.getLowStockReport).toHaveBeenCalledWith('business-a', '', {
+      page: 1, limit: 10, type: 'BOTH',
+    });
+    expect(result.topMovingProducts).toEqual([
+      { productId: 'p1', name: 'Alpha', sku: 'A', quantity: 3 },
+    ]);
+    expect(result.definitions.topMovingProducts).toContain('received customer returns');
+    expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] } }),
+    }));
+    await service.getInventoryDashboard('business-a', {
+      dateFrom: '2026-11-01', dateTo: '2026-11-15',
+    } as any, true);
+    expect(inventory.getLowStockReport).toHaveBeenLastCalledWith('business-a', '', {
+      page: 1, limit: 10000, type: 'BOTH',
+    });
+  });
+
+  it.each(['PDF', 'EXCEL', 'CSV', 'JSON'] as const)(
+    'exports every low-stock row and its snapshot definition in %s', async (format) => {
+      const service = new AnalyticsService({} as any, {} as any, {} as any);
+      const lowStockItems = Array.from({ length: 12 }, (_, index) => ({
+        productName: `Low stock ${index + 1}`,
+        sku: `PH25-SKU-${String(index + 1).padStart(3, '0')}`,
+        locationName: 'Main Warehouse',
+        quantity: 0,
+        minimumStock: 5,
+        reorderLevel: 10,
+        belowMinimum: true,
+        atOrBelowReorderLevel: true,
+        daysToStockout: null,
+      }));
+      const report = {
+        period: '2026-11-01 to 2026-11-15',
+        asOf: '2026-11-15T23:59:59.999Z',
+        costingMethod: 'WEIGHTED_AVERAGE',
+        metrics: { activeProducts: 20, stockKeepingUnitsWithStock: 15, totalQuantity: 80, inventoryValue: 7800, lowStockCount: 12, locationCount: 3 },
+        lowStockItems,
+        topMovingProducts: [{ productId: 'p1', name: 'Fast mover', sku: 'A', quantity: 4 }],
+        definitions: { inventoryValue: 'Current snapshot, not historical.', lowStockItems: 'All matching low-stock rows.' },
+      };
+      const getInventoryDashboard = jest.spyOn(service, 'getInventoryDashboard').mockResolvedValue(report as any);
+
+      const result = await service.exportReport('business-a', {
+        reportType: 'INVENTORY_DASHBOARD',
+        format,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-15',
+      } as any);
+
+      expect(getInventoryDashboard).toHaveBeenCalledWith('business-a', {
+        periodId: undefined,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-15',
+        groupBy: undefined,
+      }, true);
+      expect(result.fileName).toMatch(new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`));
+      let exportedText: string;
+      if (format === 'JSON' || format === 'CSV' || format === 'PDF') {
+        exportedText = String(result.content);
+      } else {
+        const workbook = result.content as Buffer;
+        const parts: string[] = [];
+        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+          const method = workbook.readUInt16LE(offset + 8);
+          const compressedSize = workbook.readUInt32LE(offset + 18);
+          const nameLength = workbook.readUInt16LE(offset + 26);
+          const extraLength = workbook.readUInt16LE(offset + 28);
+          const bodyStart = offset + 30 + nameLength + extraLength;
+          const body = workbook.subarray(bodyStart, bodyStart + compressedSize);
+          parts.push((method === 8 ? inflateRawSync(body) : body).toString('utf8'));
+          offset = bodyStart + compressedSize;
+        }
+        exportedText = parts.join('\n');
+      }
+      expect(exportedText).toContain('Low stock 12');
+      expect(exportedText).toContain('Current snapshot, not historical.');
+      if (format === 'PDF') {
+        const firstPage = exportedText.match(/4 0 obj[\s\S]*?stream\n([\s\S]*?)\nendstream/)?.[1] || '';
+        expect(firstPage).toContain('(Low Stock Items) Tj');
+        expect(firstPage).toContain('Period 2026-11-01 to 2026-11-15');
+        expect(exportedText).toContain('(Qty) Tj');
+        expect(exportedText).toContain('(Below) Tj');
+        expect(exportedText).toContain('(At reorder) Tj');
+        expect(exportedText).toContain('(PH25-SKU-) Tj');
+        expect(exportedText).toContain('(012) Tj');
+        expect(exportedText).not.toContain('(Quantit) Tj');
+      }
+      if (format === 'JSON') expect(JSON.parse(exportedText).lowStockItems).toHaveLength(12);
+      getInventoryDashboard.mockRestore();
+    },
+  );
+});
+
+describe('AnalyticsService trends and forecast', () => {
+  it('uses rolling moving-average errors for confidence bounds and labels future months correctly', async () => {
+    const service = new AnalyticsService({} as any, {} as any, {} as any);
+    const range = {
+      startDate: new Date('2024-12-01T00:00:00.000Z'),
+      endDate: new Date('2026-11-30T23:59:59.999Z'),
+      periodName: '2024-12 to 2026-11',
+    };
+    const points = Array.from({ length: 24 }, (_, index) => ({
+      period: index === 23 ? '2026-11' : `month-${index + 1}`,
+      value: index === 23 ? 21240 : 0,
+    }));
+    jest.spyOn(service as any, 'trendRange').mockResolvedValue(range);
+    jest.spyOn(service as any, 'businessInfo').mockResolvedValue({ currency: 'TZS' });
+    jest.spyOn(service as any, 'series').mockResolvedValue(points);
+
+    const result = await service.forecastMetric('business-a', {
+      metric: 'REVENUE', method: 'MOVING_AVERAGE', periods: 3,
+    } as any);
+
+    const expectedError = 21240 / Math.sqrt(21);
+    expect(result).toMatchObject({
+      metric: 'REVENUE', currency: 'TZS', method: 'MOVING_AVERAGE',
+      historicalPeriods: points,
+      forecast: [
+        { period: '2026-12', predicted: 7080, lowConfidence: 0 },
+        { period: '2027-01', predicted: 7080 },
+        { period: '2027-02', predicted: 7080 },
+      ],
+      lastActualValue: 21240,
+      trend: 'DOWN',
+    });
+    expect(result.forecast[0].highConfidence).toBeCloseTo(7080 + 1.96 * expectedError, 2);
+    expect(result.forecast.every((point) => point.lowConfidence >= 0)).toBe(true);
+    expect(result.confidenceIntervalNote).toContain('not a guarantee');
+  });
+
+  it.each([
+    ['TREND_ANALYSIS', 'PDF'], ['TREND_ANALYSIS', 'EXCEL'], ['TREND_ANALYSIS', 'CSV'], ['TREND_ANALYSIS', 'JSON'],
+    ['FORECAST', 'PDF'], ['FORECAST', 'EXCEL'], ['FORECAST', 'CSV'], ['FORECAST', 'JSON'],
+  ] as const)('exports %s in %s with selected metric and forecast context', async (reportType, format) => {
+    const service = new AnalyticsService({} as any, {} as any, {} as any);
+    const startDate = new Date('2026-11-01T00:00:00.000Z');
+    const endDate = new Date('2026-11-17T23:59:59.999Z');
+    const trendReport = {
+      metric: 'REVENUE', currency: 'TZS', startDate, endDate, groupBy: 'DAILY',
+      data: [{ period: '2026-11-03', value: 17700 }, { period: '2026-11-04', value: 3540 }],
+      trendLine: { slope: 1, intercept: 0, rSquared: 0.5, projection: [] },
+      volatility: 100, minValue: 0, maxValue: 17700, averageValue: 1246, forecastConfidence: 0.5,
+      forecastConfidenceBasis: 'R-squared is a fit indicator, not a statistical guarantee.',
+    };
+    const forecastReport = {
+      metric: 'REVENUE', currency: 'TZS', method: 'MOVING_AVERAGE', startDate, endDate,
+      historicalPeriods: [{ period: '2026-11', value: 21240 }],
+      forecast: [{ period: '2026-12', date: new Date('2026-12-01T00:00:00.000Z'), predicted: 7080, lowConfidence: 0, highConfidence: 14883.77 }],
+      accuracy: null, lastActualValue: 21240, trend: 'DOWN', seasonality: false,
+      confidenceIntervalNote: 'Approximate 95% interval; not a guarantee.',
+    };
+    const handler = reportType === 'TREND_ANALYSIS'
+      ? jest.spyOn(service, 'analyzeTrends').mockResolvedValue(trendReport as any)
+      : jest.spyOn(service, 'forecastMetric').mockResolvedValue(forecastReport as any);
+
+    const result = await service.exportReport('business-a', {
+      reportType, format, dateFrom: '2026-11-01', dateTo: '2026-11-17',
+      metric: 'REVENUE', groupBy: 'DAILY', method: 'MOVING_AVERAGE', periods: 3,
+    } as any);
+
+    expect(result.fileName).toMatch(new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`));
+    if (reportType === 'TREND_ANALYSIS') {
+      expect(handler).toHaveBeenCalledWith('business-a', expect.objectContaining({ metric: 'REVENUE', groupBy: 'DAILY' }));
+    } else {
+      expect(handler).toHaveBeenCalledWith('business-a', expect.objectContaining({ metric: 'REVENUE', method: 'MOVING_AVERAGE', periods: 3 }));
+    }
+    if (format === 'JSON') {
+      const json = JSON.parse(String(result.content));
+      expect(json.metric).toBe('REVENUE');
+      expect(reportType === 'TREND_ANALYSIS' ? json.data[0].period : json.forecast[0].period)
+        .toBe(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
+      if (reportType === 'FORECAST') expect(json.confidenceIntervalNote).toContain('not a guarantee');
+    } else {
+      let textContent = String(result.content);
+      if (format === 'EXCEL') {
+        const workbook = result.content as Buffer;
+        const parts: string[] = [];
+        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+          const method = workbook.readUInt16LE(offset + 8);
+          const compressedSize = workbook.readUInt32LE(offset + 18);
+          const nameLength = workbook.readUInt16LE(offset + 26);
+          const extraLength = workbook.readUInt16LE(offset + 28);
+          const bodyStart = offset + 30 + nameLength + extraLength;
+          const body = workbook.subarray(bodyStart, bodyStart + compressedSize);
+          parts.push((method === 8 ? inflateRawSync(body) : body).toString('utf8'));
+          offset = bodyStart + compressedSize;
+        }
+        textContent = parts.join('\n');
+      }
+      expect(textContent).toContain('REVENUE');
+      expect(textContent).toContain(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
+      if (reportType === 'FORECAST') {
+        expect(textContent).toContain(format === 'PDF' ? 'TZS 14,883.77' : '14883.77');
+      }
+    }
+  });
+});
+
 describe('AnalyticsService PDF export', () => {
   const service = new AnalyticsService({} as any, {} as any, {} as any);
   const salesReport = (customerNames: string[]) => ({

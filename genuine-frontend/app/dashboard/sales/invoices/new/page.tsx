@@ -128,7 +128,7 @@ export default function NewSalesInvoicePage() {
 
   if (!permissions.canCreate) return <div className="mx-auto max-w-5xl p-5"><SalesNotice>Your account does not have permission to create sales invoices.</SalesNotice></div>;
   return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
-    <Link href={permissions.canView ? '/dashboard/sales/invoices' : '/dashboard'} className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-semibold text-[#5b6554] hover:text-[#20231f]"><span aria-hidden="true">←</span>{permissions.canView ? 'All invoices' : 'Back to workspace'}</Link>
+    <Link href={permissions.canView ? '/dashboard/sales/invoices' : '/dashboard'} className="ui-back-link mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-semibold text-[#5b6554] hover:text-[#20231f]"><span aria-hidden="true">←</span>{permissions.canView ? 'All invoices' : 'Back to workspace'}</Link>
     <SalesHeading title="New invoice" description="Create a draft. Stock changes only after an authorized user issues it." />
     {error || storeError ? <SalesNotice>{error || storeError}</SalesNotice> : null}
     {loadingOptions ? <p role="status" className="mb-4 text-sm text-[#747a68]">Loading customers, products and locations…</p> : null}

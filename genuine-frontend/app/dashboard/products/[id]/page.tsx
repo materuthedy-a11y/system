@@ -90,7 +90,7 @@ export default function ProductDetailPage() {
         <p className="mt-2 text-sm text-[#73766f]">{error || 'Product not found.'}</p>
         <Link
           href="/dashboard/products"
-          className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dfe5d3] px-4 text-sm font-semibold text-[#46523a]"
+          className="ui-back-link mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dfe5d3] px-4 text-sm font-semibold text-[#46523a]"
         >
           <ArrowLeft size={16} />
           Back to products

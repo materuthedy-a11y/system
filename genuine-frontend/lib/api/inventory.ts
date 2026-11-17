@@ -7,8 +7,8 @@ export interface InventoryProductOption { id: string; name: string; sku: string;
 export interface InventoryLocationOption { id: string; name: string; code: string; type?: string; isActive: boolean }
 
 export interface InventoryDashboard {
-  totalProducts: number; totalLocations: number; totalStockUnits: number; totalStockValue: number;
-  lowStockBalances: number; expiredBatchCount: number; expiringWithin30Days: number;
+  totalProducts: number; totalLocations: number; stockQuantitiesByUnit: Array<{ unit: string; quantity: number }>; totalStockValue: number;
+  lowStockProductLocationPairs: number; expiredBatchCount: number; expiringWithin30Days: number;
   pendingAdjustments: number; pendingTransfers: number; pendingCounts: number;
   recentMovements: InventoryMovement[];
 }

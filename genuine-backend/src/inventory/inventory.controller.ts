@@ -231,7 +231,7 @@ export class InventoryController {
   @Get('dashboard')
   @RequirePermission('inventory.view')
   @ApiOperation({ summary: 'Get inventory KPIs and recent movements' })
-  dashboard(@Business() businessId: string) {
-    return this.inventory.getInventoryDashboard(businessId);
+  dashboard(@Business() businessId: string, @UserId() userId: string) {
+    return this.inventory.getInventoryDashboard(businessId, userId);
   }
 }

@@ -71,7 +71,7 @@ export default function SalesInvoiceDetailPage() {
 
   if (!permissions.canView) return <div className="mx-auto max-w-5xl p-5"><SalesNotice>Your account does not have permission to view sales invoices.</SalesNotice></div>;
   return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
-    <div className="mb-4"><Link href="/dashboard/sales/invoices" className="text-sm font-semibold text-[#40580b] underline-offset-4 hover:underline">← All invoices</Link></div>
+    <div className="mb-4"><Link href="/dashboard/sales/invoices" className="ui-back-link text-sm font-semibold text-[#40580b] underline-offset-4 hover:underline">← All invoices</Link></div>
     {error ? <SalesNotice>{error}<button type="button" className="ml-2 font-semibold underline" onClick={() => void fetchInvoice(id).catch(() => undefined)}>Retry</button></SalesNotice> : null}
     {actionError ? <SalesNotice>{actionError}</SalesNotice> : null}
     {isLoading && !invoice ? <p role="status" className="py-12 text-center text-sm text-[#747a68]">Loading invoice…</p> : null}

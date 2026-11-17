@@ -55,7 +55,7 @@ function NewSalesReturnContent() {
   }
   if (!permissions.canCreate) return <div className="mx-auto max-w-5xl p-5"><SalesNotice>Your account does not have permission to create sales returns.</SalesNotice></div>;
   return <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
-    <div className="mb-4"><Link href={invoiceId ? `/dashboard/sales/invoices/${encodeURIComponent(invoiceId)}` : '/dashboard/sales/invoices'} className="text-sm font-semibold text-[#40580b]">← Back</Link></div>
+    <div className="mb-4"><Link href={invoiceId ? `/dashboard/sales/invoices/${encodeURIComponent(invoiceId)}` : '/dashboard/sales/invoices'} className="ui-back-link text-sm font-semibold text-[#40580b]">← Back</Link></div>
     <SalesHeading title="New sales return" description={invoice ? `${invoice.invoiceNumber} · ${invoice.customerName}` : 'Create a return request from an issued invoice.'} />
     {error ? <SalesNotice>{error}</SalesNotice> : null}{loading ? <p role="status" className="py-10 text-center text-sm text-[#747a68]">Loading invoice…</p> : null}
     {invoice ? <><div className="mb-4 flex flex-wrap gap-4 rounded-xl border border-[#e5e7e0] bg-white p-4 text-sm"><span>Invoice date: <strong>{calendarDateLabel(invoice.invoiceDate)}</strong></span><span>Invoice status: <strong>{invoice.status}</strong></span><span>Original total: <strong>{money(invoice.totalAmount, invoice.currency)}</strong></span></div>

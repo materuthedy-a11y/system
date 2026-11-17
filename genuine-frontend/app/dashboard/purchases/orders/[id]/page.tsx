@@ -611,7 +611,7 @@ export default function PurchaseOrderDetailPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
           href="/dashboard/purchases"
-          className="inline-flex items-center gap-2 text-sm font-medium text-[#63685f] hover:text-[#20211f]"
+          className="ui-back-link inline-flex items-center gap-2 text-sm font-medium text-[#63685f] hover:text-[#20211f]"
         >
           <ArrowLeft size={16} />
           Back to purchases

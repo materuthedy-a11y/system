@@ -28,6 +28,7 @@ import {
   LoginDto,
   ForgotPasswordDto,
   ResetPasswordDto,
+  RestoreWorkspaceDto,
   ChangePasswordDto,
   AuthResponseDto,
   PasswordResetRequestDto,
@@ -118,6 +119,13 @@ export class AuthController {
     };
   }
 
+  @Post('restore-workspace')
+  @AllowAnonymous()
+  @ApiOperation({ summary: 'Restore a closed business workspace (owner credentials, within retention)' })
+  async restoreWorkspace(@Body() dto: RestoreWorkspaceDto) {
+    return this.authService.restoreWorkspace(dto);
+  }
+
   @Post('forgot-password')
   @AllowAnonymous()
   @HttpCode(HttpStatus.OK)
@@ -203,14 +211,6 @@ export class AuthController {
   @ApiBearerAuth()
   async revokeSession(@CurrentUser() user: any, @Param('sessionId') sessionId: string) {
     return this.authService.revokeSession(user.id, sessionId);
-  }
-
-  @Delete('me')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Delete own account (anonymized; business owners must close/transfer first)' })
-  async deleteAccount(@CurrentUser() user: any) {
-    return this.authService.deleteAccount(user.id);
   }
 
   @Get('me')

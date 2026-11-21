@@ -216,6 +216,9 @@ export const authAPI = {
   async forgotPassword(email: string) {
     return unwrap<{ message: string }>(await apiClient.post('/auth/forgot-password', { email }));
   },
+  async restoreWorkspace(email: string, password: string) {
+    return unwrap<{ message: string }>(await apiClient.post('/auth/restore-workspace', { email, password }));
+  },
   async resetPassword(token: string, newPassword: string) {
     return unwrap<{ message: string }>(await apiClient.post('/auth/reset-password', { token, newPassword }));
   },
@@ -233,9 +236,6 @@ export const authAPI = {
   },
   async logout() {
     return unwrap<{ message: string }>(await apiClient.post('/auth/logout', {}));
-  },
-  async deleteAccount() {
-    return unwrap<{ message: string }>(await apiClient.delete('/auth/me'));
   },
   async listSessions() {
     return unwrap<ActiveAuthSession[]>(await apiClient.get('/auth/sessions'));

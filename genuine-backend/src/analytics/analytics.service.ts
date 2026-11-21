@@ -3470,4 +3470,59 @@ export class AnalyticsService {
     end.writeUInt32LE(offset, 16);
     return Buffer.concat([...localParts, centralDirectory, end]);
   }
+
+  async getMyActivity(userId: string, days = 30) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const [sessions, actions] = await Promise.all([
+      this.prisma.userSession.findMany({
+        where: { userId, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        select: { id: true, createdAt: true, ipAddress: true, userAgent: true },
+      }),
+      this.prisma.auditLog.findMany({
+        where: { userId, createdAt: { gte: since } },
+        select: { createdAt: true, action: true, entityType: true },
+      }),
+    ]);
+
+    // System/noise events are excluded so modules reflect real work activity.
+    const NOISE_ENTITY_TYPES = new Set(['AnalyticsReport', 'UserSession', 'Authorization']);
+    const meaningful = actions.filter((row) => !NOISE_ENTITY_TYPES.has(row.entityType));
+
+    const byDay = new Map<string, number>();
+    const byModule = new Map<string, number>();
+    const activeDates = new Set<string>();
+    for (let i = days - 1; i >= 0; i -= 1) {
+      byDay.set(new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), 0);
+    }
+    for (const row of meaningful) {
+      const day = row.createdAt.toISOString().slice(0, 10);
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+      activeDates.add(day);
+      byModule.set(row.entityType, (byModule.get(row.entityType) ?? 0) + 1);
+    }
+    for (const session of sessions) activeDates.add(session.createdAt.toISOString().slice(0, 10));
+
+    return {
+      days,
+      summary: {
+        sessions: sessions.length,
+        actions: meaningful.length,
+        activeDays: activeDates.size,
+        topModule: [...byModule.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+      },
+      daily: [...byDay.entries()].map(([date, count]) => ({ date, count })),
+      modules: [...byModule.entries()]
+        .map(([module, count]) => ({ module, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10),
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        startedAt: s.createdAt,
+        ipAddress: s.ipAddress,
+        userAgent: s.userAgent,
+      })),
+    };
+  }
 }

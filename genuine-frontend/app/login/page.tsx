@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { AuthField, AuthFrame, FormError, reportAuthError } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
+import { authAPI, getApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
 export default function LoginPage() {
@@ -20,6 +21,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showReopen, setShowReopen] = useState(false);
+  const [reopenBusy, setReopenBusy] = useState(false);
+  const [reopenMessage, setReopenMessage] = useState('');
+  const [reopenSuccess, setReopenSuccess] = useState(false);
 
   useEffect(() => {
     if (!initializationStarted.current) {
@@ -63,6 +68,21 @@ export default function LoginPage() {
     }
   }
 
+  async function handleReopen() {
+    setReopenMessage(''); setReopenSuccess(false); setError('');
+    if (!email.trim() || !password) { reportAuthError('Enter your email and password to reopen the workspace.', setError); return; }
+    setReopenBusy(true);
+    try {
+      const result = await authAPI.restoreWorkspace(email.trim().toLowerCase(), password);
+      setReopenMessage(result.message);
+      setReopenSuccess(true);
+    } catch (cause) {
+      setReopenMessage(getApiError(cause, 'Unable to restore this workspace. Check your details or contact support.'));
+    } finally {
+      setReopenBusy(false);
+    }
+  }
+
   return (
     <>
     <AuthFrame eyebrow="Welcome back" title="Sign in to your workspace" description="Use your business account details to continue.">
@@ -94,6 +114,28 @@ export default function LoginPage() {
         </button>
         <p className="pt-1 text-center text-sm text-white/75">New to Mizania? <Link href="/register" className="font-semibold text-white underline-offset-4 hover:underline">Create an account</Link></p>
       </form>
+      <div className="mt-6 border-t border-white/15 pt-4">
+        <button type="button" onClick={() => { setShowReopen((v) => !v); setReopenMessage(''); }} className="w-full text-center text-xs font-semibold text-emerald-300 hover:text-emerald-200">
+          {showReopen ? 'Hide workspace recovery' : 'Closed workspace? Reopen it'}
+        </button>
+        {showReopen ? <div className="mt-3 space-y-3">
+          <p className="text-center text-[11px] leading-4 text-white/55">Enter the owner email and password. The workspace reopens only if it was closed within the retention period.</p>
+          {reopenMessage ? <div className="flex flex-col items-center gap-2 py-1">
+            {reopenSuccess ? <svg className="auth-tick h-16 w-16" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+              <circle cx="26" cy="26" r="24" stroke="#34d399" strokeWidth="3" />
+              <path d="M15 27l7 7 15-16" stroke="#34d399" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg> : reopenMessage ? <svg className="auth-tick auth-x h-16 w-16" viewBox="0 0 52 52" fill="none" aria-hidden="true">
+              <circle cx="26" cy="26" r="24" stroke="#f87171" strokeWidth="3" />
+              <path d="M17 17l18 18" stroke="#f87171" strokeWidth="4" strokeLinecap="round" />
+              <path d="M35 17L17 35" stroke="#f87171" strokeWidth="4" strokeLinecap="round" />
+            </svg> : null}
+            <p role="status" className={`rounded-xl border px-3 py-2 text-center text-xs font-semibold ${reopenSuccess ? 'border-emerald-300/40 bg-emerald-400/10 text-emerald-200' : 'border-red-400/60 bg-red-500/20 text-red-300'}`}>{reopenMessage}</p>
+          </div> : null}
+          <button type="button" onClick={() => void handleReopen()} disabled={reopenBusy} className="flex h-11 w-full items-center justify-center rounded-xl border border-emerald-300/50 bg-emerald-400/15 px-4 text-sm font-bold text-emerald-200 transition hover:bg-emerald-400/25 disabled:opacity-60">
+            {reopenBusy ? 'Restoring…' : 'Reopen workspace'}
+          </button>
+        </div> : null}
+      </div>
       <div className="mt-8 flex items-center justify-center gap-2 text-xs text-white/70"><LockKeyhole size={14} /> Your sign-in is encrypted and protected.</div>
     </AuthFrame>
     {isSubmitting || isRedirecting ? <AuthLoadingOverlay message={isRedirecting ? 'Opening your workspace…' : 'Signing you in…'} /> : null}

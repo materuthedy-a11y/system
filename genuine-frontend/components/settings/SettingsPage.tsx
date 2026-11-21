@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { Building2, CreditCard, ImagePlus, MapPin, Package, Percent, ReceiptText, RefreshCw, Save, Settings2, Plus, Power, Loader2, Pencil, X, Users, Shield, ArrowRightLeft, Trash2 } from 'lucide-react';
-import { authAPI, getApiError } from '@/lib/api';
+import { getApiError } from '@/lib/api';
 import { settingsAPI, BusinessProfile, BusinessSettings, Location, PaymentMethod, ExpenseCategory, TaxRate, ManagedUser } from '@/lib/api/settings';
 import { productsAPI, Category, Unit } from '@/lib/api/products';
 import { useAuthStore } from '@/store/authStore';
@@ -63,6 +63,7 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
   const [editing, setEditing] = useState<{ kind: EditableKind; id: string; data: Record<string, string | boolean | number> } | null>(null);
   const [dangerPassword, setDangerPassword] = useState('');
   const [transferTarget, setTransferTarget] = useState('');
+  const [dangerConfirm, setDangerConfirm] = useState<null | 'transfer' | 'close'>(null);
 
   const load = useCallback(async () => {
     if (!canViewSettings) { setLoading(false); return; }
@@ -156,30 +157,18 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
 
   async function transferOwnership() {
     if (!canEdit || !transferTarget || transferTarget === user?.id) return;
-    if (!window.confirm('Transfer ownership to the selected user? You will no longer be able to close the business or manage the Owner role.')) return;
     setBusy(true); setError('');
-    try { await settingsAPI.transferOwnership(transferTarget); setTransferTarget(''); notify.success('Ownership transferred.'); await load(); }
+    try { await settingsAPI.transferOwnership(transferTarget); setTransferTarget(''); setDangerConfirm(null); notify.success('Ownership transferred.'); await load(); }
     catch (cause) { const message = getApiError(cause, 'Could not transfer ownership.'); setError(message); notify.error(message); }
     finally { setBusy(false); }
   }
-  async function closeBusiness(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!canEdit || !dangerPassword) return;
-    if (!window.confirm('Close this business? It will be hidden immediately and permanently purged after the retention period. Financial records are retained as required. Continue?')) return;
+  async function closeBusiness() {
+    if (!canEdit || !dangerPassword) return;
     setBusy(true); setError('');
-    try { await settingsAPI.closeBusiness(dangerPassword); notify.success('Business closure scheduled.'); window.location.href = '/login'; }
+    try { await settingsAPI.closeBusiness(dangerPassword); setDangerPassword(''); setDangerConfirm(null); notify.success('Business closure scheduled.'); window.location.href = '/login'; }
     catch (cause) { const message = getApiError(cause, 'Could not close the business.'); setError(message); notify.error(message); }
     finally { setBusy(false); }
   }
-  async function deleteAccount() {
-    if (!window.confirm('Permanently delete your account? This cannot be undone. If you own a business, transfer ownership or close it first.')) return;
-    setBusy(true); setError('');
-    try {
-      await authAPI.deleteAccount();
-      try { await useAuthStore.getState().logout(); } catch { /* sessions already revoked server-side */ }
-      window.location.href = '/login';
-    } catch (cause) { const message = getApiError(cause, 'Could not delete your account.'); setError(message); notify.error(message); setBusy(false); }
-  }
-
   const currentTitle = sections.find((item) => item.id === activeSection)?.title || (hasAccessManagement ? 'Team access' : 'Settings');
   const currentLogoUrl = String(draft.logoUrl ?? profile?.logoUrl ?? '').trim();
   if (!canViewSettings && !hasAccessManagement) return <main className="mx-auto max-w-3xl rounded-2xl border border-amber-300 bg-white p-6 text-sm text-[#373c32] dark:border-amber-800 dark:bg-[#1d201d] dark:text-white"><h1 className="text-xl font-bold">Access required</h1><p className="mt-2">Your account does not have permission to view business settings or manage team access.</p></main>;
@@ -252,24 +241,39 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
           <p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/55">Hand the Owner role to another active team member. Only an Owner can do this, and only once — you keep your account but lose owner privileges.</p>
           <div className="mt-3 flex flex-wrap items-end gap-2">
             <label className={`${label} min-w-56 flex-1`}>New owner<Select className={field} disabled={!canEdit || busy} value={transferTarget} onChange={(e) => setTransferTarget(e.target.value)}><option value="">Choose a team member</option>{locationManagers.filter((member) => member.id !== user?.id).map((member) => <option key={member.id} value={member.id}>{member.firstName} {member.lastName} · {member.roleName}</option>)}</Select></label>
-            <button type="button" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10" disabled={!canEdit || busy || !transferTarget} onClick={() => void transferOwnership()}>Transfer ownership</button>
+            <button type="button" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10" disabled={!canEdit || busy || !transferTarget} onClick={() => setDangerConfirm('transfer')}>Transfer ownership</button>
           </div>
         </div>
         <div className={`${card} border-rose-200 dark:border-rose-500/30`}>
           <h3 className="text-sm font-bold text-rose-700 dark:text-rose-300">Close this business</h3>
-          <p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/55">The workspace is hidden immediately and permanently purged after the retention period. Financial records are retained as required by law. All sessions are signed out. Enter your password to confirm.</p>
-          <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={(event) => void closeBusiness(event)}>
-            <label className={`${label} min-w-56 flex-1`}>Your password<Input type="password" required autoComplete="current-password" className={field} disabled={!canEdit || busy} value={dangerPassword} onChange={(e) => setDangerPassword(e.target.value)} placeholder="Confirm with your password"/></label>
-            <button type="submit" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60" disabled={!canEdit || busy || !dangerPassword}>Close business</button>
-          </form>
-        </div>
-        <div className={`${card} border-rose-200 dark:border-rose-500/30`}>
-          <h3 className="text-sm font-bold text-rose-700 dark:text-rose-300">Delete my account</h3>
-          <p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/55">Permanently delete your user account and anonymize your personal data. Business records created by the workspace are not affected. If you are the only Owner, close or transfer the business first.</p>
-          <button type="button" className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-500/10" disabled={busy} onClick={() => void deleteAccount()}>Delete my account</button>
+          <p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/55">The workspace is hidden immediately and permanently purged after the retention period. Financial records are retained as required by law. All sessions are signed out. You will confirm with your password in the next step.</p>
+          <button type="button" className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-500 disabled:cursor-wait disabled:opacity-60" disabled={!canEdit || busy} onClick={() => { setDangerPassword(''); setDangerConfirm('close'); }}>Close business</button>
         </div>
       </section> : null}
     </div>
+    {dangerConfirm ? <div role="presentation" className="fixed inset-0 z-[95] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setDangerConfirm(null); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="danger-confirm-title" className="w-full max-w-md rounded-2xl border border-[#e7e9e2] bg-white p-5 text-[#20231f] shadow-2xl dark:border-white/10 dark:bg-[#1d201d] dark:text-white">
+        {dangerConfirm === 'transfer' ? <>
+          <p className="text-xs font-extrabold uppercase tracking-[0.15em] text-rose-600 dark:text-rose-400">Danger zone</p>
+          <h2 id="danger-confirm-title" className="mt-1 text-lg font-bold">Transfer ownership</h2>
+          <p className="mt-2 text-sm leading-6 text-[#50574d] dark:text-white/65">Transfer ownership to <span className="font-bold text-[#20231f] dark:text-white">{locationManagers.find((m) => m.id === transferTarget)?.firstName} {locationManagers.find((m) => m.id === transferTarget)?.lastName}</span>? You will no longer be able to close the business or manage the Owner role.</p>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" disabled={busy} onClick={() => setDangerConfirm(null)} className="min-h-10 rounded-xl border border-[#d8ddd4] px-4 text-sm font-semibold text-[#41483e] hover:bg-[#f7f7f1] dark:border-white/10 dark:text-white dark:hover:bg-white/5">Cancel</button>
+            <button type="button" disabled={busy} onClick={() => void transferOwnership()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white transition hover:bg-rose-500 disabled:opacity-60">{busy ? 'Transferring…' : 'Transfer ownership'}</button>
+          </div>
+        </> : null}
+        {dangerConfirm === 'close' ? <>
+          <p className="text-xs font-extrabold uppercase tracking-[0.15em] text-rose-600 dark:text-rose-400">Danger zone</p>
+          <h2 id="danger-confirm-title" className="mt-1 text-lg font-bold">Close this business</h2>
+          <p className="mt-2 text-sm leading-6 text-[#50574d] dark:text-white/65">The workspace is hidden immediately and permanently purged after the retention period. All sessions are signed out. Enter your password to confirm.</p>
+          <label className={`${label} mt-3`}>Your password<Input type="password" required autoComplete="current-password" className={field} disabled={busy} value={dangerPassword} onChange={(e) => setDangerPassword(e.target.value)} placeholder="Confirm with your password"/></label>
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" disabled={busy} onClick={() => setDangerConfirm(null)} className="min-h-10 rounded-xl border border-[#d8ddd4] px-4 text-sm font-semibold text-[#41483e] hover:bg-[#f7f7f1] dark:border-white/10 dark:text-white dark:hover:bg-white/5">Cancel</button>
+            <button type="button" disabled={busy || !dangerPassword} onClick={() => void closeBusiness()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white transition hover:bg-rose-500 disabled:opacity-60">{busy ? 'Closing…' : 'Close business'}</button>
+          </div>
+        </> : null}
+      </section>
+    </div> : null}
     {editing ? <div role="presentation" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onMouseDown={(event)=>{if(event.target===event.currentTarget&&!busy)setEditing(null)}}><section role="dialog" aria-modal="true" aria-labelledby="settings-edit-title" className="max-h-[90dvh] w-full max-w-xl overflow-y-auto rounded-2xl border border-[#e7e9e2] bg-white p-5 text-[#20231f] shadow-2xl dark:border-white/10 dark:bg-[#1d201d] dark:text-white"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-extrabold uppercase tracking-[0.15em] text-[#98700b]">Settings</p><h2 id="settings-edit-title" className="mt-1 text-lg font-bold">Edit {editing.kind.replace('-', ' ')}</h2></div><button type="button" disabled={busy} onClick={()=>setEditing(null)} aria-label="Close edit form" className="grid h-9 w-9 place-items-center rounded-xl border border-[#e0e4dc] dark:border-white/10"><X size={17}/></button></div><form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={saveRecord}>{Object.entries(editing.data).map(([key,value])=><label key={key} className={`${label} ${key==='description'||key==='bankDetails'?'sm:col-span-2':''}`}>{key==='managerId'?'Location manager':key.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase())}{key==='managerId'?<><Select className={field} value={String(value)} onChange={(e)=>setEditing({...editing,data:{...editing.data,[key]:e.target.value}})}><option value="">No manager assigned</option>{locationManagers.map((member)=><option key={member.id} value={member.id}>{member.firstName} {member.lastName} · {member.roleName}</option>)}</Select><span className="mt-1 block text-xs font-normal text-[#737a70]">Assign this team member to this location. The same person can manage multiple locations.</span></>:typeof value==='boolean'?<span className="mt-2 flex items-center gap-2 text-sm"><Checkbox checked={value} onChange={(e)=>setEditing({...editing,data:{...editing.data,[key]:e.target.checked}})}/>{value?'Enabled':'Disabled'}</span>:key==='type'||key==='methodType'||key==='appliesTo'?<Select className={field} value={String(value)} onChange={(e)=>setEditing({...editing,data:{...editing.data,[key]:e.target.value}})}>{(key==='type'?['WAREHOUSE','SHOP','STORE','BRANCH','DEPOT']:key==='methodType'?['CASH','BANK','MOBILE','CHEQUE','CREDIT','CUSTOM']:['SALES','PURCHASES','BOTH']).map(option=><option key={option}>{option}</option>)}</Select>:key==='description'||key==='bankDetails'?<Textarea rows={3} className={field} value={String(value)} onChange={(e)=>setEditing({...editing,data:{...editing.data,[key]:e.target.value}})}/>:<Input className={field} type={typeof value==='number'?'number':'text'} step={key==='rate'||key==='conversionFactor'?'0.01':undefined} value={String(value)} onChange={(e)=>setEditing({...editing,data:{...editing.data,[key]:typeof value==='number'?Number(e.target.value):e.target.value}})}/>}</label>)}<div className="flex justify-end gap-2 sm:col-span-2"><button type="button" disabled={busy} onClick={()=>setEditing(null)} className="min-h-10 rounded-xl border border-[#d8ddd4] px-4 text-sm font-semibold dark:border-white/10">Cancel</button><button disabled={busy} className={button}>{busy?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Save changes</button></div></form></section></div>:null}
   </div>;
 }

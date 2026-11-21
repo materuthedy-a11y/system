@@ -237,7 +237,23 @@ export const dashboardAPI = {
       }),
     };
   },
+
+  async getMyActivity(days = 30) {
+    const response = await apiClient.get<MyActivityResponse | { data: MyActivityResponse }>(
+      '/analytics/my-activity',
+      { params: { days } },
+    );
+    return unwrap<MyActivityResponse>(response);
+  },
 };
+
+export interface MyActivityResponse {
+  days: number;
+  summary: { sessions: number; actions: number; activeDays: number; topModule: string | null };
+  daily: Array<{ date: string; count: number }>;
+  modules: Array<{ module: string; count: number }>;
+  sessions: Array<{ id: string; startedAt: string; ipAddress: string | null; userAgent: string | null }>;
+}
 
 function paymentSourceLabel(row: PaymentRow) {
   if (row.poId) return 'Purchase order';

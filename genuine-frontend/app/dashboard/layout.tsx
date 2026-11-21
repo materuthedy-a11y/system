@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShieldCheck, ShoppingCart, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X, type LucideIcon } from 'lucide-react';
+import { Activity, CalendarDays, Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShieldCheck, ShoppingCart, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { authAPI, getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
@@ -36,6 +36,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const expireSession = useAuthStore((state) => state.expireSession);
   const updateUser = useAuthStore((state) => state.updateUser);
   const syncToken = useAuthStore((state) => state.syncToken);
+  const refreshProfile = useAuthStore((state) => state.refreshProfile);
   const { setTheme } = useTheme();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -72,6 +73,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     setAvatarUrl(nextUrl);
   }, []);
   const compactSidebar = isDesktop && sidebarCollapsed;
+
+  // Refresh profile on every dashboard mount so role/permission changes made
+  // elsewhere (ownership transfer, role edits) take effect without re-login.
+  useEffect(() => {
+    if (status === 'authenticated') void refreshProfile();
+  }, [status, refreshProfile]);
 
   useEffect(() => {
     if (!user?.businessId || (!user.permissions.includes('settings.view') && !user.permissions.includes('settings.edit'))) return;
@@ -336,6 +343,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     ...(has('audit.view') ? [{ label: 'Audit log', href: '/dashboard/audit', icon: ShieldCheck, active: pathname.startsWith('/dashboard/audit') }] : []),
     ...(has('settings.view', 'settings.edit') ? [{ label: 'Settings', href: '/dashboard/settings', icon: Settings2, active: pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/users') && !pathname.startsWith('/dashboard/settings/roles') }] : []),
     ...(has('users.view', 'users.create', 'users.edit', 'users.delete', 'roles.manage') ? [{ label: 'Team access', href: has('users.view', 'users.create', 'users.edit', 'users.delete') ? '/dashboard/settings/users' : '/dashboard/settings/roles', icon: UsersRound, active: pathname.startsWith('/dashboard/settings/users') || pathname.startsWith('/dashboard/settings/roles') }] : []),
+    { label: 'My activity', href: '/dashboard/activity', icon: Activity, active: pathname.startsWith('/dashboard/activity') },
     { label: 'Password & security', href: '/dashboard/security', icon: Settings2, active: pathname.startsWith('/dashboard/security') },
     { label: 'Help & feedback', href: '/dashboard/help-feedback', icon: LifeBuoy, active: pathname.startsWith('/dashboard/help-feedback') },
   ];
@@ -344,7 +352,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     { label: 'Operations', items: navItems.filter(({ label }) => ['Sales', 'Products', 'Inventory', 'Purchases', 'Customers', 'Suppliers'].includes(label)) },
     { label: 'Finance', items: navItems.filter(({ label }) => ['Payments & Finance', 'Accounting periods', 'Expenses'].includes(label)) },
     { label: 'Insights', items: navItems.filter(({ label }) => label === 'Reports & Analytics') },
-    { label: 'Account', items: navItems.filter(({ label }) => ['Settings', 'Team access', 'Audit log', 'Password & security', 'Help & feedback'].includes(label)) },
+    { label: 'Account', items: navItems.filter(({ label }) => ['Settings', 'Team access', 'Audit log', 'My activity', 'Password & security', 'Help & feedback'].includes(label)) },
   ];
   const currentNavItem = navItems.find(({ active }) => active);
   const currentNavGroup = navGroups.find(({ items }) => items.some(({ active }) => active))?.label || 'Workspace';

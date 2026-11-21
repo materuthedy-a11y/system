@@ -1141,3 +1141,53 @@ html.dark .ui-field--auth:-webkit-autofill:focus {
   caret-color: #f8fafc;
 }
 
+
+/* Animated success tick for auth workspace recovery */
+@keyframes auth-tick-circle {
+  from { stroke-dashoffset: 166; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes auth-tick-check {
+  from { stroke-dashoffset: 48; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes auth-tick-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.auth-tick {
+  animation: auth-tick-pop 0.45s cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+.auth-tick circle {
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: auth-tick-circle 0.7s ease-out 0.1s forwards;
+}
+.auth-tick path {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: auth-tick-check 0.4s ease-out 0.7s forwards;
+}
+
+@keyframes auth-x-stroke {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+.auth-x path {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: auth-x-stroke 0.35s ease-out 0.15s forwards;
+}
+.auth-x path:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+@keyframes mizania-bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.chart-bar-grow {
+  transform-origin: left center;
+  animation: mizania-bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

@@ -28,6 +28,7 @@ interface AuthState {
   clearError: () => void;
   syncToken: () => void;
   updateUser: (user: AuthUser) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -124,5 +125,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   updateUser: (user) => {
     tokenStorage.updateUser(user);
     set({ user });
+  },
+  refreshProfile: async () => {
+    try {
+      const profile = await authAPI.getProfile();
+      const current = useAuthStore.getState().user;
+      if (!current) return;
+      const merged = { ...current, ...profile, businessName: profile.businessName || current.businessName };
+      tokenStorage.updateUser(merged);
+      set({ user: merged });
+    } catch {
+      // Keep the existing session if the profile refresh fails.
+    }
   },
 }));

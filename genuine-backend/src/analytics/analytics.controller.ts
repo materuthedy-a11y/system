@@ -40,6 +40,13 @@ export class AnalyticsController {
     private readonly notifications: NotificationsService,
   ) {}
 
+  @Get('my-activity')
+  @ApiOperation({ summary: 'Get the current user\'s own activity metrics (sessions, actions, modules)' })
+  myActivity(@UserId() userId: string, @Query('days') days?: string) {
+    const parsed = Number.parseInt(days || '30', 10);
+    return this.analytics.getMyActivity(userId, Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), 365) : 30);
+  }
+
   @Get('report-settings')
   @RequirePermission('reports.view')
   @ApiOperation({ summary: 'Get business date, currency and grouping settings for reports' })

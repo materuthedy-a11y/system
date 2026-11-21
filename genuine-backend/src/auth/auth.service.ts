@@ -20,6 +20,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   ChangePasswordDto,
+  RestoreWorkspaceDto,
   AuthResponseDto,
   PasswordResetRequestDto,
 } from './dto';
@@ -226,7 +227,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: {
-        business: { select: { name: true } },
+        business: { select: { name: true, isActive: true, deletedAt: true } },
         userRoles: {
           include: {
             role: {
@@ -242,6 +243,10 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.business && (!user.business.isActive || user.business.deletedAt)) {
+      throw new UnauthorizedException('This business workspace has been closed');
     }
 
     if (!user.isActive) {
@@ -716,10 +721,10 @@ export class AuthService {
   }
 
   async validateUser(userId: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        business: { select: { name: true } },
+        business: { select: { name: true, isActive: true, deletedAt: true } },
         userRoles: {
           include: {
             role: {
@@ -732,6 +737,10 @@ export class AuthService {
         permissions: true,
       },
     });
+    if (user?.business && (!user.business.isActive || user.business.deletedAt)) {
+      throw new UnauthorizedException('This business workspace has been closed');
+    }
+    return user;
   }
 
   private _permissionKeys(user: {
@@ -1226,50 +1235,42 @@ export class AuthService {
     }
   }
 
-  async deleteAccount(userId: string): Promise<{ message: string }> {
+  async restoreWorkspace(dto: RestoreWorkspaceDto): Promise<{ message: string }> {
+    const normalizedEmail = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { userRoles: { include: { role: true } } },
+      where: { email: normalizedEmail },
+      include: {
+        business: { select: { id: true, isActive: true, deletedAt: true, deletionScheduledAt: true } },
+        userRoles: { include: { role: { select: { name: true, isSystem: true, businessId: true } } } },
+      },
     });
-    if (!user || !user.isActive) throw new NotFoundException('User not found');
-
-    const isOwner = user.userRoles.some(
+    const isOwner = user?.userRoles.some(
       (ur) => ur.role.name === 'Owner' && ur.role.isSystem && ur.role.businessId === user.businessId,
     );
-    if (isOwner) {
-      const otherActiveOwners = await this.prisma.user.count({
-        where: {
-          businessId: user.businessId,
-          isActive: true,
-          id: { not: user.id },
-          userRoles: { some: { role: { name: 'Owner', isSystem: true } } },
-        },
-      });
-      if (otherActiveOwners === 0)
-        throw new BadRequestException(
-          'Business owners must close the business or transfer ownership before deleting their account',
-        );
+    const business = user?.business;
+    const restorable =
+      !!business?.deletedAt &&
+      (!business.deletionScheduledAt || business.deletionScheduledAt > new Date());
+    if (!user || !user.isActive || !isOwner || !restorable || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException('Unable to restore this workspace');
     }
-
     await this.prisma.$transaction(async (tx) => {
-      await tx.userSession.deleteMany({ where: { userId } });
-      await tx.user.update({
-        where: { id: userId },
+      await tx.business.update({
+        where: { id: business.id },
+        data: { isActive: true, deletedAt: null, deletionScheduledAt: null, deletedById: null },
+      });
+      await tx.auditLog.create({
         data: {
-          email: `deleted-${userId}@deleted.local`,
-          passwordHash: '!',
-          firstName: 'Deleted',
-          lastName: 'User',
-          phone: null,
-          avatar: null,
-          verificationToken: null,
-          passwordResetTokenHash: null,
-          passwordResetExpiresAt: null,
-          anonymizedAt: new Date(),
-          isActive: false,
+          businessId: business.id,
+          userId: user.id,
+          entityType: 'Business',
+          entityId: business.id,
+          action: 'UPDATE',
+          description: 'Business workspace restored by owner during retention window',
         },
       });
     });
-    return { message: 'Account deleted' };
+    return { message: 'Workspace restored. You can now sign in.' };
   }
+
 }

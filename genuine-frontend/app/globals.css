@@ -856,24 +856,46 @@ html.dark[data-photo-theme="true"] .ui-add-line-button:hover:not(:disabled) {
    light cards use a clearer Mizania gold; dark cards use a visible quiet edge.
    Cards carrying a semantic hue keep that hue, with stronger contrast. */
 html:not(.dark) [class*="rounded-"]:is([class~="border"], [class*="border-"]):not(button):not(input):not(select):not(textarea):not([class*="bg-red-"]):not([class*="bg-rose-"]):not([class*="bg-amber-"]):not([class*="bg-yellow-"]):not([class*="bg-orange-"]):not([class*="bg-green-"]):not([class*="bg-emerald-"]):not([class*="bg-lime-"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="bg-sky-"]):not([class*="bg-blue-"]):not([class*="bg-indigo-"]):not([class*="bg-violet-"]):not([class*="bg-purple-"]):not([class*="bg-fuchsia-"]):not([class*="bg-pink-"]) {
-  border-color: #dfbd55 !important;
+  border-color: #e8dfcc !important;
 }
 html.dark [class*="rounded-"]:is([class~="border"], [class*="border-"]):not(button):not(input):not(select):not(textarea) {
-  border-color: #536057 !important;
+  border-color: #3d4941 !important;
 }
 
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #dc2626 !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #ea580c !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #c58b0b !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #059669 !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #0891b2 !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #2563eb !important; }
-html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #9333ea !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #efc5c5 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #f0d0b8 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #ead9aa !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #c5dfd0 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #c6e2e5 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #c9d9ef !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #ded2ec !important; }
 
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #fca5a5 !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #fdba74 !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #fcd34d !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #6ee7b7 !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #67e8f9 !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #93c5fd !important; }
-html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #c4b5fd !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #754b4d !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #76533d !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #746538 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #426b55 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #416a70 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #455f80 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #625078 !important; }
+/* Enforce readable foreground text while typing and for browser-saved credentials. */
+.auth-field-input,
+.auth-field-input:focus,
+.auth-field-input:active {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc !important;
+}
+.auth-field-input::placeholder {
+  color: #777b73 !important;
+  -webkit-text-fill-color: #777b73 !important;
+  opacity: 1;
+}
+.auth-field-input:-webkit-autofill,
+.auth-field-input:-webkit-autofill:hover,
+.auth-field-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f8fafc !important;
+  -webkit-box-shadow: 0 0 0 1000px rgb(12 17 16 / 94%) inset;
+  caret-color: #f8fafc;
+  transition: background-color 9999s ease-out;
+}
+

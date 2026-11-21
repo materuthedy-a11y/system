@@ -88,7 +88,7 @@ export default function RegisterPage() {
         <AuthField label="Business name" id="businessName" autoComplete="organization" placeholder="Your business" value={businessName} onChange={setBusinessName} disabled={isSubmitting} />
         <div>
           <label htmlFor="businessType" className="mb-2 block text-sm font-semibold text-white">Business type</label>
-          <select id="businessType" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)} disabled={isSubmitting} className="h-12 w-full rounded-xl border border-[#dfe1db] bg-white px-4 text-sm text-[#20231f] shadow-sm shadow-black/[0.02] focus:border-[#c24e00] focus:outline-none focus:ring-4 focus:ring-[#ffad66]/15 disabled:opacity-60">
+          <select id="businessType" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)} disabled={isSubmitting} className="auth-field-input h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm font-medium text-white focus:border-[#ffc253]/70 focus:outline-none focus:ring-2 focus:ring-[#ffad66]/15 disabled:opacity-60">
             <option value="">Select business type</option>
             <option value="Distribution">Distribution</option>
             <option value="Retail">Retail</option>
@@ -98,8 +98,8 @@ export default function RegisterPage() {
         </div>
         <AuthField label="Password" id="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Create a strong password" value={password} onChange={setPassword} disabled={isSubmitting} maxLength={128} suffix={<button type="button" onClick={() => setShowPassword((shown) => !shown)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#777b73] hover:text-[#20231f]">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>} />
         <div className="grid gap-1.5 rounded-xl border border-white/15 bg-black/20 px-3.5 py-3 text-xs backdrop-blur-sm sm:grid-cols-2">
-          {passwordRules.map((rule, index) => <p key={rule.label} className={matchedRules[index] ? 'text-[#c5f0d2]' : 'text-white/75'}><span className="mr-1.5">{matchedRules[index] ? '✓' : '○'}</span>{rule.label}</p>)}
-          <p className={password.length <= 128 ? 'text-white/75' : 'text-red-200'}><span className="mr-1.5">{password.length <= 128 ? '○' : '!'}</span>Maximum 128 characters</p>
+          {passwordRules.map((rule, index) => <p key={rule.label} className={matchedRules[index] ? 'font-medium text-emerald-400' : 'font-medium text-red-400'}><span className="mr-1.5">{matchedRules[index] ? '✓' : '○'}</span>{rule.label}</p>)}
+          <p className={password.length <= 128 ? 'text-white/75' : 'font-medium text-red-400'}><span className="mr-1.5">{password.length <= 128 ? '○' : '!'}</span>Maximum 128 characters</p>
         </div>
         <AuthField label="Confirm password" id="confirmPassword" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Type your password again" value={confirmPassword} onChange={setConfirmPassword} disabled={isSubmitting} maxLength={128} />
         <p className="text-xs leading-5 text-white/70">By creating an account, you confirm that you are authorized to set up this business workspace.</p>

@@ -61,7 +61,7 @@ export default function ResetPasswordPage() {
           <CheckCircle2 className="mx-auto text-[#26804b]" size={30} />
           <p className="mt-3 font-semibold text-[#214a32]">Password reset complete</p>
           <p className="mt-1 text-sm text-[#5b7261]">For your security, all existing sessions have been signed out.</p>
-          <Link href="/login" className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-[#20211f] px-5 text-sm font-semibold text-white hover:bg-[#363a33]">Go to sign in</Link>
+          <Link href="/login" className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-[#ffd166] via-[#ffad36] to-[#f28a1b] px-5 text-sm font-bold text-[#20170a] shadow-[0_8px_24px_rgba(255,167,45,0.22)] transition hover:brightness-105">Go to sign in</Link>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5" noValidate>

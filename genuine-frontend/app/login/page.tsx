@@ -88,7 +88,7 @@ export default function LoginPage() {
           type="submit"
           disabled={isSubmitting || isRedirecting || authStatus === 'loading'}
           aria-busy={isSubmitting || isRedirecting}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#20211f] px-5 text-sm font-semibold text-white shadow-lg shadow-[#20211f]/15 transition hover:bg-[#363a33] focus:outline-none focus:ring-4 focus:ring-[#20211f]/20 disabled:cursor-wait disabled:opacity-70"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ffd166] via-[#ffad36] to-[#f28a1b] px-5 text-sm font-bold text-[#20170a] shadow-[0_10px_32px_rgba(255,167,45,0.28)] transition hover:brightness-105 hover:shadow-[0_12px_38px_rgba(255,167,45,0.38)] focus:outline-none focus:ring-4 focus:ring-[#ffad66]/35 disabled:cursor-wait disabled:opacity-70"
         >
           Sign in <span aria-hidden="true">→</span>
         </button>

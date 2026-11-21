@@ -1,6 +1,12 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { notify } from '@/components/ui/AppToaster';
 import { AuthLeftPanel } from '@/components/auth/AuthLeftPanel';
+
+export function reportAuthError(message: string, setError: (message: string) => void) {
+  setError(message);
+  notify.error(message);
+}
 
 export function AuthFrame({
   eyebrow,
@@ -43,7 +49,7 @@ export function AuthFrame({
           />
         </Link>
         <div className="mx-auto my-auto w-full max-w-[430px] py-7 sm:py-10">
-          <div className="auth-glass-card relative isolate overflow-hidden rounded-[28px] border border-white/15 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.36),0_0_34px_rgba(255,173,102,0.06)] backdrop-blur-2xl sm:p-7">
+          <div className="auth-glass-card relative isolate overflow-hidden rounded-[28px] border border-white/15 p-5 shadow-[0_24px_70px_rgba(0,0,0,0.36),0_0_34px_rgba(255,173,102,0.06)] sm:p-7">
             <div aria-hidden="true" className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10" />
             <div className="relative z-10">

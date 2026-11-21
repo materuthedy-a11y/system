@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { AuthField, AuthFrame, FormError, SubmitButton } from '@/components/auth/AuthFrame';
+import { AuthField, AuthFrame, FormError, reportAuthError, SubmitButton } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { authAPI, getApiError } from '@/lib/api';
 
@@ -31,15 +31,15 @@ export default function ResetPasswordPage() {
     event.preventDefault();
     setError('');
     if (!token) {
-      setError('This reset link is missing its security token. Request a new link.');
+      reportAuthError('This reset link is missing its security token. Request a new link.', setError);
       return;
     }
     if (password.length < 8 || password.length > 128 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[@$!%*?&]/.test(password)) {
-      setError('Use 8–128 characters with uppercase, lowercase, a number, and one of @$!%*?&.');
+      reportAuthError('Use 8–128 characters with uppercase, lowercase, a number, and one of @$!%*?&.', setError);
       return;
     }
     if (password !== confirmPassword) {
-      setError('The passwords do not match.');
+      reportAuthError('The passwords do not match.', setError);
       return;
     }
     setIsSubmitting(true);
@@ -47,7 +47,7 @@ export default function ResetPasswordPage() {
       await authAPI.resetPassword(token, password);
       setSuccess(true);
     } catch (cause) {
-      setError(getApiError(cause, 'That reset link may have expired. Request a new one and try again.'));
+      reportAuthError(getApiError(cause, 'That reset link may have expired. Request a new one and try again.'), setError);
     } finally {
       setIsSubmitting(false);
     }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { AuthField, AuthFrame, FormError, SubmitButton } from '@/components/auth/AuthFrame';
+import { AuthField, AuthFrame, FormError, reportAuthError, SubmitButton } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { useAuthStore } from '@/store/authStore';
 
@@ -27,33 +27,35 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const matchedRules = useMemo(() => passwordRules.map((rule) => rule.test(password)), [password]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting || isRedirecting) return;
     setError('');
     if (firstName.trim().length < 2 || lastName.trim().length < 2) {
-      setError('Enter a first and last name with at least 2 characters each.');
+      reportAuthError('Enter a first and last name with at least 2 characters each.', setError);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter a valid email address.');
+      reportAuthError('Enter a valid email address.', setError);
       return;
     }
     if (!businessName.trim()) {
-      setError('Enter your business name.');
+      reportAuthError('Enter your business name.', setError);
       return;
     }
     if (!businessType) {
-      setError('Select your business type.');
+      reportAuthError('Select your business type.', setError);
       return;
     }
     if (!matchedRules.every(Boolean)) {
-      setError('Choose a password that meets all the requirements below.');
+      reportAuthError('Choose a password that meets all the requirements below.', setError);
       return;
     }
     if (password !== confirmPassword) {
-      setError('The passwords do not match.');
+      reportAuthError('The passwords do not match.', setError);
       return;
     }
 
@@ -67,9 +69,11 @@ export default function RegisterPage() {
         businessType,
         password,
       });
+      setIsRedirecting(true);
       router.replace('/dashboard');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'We could not create your account. Please try again.');
+      setIsRedirecting(false);
+      reportAuthError(cause instanceof Error ? cause.message : 'We could not create your account. Please try again.', setError);
     } finally {
       setIsSubmitting(false);
     }
@@ -103,11 +107,11 @@ export default function RegisterPage() {
         </div>
         <AuthField label="Confirm password" id="confirmPassword" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Type your password again" value={confirmPassword} onChange={setConfirmPassword} disabled={isSubmitting} maxLength={128} />
         <p className="text-xs leading-5 text-white/70">By creating an account, you confirm that you are authorized to set up this business workspace.</p>
-        <SubmitButton loading={isSubmitting}>Create account <span aria-hidden="true">→</span></SubmitButton>
+        <SubmitButton loading={isSubmitting || isRedirecting}>Create account <span aria-hidden="true">→</span></SubmitButton>
         <p className="text-center text-sm text-white/75">Already have an account? <Link href="/login" className="font-semibold text-white underline-offset-4 hover:underline">Sign in</Link></p>
       </form>
     </AuthFrame>
-    {isSubmitting ? <AuthLoadingOverlay message="Creating your workspace…" /> : null}
+    {isSubmitting || isRedirecting ? <AuthLoadingOverlay message={isRedirecting ? 'Opening your workspace…' : 'Creating your workspace…'} /> : null}
     </>
   );
 }

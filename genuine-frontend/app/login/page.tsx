@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
-import { AuthField, AuthFrame, FormError } from '@/components/auth/AuthFrame';
+import { AuthField, AuthFrame, FormError, reportAuthError } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { useAuthStore } from '@/store/authStore';
 
@@ -37,11 +37,11 @@ export default function LoginPage() {
     if (isSubmitting || isRedirecting || authStatus === 'loading' || authStatus === 'authenticated') return;
     setError('');
     if (!email.trim() || !password) {
-      setError('Enter both your email address and password.');
+      reportAuthError('Enter both your email address and password.', setError);
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      setError('Enter a valid email address.');
+      reportAuthError('Enter a valid email address.', setError);
       return;
     }
     setIsSubmitting(true);
@@ -57,7 +57,7 @@ export default function LoginPage() {
       setIsRedirecting(true);
       router.replace(safePath);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'We could not sign you in. Please try again.');
+      reportAuthError(cause instanceof Error ? cause.message : 'We could not sign you in. Please try again.', setError);
     } finally {
       setIsSubmitting(false);
     }

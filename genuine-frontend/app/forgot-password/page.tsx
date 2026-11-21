@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { ArrowLeft, MailCheck } from 'lucide-react';
-import { AuthField, AuthFrame, FormError, SubmitButton } from '@/components/auth/AuthFrame';
+import { AuthField, AuthFrame, FormError, reportAuthError, SubmitButton } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { authAPI, getApiError } from '@/lib/api';
 
@@ -22,7 +22,7 @@ export default function ForgotPasswordPage() {
       // Keep the response identical for existing and unknown addresses.
       setSent(true);
     } catch (cause) {
-      setError(getApiError(cause, 'We could not process that request. Please try again.'));
+      reportAuthError(getApiError(cause, 'We could not process that request. Please try again.'), setError);
     } finally {
       setIsSubmitting(false);
     }

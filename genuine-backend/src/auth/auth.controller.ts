@@ -57,7 +57,8 @@ export class AuthController {
       req.get('user-agent') || undefined,
     );
     this.setRefreshCookie(req, response, result.refreshTokenCookie);
-    const { refreshTokenCookie: _refreshTokenCookie, ...authResponse } = result;
+    const { refreshTokenCookie, ...authResponse } = result;
+    void refreshTokenCookie;
     return authResponse;
   }
 
@@ -74,7 +75,8 @@ export class AuthController {
     const ipAddress = req.ip || 'unknown';
     const result = await this.authService.login(dto, ipAddress, req.get('user-agent') || undefined);
     this.setRefreshCookie(req, response, result.refreshTokenCookie);
-    const { refreshTokenCookie: _refreshTokenCookie, ...authResponse } = result;
+    const { refreshTokenCookie, ...authResponse } = result;
+    void refreshTokenCookie;
     return authResponse;
   }
 
@@ -86,7 +88,12 @@ export class AuthController {
   async refreshToken(
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<Pick<AuthResponseDto, 'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'>> {
+  ): Promise<
+    Pick<
+      AuthResponseDto,
+      'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'
+    >
+  > {
     const refreshToken = this.readRefreshCookie(req);
     if (!refreshToken) throw new UnauthorizedException('Session expired. Sign in again.');
     const payload = this.jwtService.decode(refreshToken) as any;
@@ -216,10 +223,14 @@ export class AuthController {
       businessName: user.business?.name || '',
       avatar: profile.avatar ? `/api/v1/auth/profile/avatar?v=${Date.now()}` : null,
       roles: user.userRoles?.map((ur: any) => ur.role?.name || ur.role) || [],
-      permissions: [...new Set([
-        ...(user.userRoles?.flatMap((ur: any) => ur.role?.permissions || []).map((p: any) => p.key) || []),
-        ...(user.permissions?.map((p: any) => p.key) || []),
-      ])],
+      permissions: [
+        ...new Set([
+          ...(user.userRoles
+            ?.flatMap((ur: any) => ur.role?.permissions || [])
+            .map((p: any) => p.key) || []),
+          ...(user.permissions?.map((p: any) => p.key) || []),
+        ]),
+      ],
     };
   }
 
@@ -277,7 +288,10 @@ export class AuthController {
     const cookies = req.headers.cookie || '';
     const names = ['__Host-mizania-refresh', 'mizania-refresh'];
     for (const name of names) {
-      const entry = cookies.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+      const entry = cookies
+        .split(';')
+        .map((part) => part.trim())
+        .find((part) => part.startsWith(`${name}=`));
       // JWT base64url values need no decoding; returning the raw cookie value also
       // avoids malformed percent-encoding turning an expired cookie into a 500.
       if (entry) return entry.slice(name.length + 1);

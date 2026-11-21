@@ -15,9 +15,11 @@ export async function accessibleLocationIds(
     },
   });
   if (!user) throw new NotFoundException('User not found');
-  if (user.userRoles.some(({ role }) => role.isSystem && ['Owner', 'Admin'].includes(role.name))) return null;
+  if (user.userRoles.some(({ role }) => role.isSystem && ['Owner', 'Admin'].includes(role.name)))
+    return null;
   const ids = user.assignedLocations.map(({ id }) => id);
-  if (!ids.length) throw new ForbiddenException('Ask an administrator to assign you a business location');
+  if (!ids.length)
+    throw new ForbiddenException('Ask an administrator to assign you a business location');
   return ids;
 }
 
@@ -28,5 +30,6 @@ export async function assertLocationAccess(
   locationId: string,
 ) {
   const allowed = await accessibleLocationIds(prisma, businessId, userId);
-  if (allowed && !allowed.includes(locationId)) throw new ForbiddenException('You do not have access to this location');
+  if (allowed && !allowed.includes(locationId))
+    throw new ForbiddenException('You do not have access to this location');
 }

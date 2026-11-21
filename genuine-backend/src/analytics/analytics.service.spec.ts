@@ -24,30 +24,33 @@ describe('AnalyticsService product performance', () => {
     const prisma = {
       business: { findUnique: jest.fn().mockResolvedValue({ id: 'business-a', currency: 'TZS' }) },
       salesInvoice: {
-        findMany: jest.fn().mockResolvedValue([{
-          discountAmount: 10,
-          items: [
-            { quantity: 2, total: 60, product: productA },
-            { quantity: 1, total: 40, product: productB },
-          ],
-        }]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            discountAmount: 10,
+            items: [
+              { quantity: 2, total: 60, product: productA },
+              { quantity: 1, total: 40, product: productB },
+            ],
+          },
+        ]),
       },
       salesReturn: {
-        findMany: jest.fn().mockResolvedValue([{
-          items: [{ productId: 'product-a', quantity: 1, total: 5 }],
-        }]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            items: [{ productId: 'product-a', quantity: 1, total: 5 }],
+          },
+        ]),
       },
       inventoryMovement: {
         findMany: jest.fn().mockResolvedValue([]),
-        groupBy: jest.fn()
-          .mockResolvedValueOnce([
-            { productId: 'product-a', _sum: { quantity: -1 } },
-          ])
-          .mockResolvedValueOnce([
-            { productId: 'product-a', _sum: { quantity: -2 } },
-          ]),
+        groupBy: jest
+          .fn()
+          .mockResolvedValueOnce([{ productId: 'product-a', _sum: { quantity: -1 } }])
+          .mockResolvedValueOnce([{ productId: 'product-a', _sum: { quantity: -2 } }]),
       },
-      stockBalance: { findMany: jest.fn().mockResolvedValue([{ productId: 'product-a', quantity: 3 }]) },
+      stockBalance: {
+        findMany: jest.fn().mockResolvedValue([{ productId: 'product-a', quantity: 3 }]),
+      },
       product: { findMany: jest.fn().mockResolvedValue([productA]) },
     };
     const service = new AnalyticsService(prisma as any, {} as any, {} as any);
@@ -60,10 +63,26 @@ describe('AnalyticsService product performance', () => {
       sortBy: 'REVENUE',
     } as any);
 
-    expect(result.data).toEqual(expect.arrayContaining([
-      expect.objectContaining({ productId: 'product-a', revenue: 49, quantity: 1, currentStock: 3, unit: 'Bottle', inventoryTurnover: 0.18, estimatedDaysOfInventory: 165 }),
-      expect.objectContaining({ productId: 'product-b', revenue: 36, quantity: 1, currentStock: 0, unit: 'Pack' }),
-    ]));
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: 'product-a',
+          revenue: 49,
+          quantity: 1,
+          currentStock: 3,
+          unit: 'Bottle',
+          inventoryTurnover: 0.18,
+          estimatedDaysOfInventory: 165,
+        }),
+        expect.objectContaining({
+          productId: 'product-b',
+          revenue: 36,
+          quantity: 1,
+          currentStock: 0,
+          unit: 'Pack',
+        }),
+      ]),
+    );
     expect(result.period).toBe('2026-09-01 to 2026-09-30');
     expect(result.inventoryAsOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(result.definitions.currentStock).toContain('not a historical stock figure');
@@ -72,29 +91,60 @@ describe('AnalyticsService product performance', () => {
 
   it('preserves return-period negative COGS and leaves margin unset for negative revenue', async () => {
     const product = {
-      id: 'returned-product', name: 'Returned product', sku: 'RET-1', categoryId: 'category-a',
-      category: { name: 'Drinks' }, defaultUnit: { name: 'Bottle' }, buyingPrice: 60,
+      id: 'returned-product',
+      name: 'Returned product',
+      sku: 'RET-1',
+      categoryId: 'category-a',
+      category: { name: 'Drinks' },
+      defaultUnit: { name: 'Bottle' },
+      buyingPrice: 60,
     };
     const prisma = {
       business: { findUnique: jest.fn().mockResolvedValue({ id: 'business-a', currency: 'TZS' }) },
       salesInvoice: { findMany: jest.fn().mockResolvedValue([]) },
-      salesReturn: { findMany: jest.fn().mockResolvedValue([{ items: [{ productId: product.id, quantity: 2, total: 100 }] }]) },
-      inventoryMovement: {
-        findMany: jest.fn().mockResolvedValue([{ type: 'CUSTOMER_RETURN', productId: product.id, quantity: 2, unitCost: 60, product: { buyingPrice: 60 } }]),
-        groupBy: jest.fn().mockResolvedValueOnce([{ productId: product.id, _sum: { quantity: 2 } }]).mockResolvedValueOnce([]),
+      salesReturn: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ items: [{ productId: product.id, quantity: 2, total: 100 }] }]),
       },
-      stockBalance: { findMany: jest.fn().mockResolvedValue([{ productId: product.id, quantity: 2 }]) },
+      inventoryMovement: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            type: 'CUSTOMER_RETURN',
+            productId: product.id,
+            quantity: 2,
+            unitCost: 60,
+            product: { buyingPrice: 60 },
+          },
+        ]),
+        groupBy: jest
+          .fn()
+          .mockResolvedValueOnce([{ productId: product.id, _sum: { quantity: 2 } }])
+          .mockResolvedValueOnce([]),
+      },
+      stockBalance: {
+        findMany: jest.fn().mockResolvedValue([{ productId: product.id, quantity: 2 }]),
+      },
       product: { findMany: jest.fn().mockResolvedValue([product]) },
     };
     const service = new AnalyticsService(prisma as any, {} as any, {} as any);
 
     const result = await service.getProductPerformance('business-a', {
-      dateFrom: '2026-11-03', dateTo: '2026-11-03', page: 1, limit: 20,
+      dateFrom: '2026-11-03',
+      dateTo: '2026-11-03',
+      page: 1,
+      limit: 20,
     } as any);
 
-    expect(result.data[0]).toEqual(expect.objectContaining({
-      quantity: -2, revenue: -100, cogs: -120, profit: 20, marginPercent: null,
-    }));
+    expect(result.data[0]).toEqual(
+      expect.objectContaining({
+        quantity: -2,
+        revenue: -100,
+        cogs: -120,
+        profit: 20,
+        marginPercent: null,
+      }),
+    );
   });
 });
 
@@ -122,9 +172,7 @@ describe('AnalyticsService sales dashboard', () => {
       accountingPeriod: { findFirst: jest.fn() },
       salesInvoice: { findMany: jest.fn().mockResolvedValue([invoice]) },
       salesReturn: {
-        findMany: jest.fn()
-          .mockResolvedValueOnce([returned])
-          .mockResolvedValueOnce([returned]),
+        findMany: jest.fn().mockResolvedValueOnce([returned]).mockResolvedValueOnce([returned]),
       },
       payment: { findMany: jest.fn().mockResolvedValue([{ invoiceId: invoice.id, amount: 120 }]) },
     };
@@ -152,38 +200,90 @@ describe('AnalyticsService customer analytics', () => {
     const prisma = {
       business: {
         findUnique: jest.fn().mockResolvedValue({
-          id: 'business-a', currency: 'TZS', timezone: 'Africa/Dar_es_Salaam', financialYear: 'CALENDAR',
+          id: 'business-a',
+          currency: 'TZS',
+          timezone: 'Africa/Dar_es_Salaam',
+          financialYear: 'CALENDAR',
           settings: { dateFormat: 'DD/MM/YYYY', weekStartsOn: 'MONDAY' },
         }),
       },
       accountingPeriod: { findFirst: jest.fn() },
-      customer: { findMany: jest.fn().mockResolvedValue([
-        { id: 'customer-a', businessId: 'business-a', name: 'Alpha', customerCode: 'A', customerType: 'RETAIL' },
-        { id: 'customer-b', businessId: 'business-a', name: 'Never Purchased', customerCode: 'B', customerType: 'RETAIL' },
-      ]) },
+      customer: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'customer-a',
+            businessId: 'business-a',
+            name: 'Alpha',
+            customerCode: 'A',
+            customerType: 'RETAIL',
+          },
+          {
+            id: 'customer-b',
+            businessId: 'business-a',
+            name: 'Never Purchased',
+            customerCode: 'B',
+            customerType: 'RETAIL',
+          },
+        ]),
+      },
       salesInvoice: {
         findMany: jest.fn().mockResolvedValueOnce([invoice]).mockResolvedValueOnce([invoice]),
       },
       salesReturn: {
-        findMany: jest.fn().mockResolvedValue([{
-          customerId: 'customer-a', totalAmount: 20,
-          returnDate: new Date('2026-11-15T10:00:00.000Z'), invoice: { customerId: 'customer-a' },
-        }]),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            customerId: 'customer-a',
+            totalAmount: 20,
+            returnDate: new Date('2026-11-15T10:00:00.000Z'),
+            invoice: { customerId: 'customer-a' },
+          },
+        ]),
       },
     };
     const service = new AnalyticsService(prisma as any, {} as any, {} as any);
 
     const result = await service.getCustomerAnalytics('business-a', {
-      dateFrom: '2026-11-01', dateTo: '2026-11-15', segmentBy: 'REVENUE', page: 1, limit: 20,
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-15',
+      segmentBy: 'REVENUE',
+      page: 1,
+      limit: 20,
     } as any);
 
-    expect(prisma.customer.findMany).toHaveBeenCalledWith({ where: { businessId: 'business-a', isActive: true } });
-    expect(result).toMatchObject({ period: '2026-11-01 to 2026-11-15', currency: 'TZS', segmentBy: 'REVENUE' });
-    expect(result.data).toEqual(expect.arrayContaining([
-      expect.objectContaining({ customerId: 'customer-a', totalRevenue: 80, invoiceCount: 1, averageOrderValue: 80, lastPurchaseDate: purchaseDate, daysInactive: 0, segment: 'VIP' }),
-      expect.objectContaining({ customerId: 'customer-b', totalRevenue: 0, invoiceCount: 0, averageOrderValue: null, lastPurchaseDate: null, daysInactive: null, loyaltyScore: 0, segment: 'INACTIVE' }),
-    ]));
-    expect(result.definitions.averageOrderValue).toContain('unavailable when there are no invoices');
+    expect(prisma.customer.findMany).toHaveBeenCalledWith({
+      where: { businessId: 'business-a', isActive: true },
+    });
+    expect(result).toMatchObject({
+      period: '2026-11-01 to 2026-11-15',
+      currency: 'TZS',
+      segmentBy: 'REVENUE',
+    });
+    expect(result.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          customerId: 'customer-a',
+          totalRevenue: 80,
+          invoiceCount: 1,
+          averageOrderValue: 80,
+          lastPurchaseDate: purchaseDate,
+          daysInactive: 0,
+          segment: 'VIP',
+        }),
+        expect.objectContaining({
+          customerId: 'customer-b',
+          totalRevenue: 0,
+          invoiceCount: 0,
+          averageOrderValue: null,
+          lastPurchaseDate: null,
+          daysInactive: null,
+          loyaltyScore: 0,
+          segment: 'INACTIVE',
+        }),
+      ]),
+    );
+    expect(result.definitions.averageOrderValue).toContain(
+      'unavailable when there are no invoices',
+    );
   });
 
   it('uses midrank percentiles for positive ties and zeroes non-positive spend/frequency percentiles', () => {
@@ -205,58 +305,130 @@ describe('AnalyticsService supplier analytics', () => {
       weekStartsOn: 'MONDAY',
     };
     const acceptedGrn = {
-      status: 'ACCEPTED', receivedDate: new Date('2026-11-05T12:00:00.000Z'),
-      items: [{ acceptedQuantity: 4, rejectedQuantity: 1, damageQuantity: 0,
-        purchaseOrderItem: { quantity: 10, unitPrice: 100, lineTotal: 800 } }],
+      status: 'ACCEPTED',
+      receivedDate: new Date('2026-11-05T12:00:00.000Z'),
+      items: [
+        {
+          acceptedQuantity: 4,
+          rejectedQuantity: 1,
+          damageQuantity: 0,
+          purchaseOrderItem: { quantity: 10, unitPrice: 100, lineTotal: 800 },
+        },
+      ],
     };
     const rejectedGrn = {
-      status: 'REJECTED', receivedDate: new Date('2026-11-07T12:00:00.000Z'),
-      items: [{ acceptedQuantity: 2, rejectedQuantity: 0, damageQuantity: 0,
-        purchaseOrderItem: { quantity: 10, unitPrice: 100, lineTotal: 800 } }],
+      status: 'REJECTED',
+      receivedDate: new Date('2026-11-07T12:00:00.000Z'),
+      items: [
+        {
+          acceptedQuantity: 2,
+          rejectedQuantity: 0,
+          damageQuantity: 0,
+          purchaseOrderItem: { quantity: 10, unitPrice: 100, lineTotal: 800 },
+        },
+      ],
     };
     const noDueDateGrn = {
-      status: 'ACCEPTED', receivedDate: new Date('2026-11-03T12:00:00.000Z'),
-      items: [{ acceptedQuantity: 2, rejectedQuantity: 0, damageQuantity: 1,
-        purchaseOrderItem: { quantity: 5, unitPrice: 50, lineTotal: 250 } }],
+      status: 'ACCEPTED',
+      receivedDate: new Date('2026-11-03T12:00:00.000Z'),
+      items: [
+        {
+          acceptedQuantity: 2,
+          rejectedQuantity: 0,
+          damageQuantity: 1,
+          purchaseOrderItem: { quantity: 5, unitPrice: 50, lineTotal: 250 },
+        },
+      ],
     };
     const prisma = {
-      supplier: { findMany: jest.fn().mockResolvedValue([{
-        id: 'supplier-a', businessId: 'business-a', name: 'Test Supplier', supplierCode: 'SUP-1',
-        purchaseOrders: [
-          { id: 'po-a', orderDate: new Date('2026-11-01T12:00:00.000Z'), expectedDeliveryDate: new Date('2026-11-06T00:00:00.000Z'), grns: [acceptedGrn, rejectedGrn] },
-          { id: 'po-b', orderDate: new Date('2026-11-03T12:00:00.000Z'), expectedDeliveryDate: null, grns: [noDueDateGrn] },
-          { id: 'po-c', orderDate: new Date('2026-11-04T12:00:00.000Z'), expectedDeliveryDate: null, grns: [] },
-        ],
-      }, {
-        id: 'supplier-b', businessId: 'business-a', name: 'No Receipt Supplier', supplierCode: 'SUP-2',
-        purchaseOrders: [{ id: 'po-d', orderDate: new Date('2026-11-08T12:00:00.000Z'), expectedDeliveryDate: null, grns: [] }],
-      }]) },
+      supplier: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'supplier-a',
+            businessId: 'business-a',
+            name: 'Test Supplier',
+            supplierCode: 'SUP-1',
+            purchaseOrders: [
+              {
+                id: 'po-a',
+                orderDate: new Date('2026-11-01T12:00:00.000Z'),
+                expectedDeliveryDate: new Date('2026-11-06T00:00:00.000Z'),
+                grns: [acceptedGrn, rejectedGrn],
+              },
+              {
+                id: 'po-b',
+                orderDate: new Date('2026-11-03T12:00:00.000Z'),
+                expectedDeliveryDate: null,
+                grns: [noDueDateGrn],
+              },
+              {
+                id: 'po-c',
+                orderDate: new Date('2026-11-04T12:00:00.000Z'),
+                expectedDeliveryDate: null,
+                grns: [],
+              },
+            ],
+          },
+          {
+            id: 'supplier-b',
+            businessId: 'business-a',
+            name: 'No Receipt Supplier',
+            supplierCode: 'SUP-2',
+            purchaseOrders: [
+              {
+                id: 'po-d',
+                orderDate: new Date('2026-11-08T12:00:00.000Z'),
+                expectedDeliveryDate: null,
+                grns: [],
+              },
+            ],
+          },
+        ]),
+      },
     };
     const service = new AnalyticsService(prisma as any, {} as any, {} as any);
     jest.spyOn(service as any, 'getDateRange').mockResolvedValue(range);
     jest.spyOn(service as any, 'businessInfo').mockResolvedValue({ currency: 'TZS' });
 
     const result = await service.getSupplierAnalytics('business-a', {
-      dateFrom: '2026-11-01', dateTo: '2026-11-16', page: 1, limit: 20,
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-16',
+      page: 1,
+      limit: 20,
     } as any);
 
-    expect(prisma.supplier.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { businessId: 'business-a' },
-      include: expect.objectContaining({ purchaseOrders: expect.objectContaining({
-        where: expect.objectContaining({ status: { notIn: ['DRAFT', 'CANCELLED'] } }),
-      }) }),
-    }));
+    expect(prisma.supplier.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: 'business-a' },
+        include: expect.objectContaining({
+          purchaseOrders: expect.objectContaining({
+            where: expect.objectContaining({ status: { notIn: ['DRAFT', 'CANCELLED'] } }),
+          }),
+        }),
+      }),
+    );
     expect(result).toMatchObject({ period: range.periodName, currency: 'TZS', total: 2 });
     expect(result.data[0]).toMatchObject({
-      purchaseOrderCount: 3, acceptedPurchaseValue: 420, acceptedQuantity: 6,
-      rejectedQuantity: 3, damagedQuantity: 1, onTimeDeliveryPercent: 100,
-      qualityScore: 60, averageLeadTimeDays: 2, riskLevel: 'UNKNOWN',
+      purchaseOrderCount: 3,
+      acceptedPurchaseValue: 420,
+      acceptedQuantity: 6,
+      rejectedQuantity: 3,
+      damagedQuantity: 1,
+      onTimeDeliveryPercent: 100,
+      qualityScore: 60,
+      averageLeadTimeDays: 2,
+      riskLevel: 'UNKNOWN',
       dataCoverage: 'GRN quality measured; expected-date coverage 66.67%',
     });
     expect(result.data[1]).toMatchObject({
-      purchaseOrderCount: 1, acceptedPurchaseValue: 0, acceptedQuantity: 0,
-      onTimeDeliveryPercent: null, qualityScore: null, averageLeadTimeDays: null,
-      riskLevel: 'UNKNOWN', dataCoverage: 'No processed GRN by period end',
+      purchaseOrderCount: 1,
+      acceptedPurchaseValue: 0,
+      acceptedQuantity: 0,
+      onTimeDeliveryPercent: null,
+      qualityScore: null,
+      averageLeadTimeDays: null,
+      riskLevel: 'UNKNOWN',
+      dataCoverage: 'No processed GRN by period end',
     });
     const purchaseOrderQuery = prisma.supplier.findMany.mock.calls[0][0].include.purchaseOrders;
     expect(purchaseOrderQuery.include.grns.where).toEqual({
@@ -276,31 +448,59 @@ describe('AnalyticsService inventory dashboard', () => {
       business: { findUnique: jest.fn().mockResolvedValue({ id: 'business-a', currency: 'TZS' }) },
       inventoryMovement: {
         findMany: jest.fn().mockResolvedValue([
-          { type: 'SALE', quantity: -6, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
-          { type: 'CUSTOMER_RETURN', quantity: 1, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
-          { type: 'SALE_REVERSAL', quantity: 2, productId: 'p1', product: { id: 'p1', name: 'Alpha', sku: 'A' } },
-          { type: 'CUSTOMER_RETURN', quantity: 2, productId: 'p2', product: { id: 'p2', name: 'Beta', sku: 'B' } },
+          {
+            type: 'SALE',
+            quantity: -6,
+            productId: 'p1',
+            product: { id: 'p1', name: 'Alpha', sku: 'A' },
+          },
+          {
+            type: 'CUSTOMER_RETURN',
+            quantity: 1,
+            productId: 'p1',
+            product: { id: 'p1', name: 'Alpha', sku: 'A' },
+          },
+          {
+            type: 'SALE_REVERSAL',
+            quantity: 2,
+            productId: 'p1',
+            product: { id: 'p1', name: 'Alpha', sku: 'A' },
+          },
+          {
+            type: 'CUSTOMER_RETURN',
+            quantity: 2,
+            productId: 'p2',
+            product: { id: 'p2', name: 'Beta', sku: 'B' },
+          },
         ]),
       },
       product: { findMany: jest.fn().mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]) },
-      stockBalance: { findMany: jest.fn().mockResolvedValue([
-        { productId: 'p1', locationId: 'loc-a', quantity: 4 },
-        { productId: 'p2', locationId: 'loc-a', quantity: 0 },
-        { productId: 'p2', locationId: 'loc-b', quantity: -1 },
-        { productId: 'p2', locationId: 'loc-c', quantity: 2 },
-      ]) },
+      stockBalance: {
+        findMany: jest.fn().mockResolvedValue([
+          { productId: 'p1', locationId: 'loc-a', quantity: 4 },
+          { productId: 'p2', locationId: 'loc-a', quantity: 0 },
+          { productId: 'p2', locationId: 'loc-b', quantity: -1 },
+          { productId: 'p2', locationId: 'loc-c', quantity: 2 },
+        ]),
+      },
     };
     const inventory = {
-      getStockValuationReport: jest.fn().mockResolvedValue({ totalValue: 7800, costingMethod: 'WEIGHTED_AVERAGE' }),
+      getStockValuationReport: jest
+        .fn()
+        .mockResolvedValue({ totalValue: 7800, costingMethod: 'WEIGHTED_AVERAGE' }),
       getLowStockReport: jest.fn().mockResolvedValue({
-        data: [{ productId: 'p2', locationId: 'loc-a', quantity: 0 }], total: 12,
+        data: [{ productId: 'p2', locationId: 'loc-a', quantity: 0 }],
+        total: 12,
       }),
     };
     const service = new AnalyticsService(prisma as any, {} as any, inventory as any);
-    jest.spyOn(service as any, 'getDateRange').mockResolvedValue({ startDate, endDate, periodName: '2026-11-01 to 2026-11-15' });
+    jest
+      .spyOn(service as any, 'getDateRange')
+      .mockResolvedValue({ startDate, endDate, periodName: '2026-11-01 to 2026-11-15' });
 
     const result = await service.getInventoryDashboard('business-a', {
-      dateFrom: '2026-11-01', dateTo: '2026-11-15',
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-15',
     } as any);
 
     expect(result.metrics).toEqual({
@@ -314,25 +514,39 @@ describe('AnalyticsService inventory dashboard', () => {
     expect(result.currency).toBe('TZS');
     expect(result.lowStockItems).toHaveLength(1);
     expect(inventory.getLowStockReport).toHaveBeenCalledWith('business-a', '', {
-      page: 1, limit: 10, type: 'BOTH',
+      page: 1,
+      limit: 10,
+      type: 'BOTH',
     });
     expect(result.topMovingProducts).toEqual([
       { productId: 'p1', name: 'Alpha', sku: 'A', quantity: 3 },
     ]);
     expect(result.definitions.topMovingProducts).toContain('received customer returns');
-    expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] } }),
-    }));
-    await service.getInventoryDashboard('business-a', {
-      dateFrom: '2026-11-01', dateTo: '2026-11-15',
-    } as any, true);
+    expect(prisma.inventoryMovement.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] },
+        }),
+      }),
+    );
+    await service.getInventoryDashboard(
+      'business-a',
+      {
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-15',
+      } as any,
+      true,
+    );
     expect(inventory.getLowStockReport).toHaveBeenLastCalledWith('business-a', '', {
-      page: 1, limit: 10000, type: 'BOTH',
+      page: 1,
+      limit: 10000,
+      type: 'BOTH',
     });
   });
 
   it.each(['PDF', 'EXCEL', 'CSV', 'JSON'] as const)(
-    'exports every low-stock row and its snapshot definition in %s', async (format) => {
+    'exports every low-stock row and its snapshot definition in %s',
+    async (format) => {
       const service = new AnalyticsService({} as any, {} as any, {} as any);
       const lowStockItems = Array.from({ length: 12 }, (_, index) => ({
         productName: `Low stock ${index + 1}`,
@@ -349,12 +563,24 @@ describe('AnalyticsService inventory dashboard', () => {
         period: '2026-11-01 to 2026-11-15',
         asOf: '2026-11-15T23:59:59.999Z',
         costingMethod: 'WEIGHTED_AVERAGE',
-        metrics: { activeProducts: 20, stockKeepingUnitsWithStock: 15, totalQuantity: 80, inventoryValue: 7800, lowStockCount: 12, locationCount: 3 },
+        metrics: {
+          activeProducts: 20,
+          stockKeepingUnitsWithStock: 15,
+          totalQuantity: 80,
+          inventoryValue: 7800,
+          lowStockCount: 12,
+          locationCount: 3,
+        },
         lowStockItems,
         topMovingProducts: [{ productId: 'p1', name: 'Fast mover', sku: 'A', quantity: 4 }],
-        definitions: { inventoryValue: 'Current snapshot, not historical.', lowStockItems: 'All matching low-stock rows.' },
+        definitions: {
+          inventoryValue: 'Current snapshot, not historical.',
+          lowStockItems: 'All matching low-stock rows.',
+        },
       };
-      const getInventoryDashboard = jest.spyOn(service, 'getInventoryDashboard').mockResolvedValue(report as any);
+      const getInventoryDashboard = jest
+        .spyOn(service, 'getInventoryDashboard')
+        .mockResolvedValue(report as any);
 
       const result = await service.exportReport('business-a', {
         reportType: 'INVENTORY_DASHBOARD',
@@ -363,20 +589,29 @@ describe('AnalyticsService inventory dashboard', () => {
         dateTo: '2026-11-15',
       } as any);
 
-      expect(getInventoryDashboard).toHaveBeenCalledWith('business-a', {
-        periodId: undefined,
-        dateFrom: '2026-11-01',
-        dateTo: '2026-11-15',
-        groupBy: undefined,
-      }, true);
-      expect(result.fileName).toMatch(new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`));
+      expect(getInventoryDashboard).toHaveBeenCalledWith(
+        'business-a',
+        {
+          periodId: undefined,
+          dateFrom: '2026-11-01',
+          dateTo: '2026-11-15',
+          groupBy: undefined,
+        },
+        true,
+      );
+      expect(result.fileName).toMatch(
+        new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`),
+      );
       let exportedText: string;
       if (format === 'JSON' || format === 'CSV' || format === 'PDF') {
         exportedText = String(result.content);
       } else {
         const workbook = result.content as Buffer;
         const parts: string[] = [];
-        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+        for (
+          let offset = 0;
+          offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+        ) {
           const method = workbook.readUInt16LE(offset + 8);
           const compressedSize = workbook.readUInt32LE(offset + 18);
           const nameLength = workbook.readUInt16LE(offset + 26);
@@ -391,7 +626,8 @@ describe('AnalyticsService inventory dashboard', () => {
       expect(exportedText).toContain('Low stock 12');
       expect(exportedText).toContain('Current snapshot, not historical.');
       if (format === 'PDF') {
-        const firstPage = exportedText.match(/4 0 obj[\s\S]*?stream\n([\s\S]*?)\nendstream/)?.[1] || '';
+        const firstPage =
+          exportedText.match(/4 0 obj[\s\S]*?stream\n([\s\S]*?)\nendstream/)?.[1] || '';
         expect(firstPage).toContain('(Low Stock Items) Tj');
         expect(firstPage).toContain('Period 2026-11-01 to 2026-11-15');
         expect(exportedText).toContain('(Qty) Tj');
@@ -424,12 +660,16 @@ describe('AnalyticsService trends and forecast', () => {
     jest.spyOn(service as any, 'series').mockResolvedValue(points);
 
     const result = await service.forecastMetric('business-a', {
-      metric: 'REVENUE', method: 'MOVING_AVERAGE', periods: 3,
+      metric: 'REVENUE',
+      method: 'MOVING_AVERAGE',
+      periods: 3,
     } as any);
 
     const expectedError = 21240 / Math.sqrt(21);
     expect(result).toMatchObject({
-      metric: 'REVENUE', currency: 'TZS', method: 'MOVING_AVERAGE',
+      metric: 'REVENUE',
+      currency: 'TZS',
+      method: 'MOVING_AVERAGE',
       historicalPeriods: points,
       forecast: [
         { period: '2026-12', predicted: 7080, lowConfidence: 0 },
@@ -445,71 +685,126 @@ describe('AnalyticsService trends and forecast', () => {
   });
 
   it.each([
-    ['TREND_ANALYSIS', 'PDF'], ['TREND_ANALYSIS', 'EXCEL'], ['TREND_ANALYSIS', 'CSV'], ['TREND_ANALYSIS', 'JSON'],
-    ['FORECAST', 'PDF'], ['FORECAST', 'EXCEL'], ['FORECAST', 'CSV'], ['FORECAST', 'JSON'],
-  ] as const)('exports %s in %s with selected metric and forecast context', async (reportType, format) => {
-    const service = new AnalyticsService({} as any, {} as any, {} as any);
-    const startDate = new Date('2026-11-01T00:00:00.000Z');
-    const endDate = new Date('2026-11-17T23:59:59.999Z');
-    const trendReport = {
-      metric: 'REVENUE', currency: 'TZS', startDate, endDate, groupBy: 'DAILY',
-      data: [{ period: '2026-11-03', value: 17700 }, { period: '2026-11-04', value: 3540 }],
-      trendLine: { slope: 1, intercept: 0, rSquared: 0.5, projection: [] },
-      volatility: 100, minValue: 0, maxValue: 17700, averageValue: 1246, forecastConfidence: 0.5,
-      forecastConfidenceBasis: 'R-squared is a fit indicator, not a statistical guarantee.',
-    };
-    const forecastReport = {
-      metric: 'REVENUE', currency: 'TZS', method: 'MOVING_AVERAGE', startDate, endDate,
-      historicalPeriods: [{ period: '2026-11', value: 21240 }],
-      forecast: [{ period: '2026-12', date: new Date('2026-12-01T00:00:00.000Z'), predicted: 7080, lowConfidence: 0, highConfidence: 14883.77 }],
-      accuracy: null, lastActualValue: 21240, trend: 'DOWN', seasonality: false,
-      confidenceIntervalNote: 'Approximate 95% interval; not a guarantee.',
-    };
-    const handler = reportType === 'TREND_ANALYSIS'
-      ? jest.spyOn(service, 'analyzeTrends').mockResolvedValue(trendReport as any)
-      : jest.spyOn(service, 'forecastMetric').mockResolvedValue(forecastReport as any);
+    ['TREND_ANALYSIS', 'PDF'],
+    ['TREND_ANALYSIS', 'EXCEL'],
+    ['TREND_ANALYSIS', 'CSV'],
+    ['TREND_ANALYSIS', 'JSON'],
+    ['FORECAST', 'PDF'],
+    ['FORECAST', 'EXCEL'],
+    ['FORECAST', 'CSV'],
+    ['FORECAST', 'JSON'],
+  ] as const)(
+    'exports %s in %s with selected metric and forecast context',
+    async (reportType, format) => {
+      const service = new AnalyticsService({} as any, {} as any, {} as any);
+      const startDate = new Date('2026-11-01T00:00:00.000Z');
+      const endDate = new Date('2026-11-17T23:59:59.999Z');
+      const trendReport = {
+        metric: 'REVENUE',
+        currency: 'TZS',
+        startDate,
+        endDate,
+        groupBy: 'DAILY',
+        data: [
+          { period: '2026-11-03', value: 17700 },
+          { period: '2026-11-04', value: 3540 },
+        ],
+        trendLine: { slope: 1, intercept: 0, rSquared: 0.5, projection: [] },
+        volatility: 100,
+        minValue: 0,
+        maxValue: 17700,
+        averageValue: 1246,
+        forecastConfidence: 0.5,
+        forecastConfidenceBasis: 'R-squared is a fit indicator, not a statistical guarantee.',
+      };
+      const forecastReport = {
+        metric: 'REVENUE',
+        currency: 'TZS',
+        method: 'MOVING_AVERAGE',
+        startDate,
+        endDate,
+        historicalPeriods: [{ period: '2026-11', value: 21240 }],
+        forecast: [
+          {
+            period: '2026-12',
+            date: new Date('2026-12-01T00:00:00.000Z'),
+            predicted: 7080,
+            lowConfidence: 0,
+            highConfidence: 14883.77,
+          },
+        ],
+        accuracy: null,
+        lastActualValue: 21240,
+        trend: 'DOWN',
+        seasonality: false,
+        confidenceIntervalNote: 'Approximate 95% interval; not a guarantee.',
+      };
+      const handler =
+        reportType === 'TREND_ANALYSIS'
+          ? jest.spyOn(service, 'analyzeTrends').mockResolvedValue(trendReport as any)
+          : jest.spyOn(service, 'forecastMetric').mockResolvedValue(forecastReport as any);
 
-    const result = await service.exportReport('business-a', {
-      reportType, format, dateFrom: '2026-11-01', dateTo: '2026-11-17',
-      metric: 'REVENUE', groupBy: 'DAILY', method: 'MOVING_AVERAGE', periods: 3,
-    } as any);
+      const result = await service.exportReport('business-a', {
+        reportType,
+        format,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-17',
+        metric: 'REVENUE',
+        groupBy: 'DAILY',
+        method: 'MOVING_AVERAGE',
+        periods: 3,
+      } as any);
 
-    expect(result.fileName).toMatch(new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`));
-    if (reportType === 'TREND_ANALYSIS') {
-      expect(handler).toHaveBeenCalledWith('business-a', expect.objectContaining({ metric: 'REVENUE', groupBy: 'DAILY' }));
-    } else {
-      expect(handler).toHaveBeenCalledWith('business-a', expect.objectContaining({ metric: 'REVENUE', method: 'MOVING_AVERAGE', periods: 3 }));
-    }
-    if (format === 'JSON') {
-      const json = JSON.parse(String(result.content));
-      expect(json.metric).toBe('REVENUE');
-      expect(reportType === 'TREND_ANALYSIS' ? json.data[0].period : json.forecast[0].period)
-        .toBe(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
-      if (reportType === 'FORECAST') expect(json.confidenceIntervalNote).toContain('not a guarantee');
-    } else {
-      let textContent = String(result.content);
-      if (format === 'EXCEL') {
-        const workbook = result.content as Buffer;
-        const parts: string[] = [];
-        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
-          const method = workbook.readUInt16LE(offset + 8);
-          const compressedSize = workbook.readUInt32LE(offset + 18);
-          const nameLength = workbook.readUInt16LE(offset + 26);
-          const extraLength = workbook.readUInt16LE(offset + 28);
-          const bodyStart = offset + 30 + nameLength + extraLength;
-          const body = workbook.subarray(bodyStart, bodyStart + compressedSize);
-          parts.push((method === 8 ? inflateRawSync(body) : body).toString('utf8'));
-          offset = bodyStart + compressedSize;
+      expect(result.fileName).toMatch(
+        new RegExp(`\\.${format === 'EXCEL' ? 'xlsx' : format.toLowerCase()}$`),
+      );
+      if (reportType === 'TREND_ANALYSIS') {
+        expect(handler).toHaveBeenCalledWith(
+          'business-a',
+          expect.objectContaining({ metric: 'REVENUE', groupBy: 'DAILY' }),
+        );
+      } else {
+        expect(handler).toHaveBeenCalledWith(
+          'business-a',
+          expect.objectContaining({ metric: 'REVENUE', method: 'MOVING_AVERAGE', periods: 3 }),
+        );
+      }
+      if (format === 'JSON') {
+        const json = JSON.parse(String(result.content));
+        expect(json.metric).toBe('REVENUE');
+        expect(
+          reportType === 'TREND_ANALYSIS' ? json.data[0].period : json.forecast[0].period,
+        ).toBe(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
+        if (reportType === 'FORECAST')
+          expect(json.confidenceIntervalNote).toContain('not a guarantee');
+      } else {
+        let textContent = String(result.content);
+        if (format === 'EXCEL') {
+          const workbook = result.content as Buffer;
+          const parts: string[] = [];
+          for (
+            let offset = 0;
+            offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+          ) {
+            const method = workbook.readUInt16LE(offset + 8);
+            const compressedSize = workbook.readUInt32LE(offset + 18);
+            const nameLength = workbook.readUInt16LE(offset + 26);
+            const extraLength = workbook.readUInt16LE(offset + 28);
+            const bodyStart = offset + 30 + nameLength + extraLength;
+            const body = workbook.subarray(bodyStart, bodyStart + compressedSize);
+            parts.push((method === 8 ? inflateRawSync(body) : body).toString('utf8'));
+            offset = bodyStart + compressedSize;
+          }
+          textContent = parts.join('\n');
         }
-        textContent = parts.join('\n');
+        expect(textContent).toContain('REVENUE');
+        expect(textContent).toContain(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
+        if (reportType === 'FORECAST') {
+          expect(textContent).toContain(format === 'PDF' ? 'TZS 14,883.77' : '14883.77');
+        }
       }
-      expect(textContent).toContain('REVENUE');
-      expect(textContent).toContain(reportType === 'TREND_ANALYSIS' ? '2026-11-03' : '2026-12');
-      if (reportType === 'FORECAST') {
-        expect(textContent).toContain(format === 'PDF' ? 'TZS 14,883.77' : '14883.77');
-      }
-    }
-  });
+    },
+  );
 });
 
 describe('AnalyticsService PDF export', () => {
@@ -551,7 +846,12 @@ describe('AnalyticsService PDF export', () => {
         endDate: new Date('2026-11-16T23:59:59.999Z'),
         periodName: '2026-11-01 to 2026-11-16',
       };
-      const payload = { period: range.periodName, currency: 'TZS', [marker]: 1250, rows: [{ value: 1250 }] };
+      const payload = {
+        period: range.periodName,
+        currency: 'TZS',
+        [marker]: 1250,
+        rows: [{ value: 1250 }],
+      };
       const payments = {
         getIncomeStatement: jest.fn().mockResolvedValue(payload),
         getCashFlowReport: jest.fn().mockResolvedValue(payload),
@@ -566,17 +866,25 @@ describe('AnalyticsService PDF export', () => {
 
       for (const format of ['PDF', 'EXCEL', 'CSV', 'JSON'] as const) {
         const result = await service.exportReport('business-a', {
-          reportType, format, dateFrom: '2026-11-01', dateTo: '2026-11-16', groupBy: 'DAILY',
+          reportType,
+          format,
+          dateFrom: '2026-11-01',
+          dateTo: '2026-11-16',
+          groupBy: 'DAILY',
         } as any);
         expect(result.fileName).toContain(reportType.toLowerCase());
-        expect(result.fileName.endsWith(format === 'EXCEL' ? '.xlsx' : `.${format.toLowerCase()}`)).toBe(true);
+        expect(
+          result.fileName.endsWith(format === 'EXCEL' ? '.xlsx' : `.${format.toLowerCase()}`),
+        ).toBe(true);
         if (format === 'JSON') {
           const json = JSON.parse(String(result.content));
           if (reportType === 'EXPENSE_BREAKDOWN') expect(json).toEqual([payload]);
           else expect(json).toMatchObject(payload);
         } else if (format === 'PDF') {
           expect((result.content as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
-          expect((result.content as Buffer).toString('ascii')).toContain('2026-11-01 to 2026-11-16');
+          expect((result.content as Buffer).toString('ascii')).toContain(
+            '2026-11-01 to 2026-11-16',
+          );
         } else if (format === 'EXCEL') {
           expect((result.content as Buffer).readUInt32LE(0)).toBe(0x04034b50);
         } else {
@@ -589,10 +897,9 @@ describe('AnalyticsService PDF export', () => {
   );
 
   it('keeps sales summaries readable and fits short customer tables on one page', () => {
-    const pdf = (service as any).toPdf(
-      salesReport(['Customer Alpha', 'Customer Beta']),
-      'SALES_DASHBOARD',
-    ).toString('ascii');
+    const pdf = (service as any)
+      .toPdf(salesReport(['Customer Alpha', 'Customer Beta']), 'SALES_DASHBOARD')
+      .toString('ascii');
 
     expect(pdf).toContain('/BaseFont /Times-Roman');
     expect(pdf).toContain('/F1 12 Tf');
@@ -604,17 +911,39 @@ describe('AnalyticsService PDF export', () => {
   });
 
   it('omits internal product and category IDs from the human-facing product PDF', () => {
-    const pdf = (service as any).toPdf({
-      period: '2026-11-01 to 2026-11-15', currency: 'TZS', total: 1,
-      inventoryAsOf: '2026-11-15T13:00:00.000Z',
-      definitions: { currentStock: 'Live stock snapshot.', catalogLabels: 'Current catalog labels.' },
-      products: [{
-        productId: 'internal-product-id', productName: 'PH21 Stock and Returns Test Product',
-        productSku: 'PH21-BEV-001', categoryId: 'internal-category-id', categoryName: 'Beverages',
-        currentStock: 94, quantity: 6, revenue: 16776, cogs: 12000, profit: 4776, marginPercent: 28.47,
-        inventoryTurnover: 0.06, estimatedDaysOfInventory: 242.5, unit: 'Bottle',
-      }],
-    }, 'PRODUCT_PERFORMANCE').toString('ascii');
+    const pdf = (service as any)
+      .toPdf(
+        {
+          period: '2026-11-01 to 2026-11-15',
+          currency: 'TZS',
+          total: 1,
+          inventoryAsOf: '2026-11-15T13:00:00.000Z',
+          definitions: {
+            currentStock: 'Live stock snapshot.',
+            catalogLabels: 'Current catalog labels.',
+          },
+          products: [
+            {
+              productId: 'internal-product-id',
+              productName: 'PH21 Stock and Returns Test Product',
+              productSku: 'PH21-BEV-001',
+              categoryId: 'internal-category-id',
+              categoryName: 'Beverages',
+              currentStock: 94,
+              quantity: 6,
+              revenue: 16776,
+              cogs: 12000,
+              profit: 4776,
+              marginPercent: 28.47,
+              inventoryTurnover: 0.06,
+              estimatedDaysOfInventory: 242.5,
+              unit: 'Bottle',
+            },
+          ],
+        },
+        'PRODUCT_PERFORMANCE',
+      )
+      .toString('ascii');
 
     expect(pdf).toContain('(2026-11-01 to 2026-11-15) Tj');
     expect(pdf).toContain('(PH21 Stock and Returns) Tj');
@@ -629,7 +958,9 @@ describe('AnalyticsService PDF export', () => {
     expect(pdf).toContain('(12,000) Tj');
     expect(pdf).toContain('(242.5) Tj');
     const skuX = Number(pdf.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(PH21-BEV-001\) Tj ET/)?.[1]);
-    const categoryX = Number(pdf.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(Beverages\) Tj ET/)?.[1]);
+    const categoryX = Number(
+      pdf.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(Beverages\) Tj ET/)?.[1],
+    );
     expect(Number.isFinite(skuX)).toBe(true);
     expect(categoryX - skuX).toBeGreaterThan(100);
     expect(pdf).not.toContain('internal-product-id');
@@ -640,16 +971,24 @@ describe('AnalyticsService PDF export', () => {
 
   it('includes the selected period and products but does not export API pagination metadata', async () => {
     const getProductPerformance = jest.spyOn(service, 'getProductPerformance').mockResolvedValue({
-      period: '2026-11-01 to 2026-11-15', currency: 'TZS', total: 1,
+      period: '2026-11-01 to 2026-11-15',
+      currency: 'TZS',
+      total: 1,
       inventoryAsOf: '2026-11-15T18:00:00.000Z',
-      definitions: { currentStock: 'Live stock snapshot.', estimatedDaysOfInventory: 'Uses unrounded turnover.' },
-      page: 1, limit: 10000,
+      definitions: {
+        currentStock: 'Live stock snapshot.',
+        estimatedDaysOfInventory: 'Uses unrounded turnover.',
+      },
+      page: 1,
+      limit: 10000,
       data: [{ productName: 'Product A', productSku: 'A-1', revenue: 100 }],
     } as any);
 
     const result = await service.exportReport('business-a', {
-      reportType: 'PRODUCT_PERFORMANCE', format: 'CSV',
-      dateFrom: '2026-11-01', dateTo: '2026-11-15',
+      reportType: 'PRODUCT_PERFORMANCE',
+      format: 'CSV',
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-15',
     } as any);
     const csv = result.content.toString();
     getProductPerformance.mockRestore();
@@ -668,16 +1007,24 @@ describe('AnalyticsService PDF export', () => {
     'includes stock snapshot time and metric definitions in %s product exports',
     async (format) => {
       const getProductPerformance = jest.spyOn(service, 'getProductPerformance').mockResolvedValue({
-        period: '2026-11-01 to 2026-11-15', currency: 'TZS', total: 1,
+        period: '2026-11-01 to 2026-11-15',
+        currency: 'TZS',
+        total: 1,
         inventoryAsOf: '2026-11-15T18:00:00.000Z',
-        definitions: { currentStock: 'Live stock snapshot.', estimatedDaysOfInventory: 'Uses unrounded turnover.' },
-        page: 1, limit: 10000,
+        definitions: {
+          currentStock: 'Live stock snapshot.',
+          estimatedDaysOfInventory: 'Uses unrounded turnover.',
+        },
+        page: 1,
+        limit: 10000,
         data: [{ productName: 'Product A', productSku: 'A-1', currentStock: 94, revenue: 100 }],
       } as any);
 
       const result = await service.exportReport('business-a', {
-        reportType: 'PRODUCT_PERFORMANCE', format,
-        dateFrom: '2026-11-01', dateTo: '2026-11-15',
+        reportType: 'PRODUCT_PERFORMANCE',
+        format,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-15',
       } as any);
       getProductPerformance.mockRestore();
 
@@ -685,7 +1032,10 @@ describe('AnalyticsService PDF export', () => {
       if (format === 'EXCEL') {
         const workbook = result.content as Buffer;
         const parts: string[] = [];
-        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+        for (
+          let offset = 0;
+          offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+        ) {
           const method = workbook.readUInt16LE(offset + 8);
           const compressedSize = workbook.readUInt32LE(offset + 18);
           const nameLength = workbook.readUInt16LE(offset + 26);
@@ -703,7 +1053,8 @@ describe('AnalyticsService PDF export', () => {
       expect(exportedText).toContain('2026-11-15T18:00:00.000Z');
       expect(exportedText).toContain('Live stock snapshot.');
       expect(exportedText).toContain('Uses unrounded turnover.');
-      if (format === 'JSON') expect(JSON.parse(exportedText).definitions.currentStock).toBe('Live stock snapshot.');
+      if (format === 'JSON')
+        expect(JSON.parse(exportedText).definitions.currentStock).toBe('Live stock snapshot.');
     },
   );
 
@@ -711,23 +1062,53 @@ describe('AnalyticsService PDF export', () => {
     'exports customer period, ranking, definitions and customer rows without pagination internals in %s',
     async (format) => {
       const getCustomerAnalytics = jest.spyOn(service, 'getCustomerAnalytics').mockResolvedValue({
-        period: '2026-11-01 to 2026-11-15', asOf: '2026-11-15T23:59:59.999Z', currency: 'TZS',
-        segmentBy: 'RECENCY', total: 2, page: 1, limit: 10000,
-        definitions: { totalRevenue: 'Net invoice revenue after accepted returns.', loyaltyScore: 'A ranking guide.' },
-        data: [{
-          customerId: 'internal-customer-id', customerName: 'PH21 Filter Customer Alpha', customerCode: 'PH21-CUST-A',
-          customerType: 'RETAIL', totalRevenue: 14160, invoiceCount: 6, averageOrderValue: 2360,
-          lastPurchaseDate: '2026-11-15T00:00:00.000Z', daysInactive: 0, loyaltyScore: 95, segment: 'VIP',
-        }, {
-          customerId: 'internal-customer-id-2', customerName: 'PH22 Address Contacts Customer', customerCode: 'CUST-00008',
-          customerType: 'RETAIL', totalRevenue: 0, invoiceCount: 0, averageOrderValue: null,
-          lastPurchaseDate: null, daysInactive: null, loyaltyScore: 0, segment: 'INACTIVE',
-        }],
+        period: '2026-11-01 to 2026-11-15',
+        asOf: '2026-11-15T23:59:59.999Z',
+        currency: 'TZS',
+        segmentBy: 'RECENCY',
+        total: 2,
+        page: 1,
+        limit: 10000,
+        definitions: {
+          totalRevenue: 'Net invoice revenue after accepted returns.',
+          loyaltyScore: 'A ranking guide.',
+        },
+        data: [
+          {
+            customerId: 'internal-customer-id',
+            customerName: 'PH21 Filter Customer Alpha',
+            customerCode: 'PH21-CUST-A',
+            customerType: 'RETAIL',
+            totalRevenue: 14160,
+            invoiceCount: 6,
+            averageOrderValue: 2360,
+            lastPurchaseDate: '2026-11-15T00:00:00.000Z',
+            daysInactive: 0,
+            loyaltyScore: 95,
+            segment: 'VIP',
+          },
+          {
+            customerId: 'internal-customer-id-2',
+            customerName: 'PH22 Address Contacts Customer',
+            customerCode: 'CUST-00008',
+            customerType: 'RETAIL',
+            totalRevenue: 0,
+            invoiceCount: 0,
+            averageOrderValue: null,
+            lastPurchaseDate: null,
+            daysInactive: null,
+            loyaltyScore: 0,
+            segment: 'INACTIVE',
+          },
+        ],
       } as any);
 
       const result = await service.exportReport('business-a', {
-        reportType: 'CUSTOMER_ANALYTICS', format,
-        dateFrom: '2026-11-01', dateTo: '2026-11-15', segmentBy: 'RECENCY',
+        reportType: 'CUSTOMER_ANALYTICS',
+        format,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-15',
+        segmentBy: 'RECENCY',
       } as any);
       expect(getCustomerAnalytics.mock.calls[0][1].segmentBy).toBe('RECENCY');
       getCustomerAnalytics.mockRestore();
@@ -736,7 +1117,10 @@ describe('AnalyticsService PDF export', () => {
       if (format === 'EXCEL') {
         const workbook = result.content as Buffer;
         const parts: string[] = [];
-        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+        for (
+          let offset = 0;
+          offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+        ) {
           const method = workbook.readUInt16LE(offset + 8);
           const compressedSize = workbook.readUInt32LE(offset + 18);
           const nameLength = workbook.readUInt16LE(offset + 26);
@@ -768,8 +1152,14 @@ describe('AnalyticsService PDF export', () => {
         expect(exportedText).toContain('(95%) Tj');
         expect(exportedText).toContain('(0%) Tj');
         expect(exportedText.match(/\/Type \/Page /g)).toHaveLength(2);
-        const customerX = Number(exportedText.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(PH21 Filter Customer Alpha\) Tj ET/)?.[1]);
-        const codeX = Number(exportedText.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(PH21-CUST-A\) Tj ET/)?.[1]);
+        const customerX = Number(
+          exportedText.match(
+            /BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(PH21 Filter Customer Alpha\) Tj ET/,
+          )?.[1],
+        );
+        const codeX = Number(
+          exportedText.match(/BT \/F1 12 Tf ([\d.]+) [\d.]+ Td \(PH21-CUST-A\) Tj ET/)?.[1],
+        );
         expect(Number.isFinite(customerX)).toBe(true);
         expect(codeX - customerX).toBeGreaterThan(100);
       } else {
@@ -788,26 +1178,47 @@ describe('AnalyticsService PDF export', () => {
     'exports supplier metadata and rows without pagination internals or supplier IDs in %s',
     async (format) => {
       jest.spyOn(service, 'getSupplierAnalytics').mockResolvedValue({
-        period: '2026-11-01 to 2026-11-16', asOf: '2026-11-16T23:59:59.999Z', currency: 'TZS',
-        total: 1, page: 1, limit: 10000, totalPages: 1,
+        period: '2026-11-01 to 2026-11-16',
+        asOf: '2026-11-16T23:59:59.999Z',
+        currency: 'TZS',
+        total: 1,
+        page: 1,
+        limit: 10000,
+        totalPages: 1,
         definitions: { acceptedPurchaseValue: 'Net accepted lines after discounts.' },
-        data: [{
-          supplierId: 'internal-supplier-id', supplierName: 'Test Supplier Ltd', supplierCode: 'SUP-00001',
-          purchaseOrderCount: 5, acceptedPurchaseValue: 5100, acceptedQuantity: 16,
-          rejectedQuantity: 0, damagedQuantity: 0, onTimeDeliveryPercent: 100, qualityScore: 100,
-          averageLeadTimeDays: 0, riskLevel: 'UNKNOWN', dataCoverage: 'GRN quality measured; expected-date coverage 18.75%',
-        }],
+        data: [
+          {
+            supplierId: 'internal-supplier-id',
+            supplierName: 'Test Supplier Ltd',
+            supplierCode: 'SUP-00001',
+            purchaseOrderCount: 5,
+            acceptedPurchaseValue: 5100,
+            acceptedQuantity: 16,
+            rejectedQuantity: 0,
+            damagedQuantity: 0,
+            onTimeDeliveryPercent: 100,
+            qualityScore: 100,
+            averageLeadTimeDays: 0,
+            riskLevel: 'UNKNOWN',
+            dataCoverage: 'GRN quality measured; expected-date coverage 18.75%',
+          },
+        ],
       } as any);
       const result = await service.exportReport('business-a', {
-        reportType: 'SUPPLIER_ANALYTICS', format,
-        dateFrom: '2026-11-01', dateTo: '2026-11-16',
+        reportType: 'SUPPLIER_ANALYTICS',
+        format,
+        dateFrom: '2026-11-01',
+        dateTo: '2026-11-16',
       } as any);
 
       let exportedText: string;
       if (format === 'EXCEL') {
         const workbook = result.content as Buffer;
         const parts: string[] = [];
-        for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+        for (
+          let offset = 0;
+          offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+        ) {
           const method = workbook.readUInt16LE(offset + 8);
           const compressedSize = workbook.readUInt32LE(offset + 18);
           const nameLength = workbook.readUInt16LE(offset + 26);
@@ -853,10 +1264,9 @@ describe('AnalyticsService PDF export', () => {
   );
 
   it('fits a short customer table on one page instead of orphaning its final row', () => {
-    const pdf = (service as any).toPdf(
-      salesReport(['Customer Alpha', 'Customer Beta', 'Customer Gamma']),
-      'SALES_DASHBOARD',
-    ).toString('ascii');
+    const pdf = (service as any)
+      .toPdf(salesReport(['Customer Alpha', 'Customer Beta', 'Customer Gamma']), 'SALES_DASHBOARD')
+      .toString('ascii');
     expect(pdf.match(/\/Type \/Page /g)).toHaveLength(1);
     expect(pdf).toContain('Customer Alpha');
     expect(pdf).toContain('Customer Gamma');
@@ -868,10 +1278,24 @@ describe('AnalyticsService PDF export', () => {
       period: '2026-11-01 to 2026-11-14',
       currency: 'TZS',
       summary: {
-        totalRevenue: { label: 'Total Revenue', value: 21240, unit: 'TZS', trend: 'UP', status: 'GOOD' },
+        totalRevenue: {
+          label: 'Total Revenue',
+          value: 21240,
+          unit: 'TZS',
+          trend: 'UP',
+          status: 'GOOD',
+        },
         totalProfit: { label: 'Net Profit', value: 9240, unit: 'TZS', trend: 'UP', status: 'GOOD' },
       },
-      kpis: [{ name: 'Total Revenue', label: 'Total Revenue', value: 21240, unit: 'TZS', formula: 'Long duplicate KPI formula' }],
+      kpis: [
+        {
+          name: 'Total Revenue',
+          label: 'Total Revenue',
+          value: 21240,
+          unit: 'TZS',
+          formula: 'Long duplicate KPI formula',
+        },
+      ],
       charts: {
         periods: ['2026-11-01', '2026-11-02'],
         revenueVsExpenses: [
@@ -898,29 +1322,51 @@ describe('AnalyticsService PDF export', () => {
   });
 
   it('keeps a one-row Top Products section on the revenue page instead of creating a mostly empty final page', () => {
-    const periods = Array.from({ length: 15 }, (_, index) => `2026-11-${String(index + 1).padStart(2, '0')}`);
+    const periods = Array.from(
+      { length: 15 },
+      (_, index) => `2026-11-${String(index + 1).padStart(2, '0')}`,
+    );
     const dashboard = {
       period: '2026-11-01 to 2026-11-15',
       currency: 'TZS',
-      summary: Object.fromEntries(Array.from({ length: 10 }, (_, index) => [
-        `metric${index}`,
-        { label: `Metric ${index}`, value: index * 1000, unit: 'TZS', trend: 'UP', status: 'GOOD' },
-      ])),
+      summary: Object.fromEntries(
+        Array.from({ length: 10 }, (_, index) => [
+          `metric${index}`,
+          {
+            label: `Metric ${index}`,
+            value: index * 1000,
+            unit: 'TZS',
+            trend: 'UP',
+            status: 'GOOD',
+          },
+        ]),
+      ),
       charts: {
         periods,
         revenueVsExpenses: [
-          { label: 'Revenue', data: periods.map((_, index) => index === 2 ? 17700 : index === 3 ? 3540 : 0) },
+          {
+            label: 'Revenue',
+            data: periods.map((_, index) => (index === 2 ? 17700 : index === 3 ? 3540 : 0)),
+          },
           { label: 'Expenses', data: periods.map(() => 0) },
         ],
-        topProducts: { labels: ['PH21 Stock and Returns Test Product'], revenue: [16776], quantity: [6] },
+        topProducts: {
+          labels: ['PH21 Stock and Returns Test Product'],
+          revenue: [16776],
+          quantity: [6],
+        },
       },
       definitions: {
         revenue: 'Issued invoice totals less accepted customer returns in the selected period.',
-        profit: 'Net income from the existing income statement (revenue less inventory-movement COGS and approved/paid expenses).',
-        purchases: 'Non-draft, non-cancelled purchase order totals by order date; this is procurement volume, not COGS.',
-        cashPosition: 'Cumulative active ledger inflows minus outflows through the selected as-of date.',
+        profit:
+          'Net income from the existing income statement (revenue less inventory-movement COGS and approved/paid expenses).',
+        purchases:
+          'Non-draft, non-cancelled purchase order totals by order date; this is procurement volume, not COGS.',
+        cashPosition:
+          'Cumulative active ledger inflows minus outflows through the selected as-of date.',
         inventoryValue: 'Inventory service valuation using WEIGHTED_AVERAGE.',
-        inventoryValuationTiming: 'Current stock snapshot as of the inventory date shown above; selected date range applies to period flows, not historical inventory valuation.',
+        inventoryValuationTiming:
+          'Current stock snapshot as of the inventory date shown above; selected date range applies to period flows, not historical inventory valuation.',
       },
     };
     const pdf = (service as any).toPdf(dashboard, 'DASHBOARD').toString('ascii');
@@ -952,9 +1398,15 @@ describe('AnalyticsService PDF export', () => {
       rows: Array<Record<string, unknown>>;
     }>;
 
-    expect(sections.map((section) => section.title)).toEqual(expect.arrayContaining([
-      'Charts', 'Charts top Products', 'Charts sales Trend', 'Charts cash Flow', 'Charts customer Metrics',
-    ]));
+    expect(sections.map((section) => section.title)).toEqual(
+      expect.arrayContaining([
+        'Charts',
+        'Charts top Products',
+        'Charts sales Trend',
+        'Charts cash Flow',
+        'Charts customer Metrics',
+      ]),
+    );
     expect(sections.find((section) => section.title === 'Charts')?.rows).toEqual([
       { Period: '2026-11-01', Revenue: 100, Expenses: 10 },
       { Period: '2026-11-02', Revenue: 200, Expenses: 20 },
@@ -987,19 +1439,52 @@ describe('AnalyticsService PDF export', () => {
       },
       summary: {
         totalRevenue: {
-          label: 'Total Revenue', value: 17700, unit: 'TZS', previousValue: 0,
-          changePercent: null, trend: 'UP', status: 'GOOD',
+          label: 'Total Revenue',
+          value: 17700,
+          unit: 'TZS',
+          previousValue: 0,
+          changePercent: null,
+          trend: 'UP',
+          status: 'GOOD',
         },
       },
-      topCustomers: [{ customerId: 'customer-a', customerName: 'Customer Alpha', revenue: 14160, invoiceCount: 6 }],
+      topCustomers: [
+        {
+          customerId: 'customer-a',
+          customerName: 'Customer Alpha',
+          revenue: 14160,
+          invoiceCount: 6,
+        },
+      ],
     } as any);
-    jest.spyOn(service, 'getSalesByChannel').mockResolvedValue([{
-      channelId: 'location-a', channel: 'Main Warehouse', revenue: 17700, quantity: 5,
-      profit: 7700, transactionCount: 7, averageOrderValue: 2528.57, marginPercent: 43.5, growthRate: null,
-    }]);
+    jest.spyOn(service, 'getSalesByChannel').mockResolvedValue([
+      {
+        channelId: 'location-a',
+        channel: 'Main Warehouse',
+        revenue: 17700,
+        quantity: 5,
+        profit: 7700,
+        transactionCount: 7,
+        averageOrderValue: 2528.57,
+        marginPercent: 43.5,
+        growthRate: null,
+      },
+    ]);
     jest.spyOn(service as any, 'series').mockResolvedValue([
-      { period: '2026-11-01', date: new Date('2026-11-01T00:00:00Z'), value: 0, percentChange: null, movingAverage: 0 },
-      { period: '2026-11-03', date: new Date('2026-11-03T00:00:00Z'), value: 17700, percentChange: null, movingAverage: 8850 },
+      {
+        period: '2026-11-01',
+        date: new Date('2026-11-01T00:00:00Z'),
+        value: 0,
+        percentChange: null,
+        movingAverage: 0,
+      },
+      {
+        period: '2026-11-03',
+        date: new Date('2026-11-03T00:00:00Z'),
+        value: 17700,
+        percentChange: null,
+        movingAverage: 8850,
+      },
     ]);
 
     const baseFilter = {
@@ -1039,12 +1524,18 @@ describe('AnalyticsService PDF export', () => {
     expect(jsonReport.groupBy).toBe('Daily');
     expect(jsonReport.revenueTrend[1]).toEqual({ period: '2026-11-03', revenue: 17700 });
 
-    const excel = await service.exportReport('business-a', { ...baseFilter, format: 'EXCEL' } as any);
+    const excel = await service.exportReport('business-a', {
+      ...baseFilter,
+      format: 'EXCEL',
+    } as any);
     const workbook = excel.content as Buffer;
     expect(workbook.readUInt32LE(0)).toBe(0x04034b50);
     expect(workbook.length).toBeGreaterThan(1000);
     const workbookXml: string[] = [];
-    for (let offset = 0; offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;) {
+    for (
+      let offset = 0;
+      offset + 30 <= workbook.length && workbook.readUInt32LE(offset) === 0x04034b50;
+    ) {
       const method = workbook.readUInt16LE(offset + 8);
       const compressedSize = workbook.readUInt32LE(offset + 18);
       const nameLength = workbook.readUInt16LE(offset + 26);
@@ -1077,7 +1568,7 @@ describe('AnalyticsService PDF export', () => {
     }) as string;
 
     expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv).toContain("'=HYPERLINK(\"\"https://example.invalid\"\")");
+    expect(csv).toContain('\'=HYPERLINK(""https://example.invalid"")');
     expect(csv).toContain('"line one, line two"');
     expect(csv).toContain('"T""ZS"');
     expect(csv).toContain('"—"');

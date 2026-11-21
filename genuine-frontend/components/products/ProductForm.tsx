@@ -831,15 +831,34 @@ export function ProductForm({
             />
           </label>
           <label className={labelClass}>
-            Expiry days
+            Default shelf life (days)
             <input
               type="number"
               className={fieldClass}
               value={form.expiryDays}
               onChange={(e) => change('expiryDays', e.target.value)}
+              placeholder="Choose or enter days"
+              list="product-expiry-day-options"
               min="0"
               step="1"
             />
+            <datalist id="product-expiry-day-options">
+              {[7, 14, 30, 60, 90, 180, 365].map((days) => <option key={days} value={days}>{days} days</option>)}
+            </datalist>
+            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Common shelf-life choices">
+              {[7, 14, 30, 60, 90, 180, 365].map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => change('expiryDays', String(days))}
+                  aria-pressed={form.expiryDays === String(days)}
+                  className={`min-h-8 rounded-full border px-2.5 text-xs font-semibold transition ${form.expiryDays === String(days) ? 'border-[#087f5b] bg-[#e7f5ed] text-[#075c43]' : 'border-[#dfe5d3] bg-white text-[#53594f] hover:border-[#087f5b] hover:bg-[#f0f8f3]'}`}
+                >
+                  {days} days
+                </button>
+              ))}
+            </div>
+            <span className="mt-1 block text-[11px] font-normal leading-4 text-[#73766f] dark:text-[#afb5ac]">Optional shelf-life guidance. New receipts can suggest received date + these days; verify the printed batch date.</span>
           </label>
           <label className="flex min-h-11 items-center gap-3 rounded-xl border border-[#e0e5d8] px-3.5 text-sm font-semibold text-[#454a41]">
             <input

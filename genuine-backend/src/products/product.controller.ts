@@ -66,7 +66,10 @@ export class ProductController {
   @RequirePermission('products.view', 'products.create', 'settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get all product categories' })
   @ApiResponse({ status: 200, type: [CategoryResponseDto] })
-  async getCategories(@Business() businessId: string, @Query('includeInactive') includeInactive?: string): Promise<CategoryResponseDto[]> {
+  async getCategories(
+    @Business() businessId: string,
+    @Query('includeInactive') includeInactive?: string,
+  ): Promise<CategoryResponseDto[]> {
     return this.productService.getCategories(businessId, includeInactive === 'true');
   }
 
@@ -83,7 +86,10 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   @RequirePermission('products.view', 'products.create', 'settings.view', 'settings.edit')
   @ApiOperation({ summary: 'Get active standard and business-specific product units' })
-  async getUnits(@Business() businessId: string, @Query('includeInactive') includeInactive?: string) {
+  async getUnits(
+    @Business() businessId: string,
+    @Query('includeInactive') includeInactive?: string,
+  ) {
     return this.productService.getUnits(businessId, includeInactive === 'true');
   }
 

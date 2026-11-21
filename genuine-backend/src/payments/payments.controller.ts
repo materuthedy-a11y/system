@@ -46,7 +46,11 @@ export class PaymentsController {
 
   @Get()
   @RequirePermission('payments.view')
-  listPayments(@Business() businessId: string, @UserId() userId: string, @Query() query: PaymentListQueryDto) {
+  listPayments(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Query() query: PaymentListQueryDto,
+  ) {
     return this.payments.getAllPayments(businessId, userId, query);
   }
 

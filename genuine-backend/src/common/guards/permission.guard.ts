@@ -5,7 +5,10 @@ import { PrismaService } from '../../database/prisma.service';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
-  constructor(private reflector: Reflector, private prisma: PrismaService) {}
+  constructor(
+    private reflector: Reflector,
+    private prisma: PrismaService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.get<string[]>(PERMISSION_KEY, context.getHandler());
@@ -52,17 +55,21 @@ export class PermissionGuard implements CanActivate {
       const request = context.switchToHttp().getRequest();
       if (user.id && user.businessId) {
         try {
-          await this.prisma.auditLog.create({ data: {
-            businessId: user.businessId,
-            userId: user.id,
-            entityType: 'Authorization',
-            entityId: String(request.originalUrl || request.path || 'unknown').split('?')[0].slice(0, 180),
-            action: 'ACCESS_DENIED',
-            ipAddress: request.ip || null,
-            userAgent: request.get?.('user-agent')?.slice(0, 500) || null,
-            description: `Blocked ${request.method} request; missing required permission`,
-            afterData: JSON.stringify({ method: request.method, requiredPermissions }),
-          } });
+          await this.prisma.auditLog.create({
+            data: {
+              businessId: user.businessId,
+              userId: user.id,
+              entityType: 'Authorization',
+              entityId: String(request.originalUrl || request.path || 'unknown')
+                .split('?')[0]
+                .slice(0, 180),
+              action: 'ACCESS_DENIED',
+              ipAddress: request.ip || null,
+              userAgent: request.get?.('user-agent')?.slice(0, 500) || null,
+              description: `Blocked ${request.method} request; missing required permission`,
+              afterData: JSON.stringify({ method: request.method, requiredPermissions }),
+            },
+          });
         } catch {
           // Authorization must still reject the request even if the audit store is unavailable.
         }

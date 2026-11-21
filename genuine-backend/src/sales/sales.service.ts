@@ -62,29 +62,45 @@ export class SalesService {
 
   async getInvoiceOptions(businessId: string, userId: string) {
     const accessibleIds = await accessibleLocationIds(this.prisma, businessId, userId);
-    const [business, defaultTaxRate, locations, salespeople, customers, settings] = await Promise.all([
-      this.prisma.business.findUnique({
-        where: { id: businessId },
-        select: { currency: true, taxPercentage: true },
-      }),
-      this.prisma.taxRate.findFirst({ where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } }, select: { rate: true } }),
-      this.prisma.location.findMany({
-        where: { businessId, isActive: true, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, name: true, code: true, isActive: true },
-      }),
-      this.prisma.user.findMany({
-        where: { businessId, isActive: true },
-        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-        select: { id: true, firstName: true, lastName: true },
-      }),
-      this.prisma.customer.findMany({
-        where: { businessId, isActive: true },
-        orderBy: { name: 'asc' },
-        select: { id: true, name: true },
-      }),
-      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { defaultLocationId: true } }),
-    ]);
+    const [business, defaultTaxRate, locations, salespeople, customers, settings] =
+      await Promise.all([
+        this.prisma.business.findUnique({
+          where: { id: businessId },
+          select: { currency: true, taxPercentage: true },
+        }),
+        this.prisma.taxRate.findFirst({
+          where: {
+            businessId,
+            isActive: true,
+            isDefault: true,
+            appliesTo: { in: ['SALES', 'BOTH'] },
+          },
+          select: { rate: true },
+        }),
+        this.prisma.location.findMany({
+          where: {
+            businessId,
+            isActive: true,
+            ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, name: true, code: true, isActive: true },
+        }),
+        this.prisma.user.findMany({
+          where: { businessId, isActive: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+          select: { id: true, firstName: true, lastName: true },
+        }),
+        this.prisma.customer.findMany({
+          where: { businessId, isActive: true },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true },
+        }),
+        this.prisma.businessSettings.findUnique({
+          where: { businessId },
+          select: { defaultLocationId: true },
+        }),
+      ]);
     if (!business) throw new NotFoundException('Business not found');
     return {
       customers,
@@ -123,15 +139,30 @@ export class SalesService {
     const subtotal = money(lines.reduce((sum, line) => sum + line.total, 0));
     const discount = this.discountFor(subtotal, dto.discountAmount, dto.discountPercentage);
     const [business, defaultTaxRate] = await Promise.all([
-      this.prisma.business.findUnique({ where: { id: businessId }, select: { taxPercentage: true } }),
-      this.prisma.taxRate.findFirst({ where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } }, select: { rate: true } }),
+      this.prisma.business.findUnique({
+        where: { id: businessId },
+        select: { taxPercentage: true },
+      }),
+      this.prisma.taxRate.findFirst({
+        where: {
+          businessId,
+          isActive: true,
+          isDefault: true,
+          appliesTo: { in: ['SALES', 'BOTH'] },
+        },
+        select: { rate: true },
+      }),
     ]);
     if (!business) throw new NotFoundException('Business not found');
     const taxableAmount = money(subtotal - discount.amount);
     const taxAmount =
       dto.taxAmount !== undefined
         ? money(dto.taxAmount)
-        : money((taxableAmount * (dto.taxPercentage ?? defaultTaxRate?.rate ?? business.taxPercentage)) / 100);
+        : money(
+            (taxableAmount *
+              (dto.taxPercentage ?? defaultTaxRate?.rate ?? business.taxPercentage)) /
+              100,
+          );
     const totalAmount = money(subtotal - discount.amount + taxAmount);
     if (totalAmount < 0) throw new BadRequestException('Invoice total cannot be negative');
     const invoiceDate = dto.invoiceDate ? this.parseInvoiceDate(dto.invoiceDate) : new Date();
@@ -248,9 +279,15 @@ export class SalesService {
     invoiceId: string,
     userId?: string,
   ): Promise<SalesInvoiceResponseDto> {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const invoice = await this.prisma.salesInvoice.findFirst({
-      where: { id: invoiceId, businessId, ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}) },
+      where: {
+        id: invoiceId,
+        businessId,
+        ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
+      },
       include: invoiceInclude,
     });
     if (!invoice) throw new NotFoundException('Sales invoice not found');
@@ -285,9 +322,10 @@ export class SalesService {
           { customer: { name: { contains: filter.search, mode: 'insensitive' } } },
         ],
       }),
-      ...(Object.keys(selectedDate).length > 0 && (filter.dateBasis === 'ISSUED'
-        ? { issuedDate: selectedDate }
-        : { invoiceDate: selectedDate })),
+      ...(Object.keys(selectedDate).length > 0 &&
+        (filter.dateBasis === 'ISSUED'
+          ? { issuedDate: selectedDate }
+          : { invoiceDate: selectedDate })),
       ...(filter.status === 'OVERDUE'
         ? {
             status: { in: ['ISSUED', 'PARTIALLY_PAID'] },
@@ -306,11 +344,11 @@ export class SalesService {
       createdAt: { createdAt: direction },
     };
     const sortBy = filter.sortBy || 'createdAt';
-    const primaryOrder: Prisma.SalesInvoiceOrderByWithRelationInput =
-      orderBy[sortBy] || { createdAt: 'desc' };
-    const stableOrderBy: Prisma.SalesInvoiceOrderByWithRelationInput[] = sortBy === 'invoiceNumber'
-      ? [primaryOrder]
-      : [primaryOrder, { invoiceNumber: direction }];
+    const primaryOrder: Prisma.SalesInvoiceOrderByWithRelationInput = orderBy[sortBy] || {
+      createdAt: 'desc',
+    };
+    const stableOrderBy: Prisma.SalesInvoiceOrderByWithRelationInput[] =
+      sortBy === 'invoiceNumber' ? [primaryOrder] : [primaryOrder, { invoiceNumber: direction }];
     const [rows, total] = await Promise.all([
       this.prisma.salesInvoice.findMany({
         where,
@@ -1025,10 +1063,20 @@ export class SalesService {
     return this.getSalesReturnById(businessId, id);
   }
 
-  async getSalesReturnById(businessId: string, returnId: string, userId?: string): Promise<SalesReturnResponseDto> {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+  async getSalesReturnById(
+    businessId: string,
+    returnId: string,
+    userId?: string,
+  ): Promise<SalesReturnResponseDto> {
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const ret = await this.prisma.salesReturn.findFirst({
-      where: { id: returnId, businessId, ...(accessibleIds ? { invoice: { locationId: { in: accessibleIds } } } : {}) },
+      where: {
+        id: returnId,
+        businessId,
+        ...(accessibleIds ? { invoice: { locationId: { in: accessibleIds } } } : {}),
+      },
       include: {
         invoice: { include: { customer: true, business: { select: { currency: true } } } },
         items: { include: { product: true } },
@@ -1367,11 +1415,19 @@ export class SalesService {
     return items.map((item) => {
       const product = productMap.get(item.productId)!;
       const selectedUnit = item.unitId
-        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
-        : product.units.find((unit) => unit.isDefault) ?? product.units.find((unit) => unit.conversionFactor === 1);
-      if (!selectedUnit) throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
+        ? product.units.find(
+            (unit) =>
+              unit.unitId === item.unitId &&
+              unit.unit.isActive &&
+              (!unit.unit.businessId || unit.unit.businessId === businessId),
+          )
+        : (product.units.find((unit) => unit.isDefault) ??
+          product.units.find((unit) => unit.conversionFactor === 1));
+      if (!selectedUnit)
+        throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
       const factor = Number(selectedUnit.conversionFactor);
-      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
+      if (!Number.isFinite(factor) || factor <= 0)
+        throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
       const baseQuantity = item.quantity * factor;
       const baseUnitPrice = item.unitPrice / factor;
       this.exclusiveDiscount(item.discountAmount, item.discountPercentage);
@@ -1484,7 +1540,10 @@ export class SalesService {
     businessId: string,
   ): Promise<string> {
     await this.lockSequence(tx, 'SalesInvoice', businessId);
-    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { invoicePrefix: true } });
+    const settings = await tx.businessSettings.findUnique({
+      where: { businessId },
+      select: { invoicePrefix: true },
+    });
     return this.nextMonthlyNumber(
       await tx.salesInvoice.findMany({
         where: { businessId },

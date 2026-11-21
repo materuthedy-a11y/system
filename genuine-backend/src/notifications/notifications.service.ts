@@ -365,7 +365,13 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
   async getInAppNotifications(
     businessId: string,
     userId: string,
-    filter: { unreadOnly?: boolean; archivedOnly?: boolean; search?: string; page?: number; limit?: number },
+    filter: {
+      unreadOnly?: boolean;
+      archivedOnly?: boolean;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
   ) {
     const page = Math.max(1, filter.page ?? 1);
     const limit = Math.min(100, Math.max(1, filter.limit ?? 20));
@@ -375,11 +381,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       user: { businessId },
       isArchived: filter.archivedOnly === true,
       ...(filter.unreadOnly && { isRead: false }),
-      ...(search && { notification: { is: { OR: [
-        { subject: { contains: search, mode: 'insensitive' } },
-        { body: { contains: search, mode: 'insensitive' } },
-        { eventType: { contains: search, mode: 'insensitive' } },
-      ] } } }),
+      ...(search && {
+        notification: {
+          is: {
+            OR: [
+              { subject: { contains: search, mode: 'insensitive' } },
+              { body: { contains: search, mode: 'insensitive' } },
+              { eventType: { contains: search, mode: 'insensitive' } },
+            ],
+          },
+        },
+      }),
     };
     const [data, total, unreadCount] = await Promise.all([
       this.prisma.inAppNotification.findMany({
@@ -481,7 +493,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
     if (result.count) return { id: inboxId, isArchived: true };
     const existing = await this.prisma.inAppNotification.findFirst({
-      where: { id: inboxId, userId, user: { businessId } }, select: { id: true, isArchived: true },
+      where: { id: inboxId, userId, user: { businessId } },
+      select: { id: true, isArchived: true },
     });
     if (!existing) throw new NotFoundException('In-app notification not found');
     return existing;
@@ -494,7 +507,8 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     });
     if (result.count) return { id: inboxId, isArchived: false };
     const existing = await this.prisma.inAppNotification.findFirst({
-      where: { id: inboxId, userId, user: { businessId } }, select: { id: true, isArchived: true },
+      where: { id: inboxId, userId, user: { businessId } },
+      select: { id: true, isArchived: true },
     });
     if (!existing) throw new NotFoundException('In-app notification not found');
     return existing;
@@ -560,13 +574,24 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const secret: SmsSecret = { apiKey: dto.apiKey?.trim() };
     const sender = dto.fromNumber?.trim() || '';
     if (dto.provider === 'TWILIO') {
-      if (!dto.accountSid?.trim() || !secret.apiKey || !/^\+[1-9]\d{6,14}$/.test(sender)) throw new BadRequestException('Twilio requires Account SID, auth token and a verified E.164 From phone number');
+      if (!dto.accountSid?.trim() || !secret.apiKey || !/^\+[1-9]\d{6,14}$/.test(sender))
+        throw new BadRequestException(
+          'Twilio requires Account SID, auth token and a verified E.164 From phone number',
+        );
       secret.accountSid = dto.accountSid.trim();
     } else if (dto.provider === 'AFRICAS_TALKING') {
-      if (!dto.username?.trim() || !secret.apiKey) throw new BadRequestException("Africa's Talking requires a username and API key");
+      if (!dto.username?.trim() || !secret.apiKey)
+        throw new BadRequestException("Africa's Talking requires a username and API key");
       secret.username = dto.username.trim();
     } else if (dto.provider === 'EHUB') {
-      if (!secret.apiKey || !dto.apiSecret?.trim() || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sender)) throw new BadRequestException('eHUB requires an API key, API secret and approved sender ID UUID');
+      if (
+        !secret.apiKey ||
+        !dto.apiSecret?.trim() ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sender)
+      )
+        throw new BadRequestException(
+          'eHUB requires an API key, API secret and approved sender ID UUID',
+        );
       secret.apiSecret = dto.apiSecret.trim();
     } else {
       if (!secret.apiKey) throw new BadRequestException('This SMS provider requires an API key');
@@ -574,7 +599,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     }
     const fromNumber = dto.fromNumber?.trim() || '';
     await this.prisma.$transaction(async (tx) => {
-      const before = await tx.sMSConfig.findUnique({ where: { businessId }, select: { provider: true, fromNumber: true } });
+      const before = await tx.sMSConfig.findUnique({
+        where: { businessId },
+        select: { provider: true, fromNumber: true },
+      });
       await tx.sMSConfig.upsert({
         where: { businessId },
         create: { businessId, provider: dto.provider, fromNumber, config: this.encrypt(secret) },
@@ -606,12 +634,27 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const to = dto.to.trim();
     let providerId: string | undefined;
     try {
-      providerId = await this.sendSms(businessId, to, 'Mizania SMS delivery test. If you received this message, your SMS provider is connected.', `test-${randomBytes(12).toString('hex')}`);
+      providerId = await this.sendSms(
+        businessId,
+        to,
+        'Mizania SMS delivery test. If you received this message, your SMS provider is connected.',
+        `test-${randomBytes(12).toString('hex')}`,
+      );
     } catch (error) {
       const failureMessage = this.safeError(error).slice(0, 1000);
       try {
         await this.recordSmsTestDelivery(businessId, to, 'FAILED', failureMessage);
-        await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST_FAILED', afterData: JSON.stringify({ failure: failureMessage }), description: 'TEST SMS provider connection failed' } });
+        await this.prisma.auditLog.create({
+          data: {
+            businessId,
+            userId,
+            entityType: 'SMSConfig',
+            entityId: businessId,
+            action: 'TEST_FAILED',
+            afterData: JSON.stringify({ failure: failureMessage }),
+            description: 'TEST SMS provider connection failed',
+          },
+        });
       } catch (loggingError) {
         this.logError(loggingError);
       }
@@ -620,13 +663,29 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     let deliveryLogged = false;
     let auditLogged = false;
     try {
-      await this.recordSmsTestDelivery(businessId, to, 'SENT', 'Provider accepted the test SMS.', providerId);
+      await this.recordSmsTestDelivery(
+        businessId,
+        to,
+        'SENT',
+        'Provider accepted the test SMS.',
+        providerId,
+      );
       deliveryLogged = true;
     } catch (loggingError) {
       this.logError(loggingError);
     }
     try {
-      await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'SMSConfig', entityId: businessId, action: 'TEST', afterData: JSON.stringify({ providerId: providerId || null }), description: 'TEST SMS provider connection accepted' } });
+      await this.prisma.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          entityType: 'SMSConfig',
+          entityId: businessId,
+          action: 'TEST',
+          afterData: JSON.stringify({ providerId: providerId || null }),
+          description: 'TEST SMS provider connection accepted',
+        },
+      });
       auditLogged = true;
     } catch (loggingError) {
       this.logError(loggingError);
@@ -634,12 +693,20 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     // The SMS has already been accepted; never report it as failed or invite a
     // duplicate send just because a local log or audit write could not be saved.
     const message = deliveryLogged
-      ? auditLogged ? 'Test SMS accepted and recorded in the delivery log' : 'Test SMS accepted and recorded in the delivery log; audit record could not be saved'
+      ? auditLogged
+        ? 'Test SMS accepted and recorded in the delivery log'
+        : 'Test SMS accepted and recorded in the delivery log; audit record could not be saved'
       : 'Test SMS accepted by the provider, but its delivery log could not be saved. Check the server log before retrying.';
     return { message, providerId };
   }
 
-  private async recordSmsTestDelivery(businessId: string, to: string, status: 'SENT' | 'FAILED', message: string, providerId?: string) {
+  private async recordSmsTestDelivery(
+    businessId: string,
+    to: string,
+    status: 'SENT' | 'FAILED',
+    message: string,
+    providerId?: string,
+  ) {
     const logMessage = providerId ? `${message} Provider ID: ${providerId}` : message;
     await this.prisma.notification.create({
       data: {
@@ -653,7 +720,18 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
         attemptCount: 1,
         lastAttemptAt: new Date(),
         sentAt: status === 'SENT' ? new Date() : null,
-        recipients: { create: [{ phoneNumber: to, name: 'SMS test recipient', status, sentAt: status === 'SENT' ? new Date() : null, failureReason: status === 'FAILED' ? message : null, providerId: providerId || null }] },
+        recipients: {
+          create: [
+            {
+              phoneNumber: to,
+              name: 'SMS test recipient',
+              status,
+              sentAt: status === 'SENT' ? new Date() : null,
+              failureReason: status === 'FAILED' ? message : null,
+              providerId: providerId || null,
+            },
+          ],
+        },
         logs: { create: [{ recipient: to, status, message: logMessage }] },
       },
     });
@@ -669,11 +747,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
   private async persistEvent(input: EventInput) {
     const candidates = await this.findEventUsers(input.businessId, input.eventType);
-    const preferences = candidates.length ? await this.prisma.notificationPreference.findMany({
-      where: { userId: { in: candidates.map((user) => user.id) }, eventType: input.eventType },
-      select: { userId: true, inAppEnabled: true },
-    }) : [];
-    const disabled = new Set(preferences.filter((preference) => !preference.inAppEnabled).map((preference) => preference.userId));
+    const preferences = candidates.length
+      ? await this.prisma.notificationPreference.findMany({
+          where: { userId: { in: candidates.map((user) => user.id) }, eventType: input.eventType },
+          select: { userId: true, inAppEnabled: true },
+        })
+      : [];
+    const disabled = new Set(
+      preferences
+        .filter((preference) => !preference.inAppEnabled)
+        .map((preference) => preference.userId),
+    );
     const targets = candidates.filter((user) => !disabled.has(user.id));
     const defaultMessage = this.defaultEventMessage(input.eventType, input.variables || {});
     const internalMessage =
@@ -1226,7 +1310,12 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
                 notification.subject,
                 notification.body,
               )
-            : await this.sendSms(businessId, recipient.phoneNumber, notification.body, `${notificationId}:${recipient.id}`);
+            : await this.sendSms(
+                businessId,
+                recipient.phoneNumber,
+                notification.body,
+                `${notificationId}:${recipient.id}`,
+              );
         await this.prisma.$transaction([
           this.prisma.notificationRecipient.update({
             where: { id: recipient.id },
@@ -1362,13 +1451,21 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     return response.headers.get('x-message-id') || undefined;
   }
 
-  private async sendSms(businessId: string, to: string | null, body: string, idempotencyKey?: string) {
+  private async sendSms(
+    businessId: string,
+    to: string | null,
+    body: string,
+    idempotencyKey?: string,
+  ) {
     if (!to) throw new BadRequestException('Recipient phone number is missing');
     const config = await this.prisma.sMSConfig.findUnique({ where: { businessId } });
     if (!config) throw new BadRequestException('Configure an SMS provider before sending SMS');
     const secret = this.decrypt<SmsSecret>(config.config);
     if (config.provider === 'TWILIO') {
-      if (!secret.accountSid || !secret.apiKey) throw new ConflictException('Twilio credentials are incomplete; save the provider settings again');
+      if (!secret.accountSid || !secret.apiKey)
+        throw new ConflictException(
+          'Twilio credentials are incomplete; save the provider settings again',
+        );
       const auth = Buffer.from(`${secret.accountSid}:${secret.apiKey}`).toString('base64');
       const form = new URLSearchParams({ To: to, From: config.fromNumber, Body: body });
       const response = await fetch(
@@ -1391,40 +1488,82 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       return data.sid;
     }
     if (config.provider === 'AFRICAS_TALKING') {
-      if (!secret.username || !secret.apiKey) throw new ConflictException("Africa's Talking credentials are incomplete; save the provider settings again");
+      if (!secret.username || !secret.apiKey)
+        throw new ConflictException(
+          "Africa's Talking credentials are incomplete; save the provider settings again",
+        );
       const form = new URLSearchParams({ username: secret.username, to, message: body });
       if (config.fromNumber) form.set('from', config.fromNumber);
-      const response = await fetch('https://api.africastalking.com/version1/messaging', { method: 'POST', headers: { apiKey: secret.apiKey || '', Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(15000) });
-      const data = (await response.json().catch(() => ({}))) as { SMSMessageData?: { Recipients?: Array<{ status?: string; messageId?: string; statusCode?: number }> } };
+      const response = await fetch('https://api.africastalking.com/version1/messaging', {
+        method: 'POST',
+        headers: {
+          apiKey: secret.apiKey || '',
+          Accept: 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: form,
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        SMSMessageData?: {
+          Recipients?: Array<{ status?: string; messageId?: string; statusCode?: number }>;
+        };
+      };
       const recipient = data.SMSMessageData?.Recipients?.[0];
-      if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101)) throw new Error(`Africa's Talking request failed (${response.status}): ${this.safeProviderMessage(recipient?.status, [secret.username, secret.apiKey])}`);
+      if (!response.ok || (recipient?.statusCode !== undefined && recipient.statusCode !== 101))
+        throw new Error(
+          `Africa's Talking request failed (${response.status}): ${this.safeProviderMessage(recipient?.status, [secret.username, secret.apiKey])}`,
+        );
       return recipient?.messageId;
     }
 
     if (config.provider === 'SASISMS') {
-      if (!secret.apiKey) throw new ConflictException('SasiSMS API key is missing; save the provider settings again');
+      if (!secret.apiKey)
+        throw new ConflictException('SasiSMS API key is missing; save the provider settings again');
       const path = '/v1/messages';
-      const headers: Record<string, string> = { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' };
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${secret.apiKey}`,
+        'Content-Type': 'application/json',
+      };
       if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
       let response: Response;
       try {
-        response = await fetch(`https://sms.sasidigital.co.tz${path}`, { method: 'POST', headers, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
+        response = await fetch(`https://sms.sasidigital.co.tz${path}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            to,
+            message: body,
+            ...(config.fromNumber ? { sender_id: config.fromNumber } : {}),
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
       } catch (error) {
-        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-        throw new BadGatewayException(timedOut
-          ? 'SasiSMS did not respond before the request timed out. Check provider status and try again later.'
-          : 'Mizania could not connect to SasiSMS. Check backend outbound internet access and provider status.');
+        const timedOut =
+          error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        throw new BadGatewayException(
+          timedOut
+            ? 'SasiSMS did not respond before the request timed out. Check provider status and try again later.'
+            : 'Mizania could not connect to SasiSMS. Check backend outbound internet access and provider status.',
+        );
       }
-      const data = await response.json().catch(() => ({})) as { success?: boolean; data?: { id?: string; status?: string }; error?: { code?: string; message?: string } };
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        data?: { id?: string; status?: string };
+        error?: { code?: string; message?: string };
+      };
       if (!response.ok || data.success === false) {
         const code = data.error?.code || `http_${response.status}`;
         const providerMessage = this.safeProviderMessage(data.error?.message, [secret.apiKey], 240);
-        const sourceAddressMismatch = /source_address filter mismatch/i.test(data.error?.message || '');
+        const sourceAddressMismatch = /source_address filter mismatch/i.test(
+          data.error?.message || '',
+        );
         const reason: Record<string, string> = {
           unauthorized: 'The SasiSMS API key is invalid, revoked or not authorized.',
           insufficient_credits: 'The SasiSMS account does not have enough credits.',
           sender_id_not_allowed: 'The sender ID is not approved for this SasiSMS account.',
-          validation_error: 'SasiSMS rejected the recipient or message. Use a local number (07…) or international digits without + (255…).',
+          validation_error:
+            'SasiSMS rejected the recipient or message. Use a local number (07…) or international digits without + (255…).',
           send_failed: sourceAddressMismatch
             ? `SasiSMS rejected the sender: ${providerMessage || 'source_address filter mismatch'}. Wait for your Sender ID approval or ask SasiSMS support to allow the sender on this account, then save that approved sender ID here.`
             : providerMessage
@@ -1433,37 +1572,93 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           rate_limit_exceeded: 'The SasiSMS request limit was reached. Wait before trying again.',
           service_unavailable: 'SasiSMS is temporarily unavailable. Try again later.',
         };
-        throw new BadGatewayException(`SasiSMS rejected the test (${response.status}, ${code}): ${reason[code] || 'Check the API key, recipient format and account status in SasiSMS.'}`);
+        throw new BadGatewayException(
+          `SasiSMS rejected the test (${response.status}, ${code}): ${reason[code] || 'Check the API key, recipient format and account status in SasiSMS.'}`,
+        );
       }
       return data.data?.id;
     }
 
     if (config.provider === 'DARSMS') {
-      if (!secret.apiKey) throw new ConflictException('DARSMS API key is missing; save the provider settings again');
-      const response = await fetch('https://dev.darsms.co.tz/api/v1/integrations/sms/send', { method: 'POST', headers: { 'X-API-Key': secret.apiKey || '', 'Content-Type': 'application/json' }, body: JSON.stringify({ senderId: config.fromNumber || 'DARSMS', to: [to], message: body }), signal: AbortSignal.timeout(15000) });
-      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { messageIds?: string[]; batchId?: string } };
-      if (!response.ok || data.success === false) throw new Error(`DARSMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`);
+      if (!secret.apiKey)
+        throw new ConflictException('DARSMS API key is missing; save the provider settings again');
+      const response = await fetch('https://dev.darsms.co.tz/api/v1/integrations/sms/send', {
+        method: 'POST',
+        headers: { 'X-API-Key': secret.apiKey || '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: config.fromNumber || 'DARSMS', to: [to], message: body }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        data?: { messageIds?: string[]; batchId?: string };
+      };
+      if (!response.ok || data.success === false)
+        throw new Error(
+          `DARSMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`,
+        );
       return data.data?.messageIds?.[0] || data.data?.batchId;
     }
 
     if (config.provider === 'EHUB') {
-      if (!secret.apiKey || !secret.apiSecret || !config.fromNumber) throw new ConflictException('eHUB credentials or approved sender UUID are missing; save the provider settings again');
+      if (!secret.apiKey || !secret.apiSecret || !config.fromNumber)
+        throw new ConflictException(
+          'eHUB credentials or approved sender UUID are missing; save the provider settings again',
+        );
       const path = '/api/v1/sms/send';
       const rawBody = JSON.stringify({ to, message: body, sender_id: config.fromNumber });
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const payload = `${timestamp}\nPOST\n${path}\n${rawBody}`;
-      const signature = createHmac('sha256', secret.apiSecret || '').update(payload).digest('hex');
-      const response = await fetch(`https://sms.ehub.co.tz${path}`, { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'X-Timestamp': timestamp, 'X-Signature': signature, 'Content-Type': 'application/json' }, body: rawBody, signal: AbortSignal.timeout(15000) });
-      const data = await response.json().catch(() => ({})) as { success?: boolean; message?: string; data?: { message_id?: string } };
-      if (!response.ok || data.success === false) throw new Error(`eHUB SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey, secret.apiSecret])}`);
+      const signature = createHmac('sha256', secret.apiSecret || '')
+        .update(payload)
+        .digest('hex');
+      const response = await fetch(`https://sms.ehub.co.tz${path}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secret.apiKey}`,
+          'X-Timestamp': timestamp,
+          'X-Signature': signature,
+          'Content-Type': 'application/json',
+        },
+        body: rawBody,
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        data?: { message_id?: string };
+      };
+      if (!response.ok || data.success === false)
+        throw new Error(
+          `eHUB SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey, secret.apiSecret])}`,
+        );
       return data.data?.message_id;
     }
 
     if (config.provider === 'SAKURA') {
-      if (!secret.apiKey) throw new ConflictException('Sakura SMS API key is missing; save the provider settings again');
-      const response = await fetch('https://sms.sakuragroup.co.tz/api/v1/sms/send', { method: 'POST', headers: { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to, message: body, ...(config.fromNumber ? { sender_id: config.fromNumber } : {}) }), signal: AbortSignal.timeout(15000) });
-      const data = await response.json().catch(() => ({})) as { status?: string; message?: string; message_id?: string };
-      if (!response.ok || (data.status && data.status !== 'success' && data.status !== 'queued')) throw new Error(`Sakura SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`);
+      if (!secret.apiKey)
+        throw new ConflictException(
+          'Sakura SMS API key is missing; save the provider settings again',
+        );
+      const response = await fetch('https://sms.sakuragroup.co.tz/api/v1/sms/send', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secret.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          message: body,
+          ...(config.fromNumber ? { sender_id: config.fromNumber } : {}),
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        status?: string;
+        message?: string;
+        message_id?: string;
+      };
+      if (!response.ok || (data.status && data.status !== 'success' && data.status !== 'queued'))
+        throw new Error(
+          `Sakura SMS request failed (${response.status}): ${this.safeProviderMessage(data.message, [secret.apiKey])}`,
+        );
       return data.message_id;
     }
 
@@ -1518,11 +1713,17 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     return createHash('sha256').update(secret).digest();
   }
 
-  private safeProviderMessage(message: string | undefined, secrets: Array<string | undefined>, maxLength = 300) {
-    let safeMessage = (message || 'provider rejected the message').replace(/[\r\n\t]+/g, ' ')
+  private safeProviderMessage(
+    message: string | undefined,
+    secrets: Array<string | undefined>,
+    maxLength = 300,
+  ) {
+    let safeMessage = (message || 'provider rejected the message')
+      .replace(/[\r\n\t]+/g, ' ')
       .replace(/\bsk_(?:live|test)_[A-Za-z0-9_-]+\b/gi, '[redacted API key]');
     for (const secret of secrets) {
-      if (secret && secret.length >= 4) safeMessage = safeMessage.split(secret).join('[redacted credential]');
+      if (secret && secret.length >= 4)
+        safeMessage = safeMessage.split(secret).join('[redacted credential]');
     }
     return safeMessage.slice(0, maxLength);
   }

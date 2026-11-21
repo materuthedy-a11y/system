@@ -47,8 +47,7 @@ async function bootstrap() {
     });
   app.use(
     cors({
-      origin: (origin, callback) =>
-        callback(null, !origin || allowedOrigins.includes(origin)),
+      origin: (origin, callback) => callback(null, !origin || allowedOrigins.includes(origin)),
       credentials: true,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
       allowedHeaders: 'Content-Type,Authorization,Idempotency-Key',

@@ -210,7 +210,10 @@ export class SupplierService {
     }
 
     // Query suppliers
-    const fullSort = filter.status === 'OVERDUE' || filter.sortBy === 'outstanding' || filter.sortBy === 'lastPurchase';
+    const fullSort =
+      filter.status === 'OVERDUE' ||
+      filter.sortBy === 'outstanding' ||
+      filter.sortBy === 'lastPurchase';
     const [suppliers, matchedCount] = await Promise.all([
       this.prisma.supplier.findMany({
         where,
@@ -376,9 +379,12 @@ export class SupplierService {
         } else {
           await tx.supplierAddress.create({
             data: {
-              id: uuid(), supplierId,
-              street: dto.address.street || '', city: dto.address.city || '',
-              region: dto.address.region || '', postalCode: dto.address.postalCode || '',
+              id: uuid(),
+              supplierId,
+              street: dto.address.street || '',
+              city: dto.address.city || '',
+              region: dto.address.region || '',
+              postalCode: dto.address.postalCode || '',
               country: dto.address.country,
             },
           });
@@ -417,7 +423,12 @@ export class SupplierService {
         tx.purchaseReturn.count({ where: { supplierId, businessId } }),
       ]);
 
-      if (poCount > 0 || paymentCount > 0 || returnCount > 0 || Number(supplier.openingBalance) !== 0) {
+      if (
+        poCount > 0 ||
+        paymentCount > 0 ||
+        returnCount > 0 ||
+        Number(supplier.openingBalance) !== 0
+      ) {
         throw new BadRequestException(
           'Cannot delete a supplier with account history or an opening balance. Deactivate the supplier to preserve its records.',
         );
@@ -654,7 +665,12 @@ export class SupplierService {
     supplier: any,
     contacts: any[],
     address: any,
-    financials?: { totalPurchased: number; totalPaid: number; totalReturned: number; lastPurchaseDate?: Date | null },
+    financials?: {
+      totalPurchased: number;
+      totalPaid: number;
+      totalReturned: number;
+      lastPurchaseDate?: Date | null;
+    },
   ): SupplierResponseDto {
     const totalPurchased = roundMoney(financials?.totalPurchased || 0);
     const totalPaid = roundMoney(financials?.totalPaid || 0);

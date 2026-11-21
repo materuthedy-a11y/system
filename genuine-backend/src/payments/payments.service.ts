@@ -32,7 +32,9 @@ const paymentDirection = (payment: {
   direction?: string | null;
   invoiceId?: string | null;
   referenceType?: string | null;
-}) => payment.direction || (payment.invoiceId || payment.referenceType === 'SalesInvoice' ? 'INFLOW' : 'OUTFLOW');
+}) =>
+  payment.direction ||
+  (payment.invoiceId || payment.referenceType === 'SalesInvoice' ? 'INFLOW' : 'OUTFLOW');
 
 @Injectable()
 export class PaymentsService {
@@ -53,11 +55,14 @@ export class PaymentsService {
   async getPaymentMethodsForEntry(businessId: string) {
     const [methods, settings] = await Promise.all([
       this.prisma.paymentMethod.findMany({
-      where: { businessId, isActive: true },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, isActive: true, requiresReference: true },
+        where: { businessId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true, isActive: true, requiresReference: true },
       }),
-      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { defaultPaymentMethodId: true } }),
+      this.prisma.businessSettings.findUnique({
+        where: { businessId },
+        select: { defaultPaymentMethodId: true },
+      }),
     ]);
     return methods
       .map((method) => ({ ...method, isDefault: method.id === settings?.defaultPaymentMethodId }))
@@ -86,8 +91,15 @@ export class PaymentsService {
               where: { id: dto.paymentMethodId, businessId, isActive: true },
             });
             if (!method) throw new NotFoundException('Active payment method not found');
-            if (method.requiresReference && ![dto.referenceNumber, dto.transactionId, dto.chequeNumber].some((value) => value?.trim())) {
-              throw new BadRequestException('This payment method requires a transaction or reference number');
+            if (
+              method.requiresReference &&
+              ![dto.referenceNumber, dto.transactionId, dto.chequeNumber].some((value) =>
+                value?.trim(),
+              )
+            ) {
+              throw new BadRequestException(
+                'This payment method requires a transaction or reference number',
+              );
             }
             await this.assertPeriodOpen(tx, businessId, paymentDate);
 
@@ -119,8 +131,12 @@ export class PaymentsService {
               dto.referenceId,
               paymentDate,
             );
-            const linkedLocationId = reference.invoice?.locationId || reference.po?.locationId || reference.expense?.locationId;
-            if (linkedLocationId) await assertLocationAccess(this.prisma, businessId, userId, linkedLocationId);
+            const linkedLocationId =
+              reference.invoice?.locationId ||
+              reference.po?.locationId ||
+              reference.expense?.locationId;
+            if (linkedLocationId)
+              await assertLocationAccess(this.prisma, businessId, userId, linkedLocationId);
             if (dto.referenceType === PaymentReferenceType.Other && !dto.referenceId.trim()) {
               throw new BadRequestException('referenceId is required for Other payments');
             }
@@ -337,8 +353,10 @@ export class PaymentsService {
         data: {
           isPaid,
           status: isPaid ? 'PAID' : 'APPROVED',
-          paidBy: isPaid ? (latestPayment?.createdBy || userId) : null,
-          paidAt: isPaid ? (latestPayment?.processedAt || latestPayment?.paymentDate || new Date()) : null,
+          paidBy: isPaid ? latestPayment?.createdBy || userId : null,
+          paidAt: isPaid
+            ? latestPayment?.processedAt || latestPayment?.paymentDate || new Date()
+            : null,
           paymentMethodId: latestPayment?.paymentMethodId || null,
           paymentReference: latestPayment?.transactionId || null,
         },
@@ -347,13 +365,23 @@ export class PaymentsService {
   }
 
   async getPaymentById(businessId: string, id: string, userId?: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const row = await this.prisma.payment.findFirst({
-      where: { id, businessId, ...(accessibleIds ? { OR: [
-        { invoice: { is: { locationId: { in: accessibleIds } } } },
-        { po: { is: { locationId: { in: accessibleIds } } } },
-        { expense: { is: { locationId: { in: accessibleIds } } } },
-      ] } : {}) },
+      where: {
+        id,
+        businessId,
+        ...(accessibleIds
+          ? {
+              OR: [
+                { invoice: { is: { locationId: { in: accessibleIds } } } },
+                { po: { is: { locationId: { in: accessibleIds } } } },
+                { expense: { is: { locationId: { in: accessibleIds } } } },
+              ],
+            }
+          : {}),
+      },
       include: {
         paymentMethod: true,
         invoice: { include: { location: { select: { id: true, name: true } } } },
@@ -364,14 +392,29 @@ export class PaymentsService {
       },
     });
     if (!row) throw new NotFoundException('Payment not found');
-    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { currency: true },
+    });
     return {
       ...row,
       currency: business?.currency || 'TZS',
       paymentMethodName: row.paymentMethod.name,
-      locationName: row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
-      sourceType: row.invoiceId ? 'SALES_INVOICE' : row.poId ? 'PURCHASE_ORDER' : row.expenseId ? 'EXPENSE' : 'OTHER',
-      sourceReference: row.invoice?.invoiceNumber || row.po?.poNumber || row.expense?.expenseNumber || row.referenceId || null,
+      locationName:
+        row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
+      sourceType: row.invoiceId
+        ? 'SALES_INVOICE'
+        : row.poId
+          ? 'PURCHASE_ORDER'
+          : row.expenseId
+            ? 'EXPENSE'
+            : 'OTHER',
+      sourceReference:
+        row.invoice?.invoiceNumber ||
+        row.po?.poNumber ||
+        row.expense?.expenseNumber ||
+        row.referenceId ||
+        null,
       counterpartyName: row.customer?.name || row.supplier?.name || null,
       processedBy: row.createdBy,
       reconciledBy: row.reconciledBy || undefined,
@@ -393,38 +436,49 @@ export class PaymentsService {
     const limit = query.limit || 20;
     const and: Prisma.PaymentWhereInput[] = [];
     if (query.fromDate || query.toDate) {
-      and.push({ paymentDate: {
-        ...(query.fromDate && { gte: new Date(`${query.fromDate}T00:00:00.000Z`) }),
-        ...(query.toDate && { lte: new Date(`${query.toDate}T23:59:59.999Z`) }),
-      } });
+      and.push({
+        paymentDate: {
+          ...(query.fromDate && { gte: new Date(`${query.fromDate}T00:00:00.000Z`) }),
+          ...(query.toDate && { lte: new Date(`${query.toDate}T23:59:59.999Z`) }),
+        },
+      });
     }
     if (query.sourceType === 'SALES_INVOICE') and.push({ invoiceId: { not: null } });
     if (query.sourceType === 'PURCHASE_ORDER') and.push({ poId: { not: null } });
     if (query.sourceType === 'EXPENSE') and.push({ expenseId: { not: null } });
     if (query.sourceType === 'OTHER') and.push({ invoiceId: null, poId: null, expenseId: null });
-    if (query.locationId) and.push({ OR: [
-      { invoice: { is: { locationId: query.locationId } } },
-      { po: { is: { locationId: query.locationId } } },
-      { expense: { is: { locationId: query.locationId } } },
-    ] });
-    if (accessibleIds) and.push({ OR: [
-      { invoice: { is: { locationId: { in: accessibleIds } } } },
-      { po: { is: { locationId: { in: accessibleIds } } } },
-      { expense: { is: { locationId: { in: accessibleIds } } } },
-    ] });
+    if (query.locationId)
+      and.push({
+        OR: [
+          { invoice: { is: { locationId: query.locationId } } },
+          { po: { is: { locationId: query.locationId } } },
+          { expense: { is: { locationId: query.locationId } } },
+        ],
+      });
+    if (accessibleIds)
+      and.push({
+        OR: [
+          { invoice: { is: { locationId: { in: accessibleIds } } } },
+          { po: { is: { locationId: { in: accessibleIds } } } },
+          { expense: { is: { locationId: { in: accessibleIds } } } },
+        ],
+      });
     const search = query.search?.trim();
-    if (search) and.push({ OR: [
-      { paymentNumber: { contains: search, mode: 'insensitive' } },
-      { reference: { contains: search, mode: 'insensitive' } },
-      { referenceNumber: { contains: search, mode: 'insensitive' } },
-      { transactionId: { contains: search, mode: 'insensitive' } },
-      { bankStatementReference: { contains: search, mode: 'insensitive' } },
-      { invoice: { is: { invoiceNumber: { contains: search, mode: 'insensitive' } } } },
-      { po: { is: { poNumber: { contains: search, mode: 'insensitive' } } } },
-      { expense: { is: { expenseNumber: { contains: search, mode: 'insensitive' } } } },
-      { customer: { is: { name: { contains: search, mode: 'insensitive' } } } },
-      { supplier: { is: { name: { contains: search, mode: 'insensitive' } } } },
-    ] });
+    if (search)
+      and.push({
+        OR: [
+          { paymentNumber: { contains: search, mode: 'insensitive' } },
+          { reference: { contains: search, mode: 'insensitive' } },
+          { referenceNumber: { contains: search, mode: 'insensitive' } },
+          { transactionId: { contains: search, mode: 'insensitive' } },
+          { bankStatementReference: { contains: search, mode: 'insensitive' } },
+          { invoice: { is: { invoiceNumber: { contains: search, mode: 'insensitive' } } } },
+          { po: { is: { poNumber: { contains: search, mode: 'insensitive' } } } },
+          { expense: { is: { expenseNumber: { contains: search, mode: 'insensitive' } } } },
+          { customer: { is: { name: { contains: search, mode: 'insensitive' } } } },
+          { supplier: { is: { name: { contains: search, mode: 'insensitive' } } } },
+        ],
+      });
     const where: Prisma.PaymentWhereInput = {
       businessId,
       ...(query.purchaseOrderId ? { poId: query.purchaseOrderId } : {}),
@@ -453,15 +507,33 @@ export class PaymentsService {
       }),
       this.prisma.payment.count({ where }),
     ]);
-    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { currency: true },
+    });
     return {
       data: data.map((row) => ({
         ...row,
         currency: business?.currency || 'TZS',
         paymentMethodName: row.paymentMethod.name,
-        locationName: row.invoice?.location.name || row.po?.location.name || row.expense?.location?.name || null,
-        sourceType: row.invoiceId ? 'SALES_INVOICE' : row.poId ? 'PURCHASE_ORDER' : row.expenseId ? 'EXPENSE' : 'OTHER',
-        sourceReference: row.invoice?.invoiceNumber || row.po?.poNumber || row.expense?.expenseNumber || row.referenceId || null,
+        locationName:
+          row.invoice?.location.name ||
+          row.po?.location.name ||
+          row.expense?.location?.name ||
+          null,
+        sourceType: row.invoiceId
+          ? 'SALES_INVOICE'
+          : row.poId
+            ? 'PURCHASE_ORDER'
+            : row.expenseId
+              ? 'EXPENSE'
+              : 'OTHER',
+        sourceReference:
+          row.invoice?.invoiceNumber ||
+          row.po?.poNumber ||
+          row.expense?.expenseNumber ||
+          row.referenceId ||
+          null,
         counterpartyName: row.customer?.name || row.supplier?.name || null,
       })),
       total,
@@ -485,7 +557,9 @@ export class PaymentsService {
           reconciledBy: userId,
           reconciledAt: new Date(),
           bankStatementReference: dto.bankStatementReference,
-          ...(dto.notes?.trim() ? { notes: [payment.notes, dto.notes.trim()].filter(Boolean).join('\n\n') } : {}),
+          ...(dto.notes?.trim()
+            ? { notes: [payment.notes, dto.notes.trim()].filter(Boolean).join('\n\n') }
+            : {}),
         },
       });
       await this.audit(tx, businessId, userId, 'Payment', id, 'RECONCILE', payment, updated);
@@ -603,8 +677,13 @@ export class PaymentsService {
           where: { id: dto.paymentMethodId, businessId, isActive: true },
         });
         if (!method) throw new NotFoundException('Active payment method not found');
-        if (method.requiresReference && ![dto.referenceNumber, dto.reference].some((value) => value?.trim())) {
-          throw new BadRequestException('This payment method requires a transaction or reference number');
+        if (
+          method.requiresReference &&
+          ![dto.referenceNumber, dto.reference].some((value) => value?.trim())
+        ) {
+          throw new BadRequestException(
+            'This payment method requires a transaction or reference number',
+          );
         }
         const categoryIds = [...new Set(dto.items.map((item) => item.expenseCategoryId))];
         const categories = await tx.expenseCategory.findMany({
@@ -773,7 +852,9 @@ export class PaymentsService {
           if (remaining <= 0) throw new ConflictException('Expense is already fully paid');
           const amount = roundMoney(dto?.amount ?? remaining);
           if (amount <= 0 || amount > remaining)
-            throw new BadRequestException('Payment amount must be greater than zero and no more than the remaining expense balance');
+            throw new BadRequestException(
+              'Payment amount must be greater than zero and no more than the remaining expense balance',
+            );
           const paymentNumber = await this.nextPaymentNumber(tx, businessId, new Date());
           const payment = await tx.payment.create({
             data: {
@@ -1064,7 +1145,10 @@ export class PaymentsService {
     const weekStartsOn = businessSettings?.settings?.weekStartsOn || 'MONDAY';
     const keyFor = (date: Date) => {
       const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
       }).formatToParts(date);
       const part = (type: string) => parts.find((value) => value.type === type)?.value || '00';
       const year = Number(part('year'));
@@ -1207,18 +1291,28 @@ export class PaymentsService {
         },
       }),
       this.prisma.purchaseReturn.findMany({
-        where: { businessId, purchaseOrderId: { in: ids }, status: 'APPROVED', approvedAt: { lte: asOf } },
+        where: {
+          businessId,
+          purchaseOrderId: { in: ids },
+          status: 'APPROVED',
+          approvedAt: { lte: asOf },
+        },
         select: { purchaseOrderId: true, totalReturnAmount: true },
       }),
     ]);
     const paid = this.sumBy(payments, (p) => p.poId!);
     const returned = new Map<string, number>();
     for (const item of supplierReturns) {
-      returned.set(item.purchaseOrderId, (returned.get(item.purchaseOrderId) || 0) + item.totalReturnAmount);
+      returned.set(
+        item.purchaseOrderId,
+        (returned.get(item.purchaseOrderId) || 0) + item.totalReturnAmount,
+      );
     }
     const bySupplier = new Map<string, any>();
     for (const po of pos) {
-      const balance = roundMoney(po.totalAmount - (paid.get(po.id) || 0) - (returned.get(po.id) || 0));
+      const balance = roundMoney(
+        po.totalAmount - (paid.get(po.id) || 0) - (returned.get(po.id) || 0),
+      );
       if (balance <= 0) continue;
       const terms = Number((po.supplier.paymentTerms || '').match(/\d+/)?.[0] || 0);
       const due = new Date(po.orderDate);
@@ -1342,14 +1436,7 @@ export class PaymentsService {
       ),
     );
     const cash = roundMoney(
-      payments.reduce(
-        (s, p) =>
-          s +
-          (paymentDirection(p) === 'INFLOW'
-            ? p.amount
-            : -p.amount),
-        0,
-      ),
+      payments.reduce((s, p) => s + (paymentDirection(p) === 'INFLOW' ? p.amount : -p.amount), 0),
     );
     const expensesDue = roundMoney(
       expenses.reduce((s, e) => s + Math.max(0, e.amount - (expensePaid.get(e.id) || 0)), 0),
@@ -1432,14 +1519,10 @@ export class PaymentsService {
     ]);
     const inventoryValuation = await this.inventory.getStockValuationReport(businessId, '', {});
     const inflows = roundMoney(
-      payments
-        .filter((p) => paymentDirection(p) === 'INFLOW')
-        .reduce((s, p) => s + p.amount, 0),
+      payments.filter((p) => paymentDirection(p) === 'INFLOW').reduce((s, p) => s + p.amount, 0),
     );
     const outflows = roundMoney(
-      payments
-        .filter((p) => paymentDirection(p) === 'OUTFLOW')
-        .reduce((s, p) => s + p.amount, 0),
+      payments.filter((p) => paymentDirection(p) === 'OUTFLOW').reduce((s, p) => s + p.amount, 0),
     );
     const arPaid = this.sumBy(
       payments.filter((p) => p.invoiceId),
@@ -1621,7 +1704,10 @@ export class PaymentsService {
   }
 
   private async nextPaymentNumber(tx: Prisma.TransactionClient, businessId: string, date: Date) {
-    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { receiptPrefix: true } });
+    const settings = await tx.businessSettings.findUnique({
+      where: { businessId },
+      select: { receiptPrefix: true },
+    });
     const prefix = `${normalizeDocumentPrefix(settings?.receiptPrefix, 'PAY')}-${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}-`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`payment-number:${businessId}:${prefix}`}, 0)) IS NULL AS locked`;
     const last = await tx.payment.findFirst({

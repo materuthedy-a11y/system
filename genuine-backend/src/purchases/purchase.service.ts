@@ -59,9 +59,17 @@ export class PurchaseService {
 
   async getPurchaseOrderOptions(businessId: string) {
     const [business, defaultPurchaseTax] = await Promise.all([
-      this.prisma.business.findUnique({ where: { id: businessId }, select: { taxPercentage: true } }),
+      this.prisma.business.findUnique({
+        where: { id: businessId },
+        select: { taxPercentage: true },
+      }),
       this.prisma.taxRate.findFirst({
-        where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['PURCHASES', 'BOTH'] } },
+        where: {
+          businessId,
+          isActive: true,
+          isDefault: true,
+          appliesTo: { in: ['PURCHASES', 'BOTH'] },
+        },
         select: { rate: true },
       }),
     ]);
@@ -98,12 +106,18 @@ export class PurchaseService {
     if (dto.taxAmount !== undefined && dto.taxPercentage !== undefined) {
       throw new BadRequestException('Provide either taxAmount or taxPercentage, not both');
     }
-    const defaultPurchaseTax = dto.taxPercentage === undefined && dto.taxAmount === undefined
-      ? await this.prisma.taxRate.findFirst({
-          where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['PURCHASES', 'BOTH'] } },
-          select: { rate: true },
-        })
-      : null;
+    const defaultPurchaseTax =
+      dto.taxPercentage === undefined && dto.taxAmount === undefined
+        ? await this.prisma.taxRate.findFirst({
+            where: {
+              businessId,
+              isActive: true,
+              isDefault: true,
+              appliesTo: { in: ['PURCHASES', 'BOTH'] },
+            },
+            select: { rate: true },
+          })
+        : null;
     if (dto.expectedDeliveryDate) {
       const orderDate = dto.orderDate ?? new Date();
       const calendarDay = (date: Date) =>
@@ -174,11 +188,20 @@ export class PurchaseService {
       subtotal = roundMoney(subtotal + lineTotal);
       const product = productMap.get(item.productId)!;
       const selectedUnit = item.unitId
-        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
+        ? product.units.find(
+            (unit) =>
+              unit.unitId === item.unitId &&
+              unit.unit.isActive &&
+              (!unit.unit.businessId || unit.unit.businessId === businessId),
+          )
         : product.units.find((unit) => unit.isDefault);
-      if (!selectedUnit) throw new BadRequestException(`The selected unit is inactive or is not configured for ${product.name}. Refresh products and check the product's Units settings.`);
+      if (!selectedUnit)
+        throw new BadRequestException(
+          `The selected unit is inactive or is not configured for ${product.name}. Refresh products and check the product's Units settings.`,
+        );
       const factor = Number(selectedUnit.conversionFactor);
-      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
+      if (!Number.isFinite(factor) || factor <= 0)
+        throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
       poItems.push({
         productId: item.productId,
         quantity: Number(item.quantity) * factor,
@@ -289,8 +312,14 @@ export class PurchaseService {
   /**
    * GET PURCHASE ORDER BY ID
    */
-  async getPurchaseOrderById(businessId: string, poId: string, userId?: string): Promise<PurchaseOrderResponseDto> {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+  async getPurchaseOrderById(
+    businessId: string,
+    poId: string,
+    userId?: string,
+  ): Promise<PurchaseOrderResponseDto> {
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const po = await this.prisma.purchaseOrder.findFirst({
       where: {
         id: poId,
@@ -401,6 +430,7 @@ export class PurchaseService {
           productName: item.product.name,
           productSku: item.product.sku,
           requiresExpiry: item.product.requiresExpiry,
+          expiryDays: item.product.expiryDays,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discount: item.discount,
@@ -785,11 +815,18 @@ export class PurchaseService {
     const nextItems = dto.items?.map((item) => {
       const product = products.find((entry) => entry.id === item.productId)!;
       const selectedUnit = item.unitId
-        ? product.units.find((unit) => unit.unitId === item.unitId && unit.unit.isActive && (!unit.unit.businessId || unit.unit.businessId === businessId))
+        ? product.units.find(
+            (unit) =>
+              unit.unitId === item.unitId &&
+              unit.unit.isActive &&
+              (!unit.unit.businessId || unit.unit.businessId === businessId),
+          )
         : product.units.find((unit) => unit.isDefault);
-      if (!selectedUnit) throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
+      if (!selectedUnit)
+        throw new BadRequestException(`Choose a valid active unit for ${product.name}`);
       const factor = Number(selectedUnit.conversionFactor);
-      if (!Number.isFinite(factor) || factor <= 0) throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
+      if (!Number.isFinite(factor) || factor <= 0)
+        throw new BadRequestException(`Invalid unit conversion for ${product.name}`);
       const quantity = Number(item.quantity) * factor;
       const unitPrice = Number(item.unitPrice) / factor;
       const discount = Number(item.discount || 0);
@@ -1232,6 +1269,34 @@ export class PurchaseService {
             expiryDate: item.expiryDate ? new Date(item.expiryDate) : undefined,
           })),
         });
+        await tx.auditLog.create({
+          data: {
+            id: uuid(),
+            businessId,
+            userId,
+            entityType: 'GoodsReceivedNote',
+            entityId: created.id,
+            action: 'CREATE',
+            beforeData: JSON.stringify({}),
+            afterData: JSON.stringify({
+              action: 'GRN created',
+              grnNumber: created.grnNumber,
+              status: created.status,
+              purchaseOrderId: created.purchaseOrderId,
+              receivedDate: created.receivedDate,
+              receivedQuantity: dto.items.reduce(
+                (sum, item) => sum + Number(item.receivedQuantity),
+                0,
+              ),
+              acceptedQuantity: dto.items.reduce(
+                (sum, item) => sum + Number(item.acceptedQuantity),
+                0,
+              ),
+            }),
+            description: `CREATE GoodsReceivedNote ${created.grnNumber}`,
+            ipAddress: 'unknown',
+          },
+        });
         createdNew = true;
         return created;
       });
@@ -1263,12 +1328,6 @@ export class PurchaseService {
     }
 
     if (createdNew) {
-      await this._createAuditLog(businessId, userId, 'GoodsReceivedNote', grn.id, 'CREATE', {
-        action: 'GRN created',
-        grnNumber: grn.grnNumber,
-        purchaseOrderId: dto.purchaseOrderId,
-      });
-
       this.logger.log(`[PURCHASES] GRN created: ${grn.id} (${grnNumber})`);
     }
 
@@ -1539,11 +1598,26 @@ export class PurchaseService {
           ...(dto.notes !== undefined && { notes: dto.notes }),
         },
       });
-    });
-
-    await this._createAuditLog(businessId, userId, 'GoodsReceivedNote', grnId, 'UPDATE', {
-      action: 'GRN updated',
-      fields: Object.keys(dto),
+      await tx.auditLog.create({
+        data: {
+          id: uuid(),
+          businessId,
+          userId,
+          entityType: 'GoodsReceivedNote',
+          entityId: grn.id,
+          action: 'UPDATE',
+          beforeData: JSON.stringify({ status: grn.status }),
+          afterData: JSON.stringify({
+            action: 'GRN updated',
+            grnNumber: grn.grnNumber,
+            status: grn.status,
+            purchaseOrderId: grn.purchaseOrderId,
+            fields: Object.keys(dto),
+          }),
+          description: `UPDATE GoodsReceivedNote ${grn.grnNumber}`,
+          ipAddress: 'unknown',
+        },
+      });
     });
 
     this.logger.log(`[PURCHASES] GRN updated: ${grnId}`);
@@ -1636,10 +1710,34 @@ export class PurchaseService {
         }
       }
       await this._refreshPurchaseOrderReceivingStatus(tx, grn.purchaseOrderId);
-    });
 
-    await this._createAuditLog(businessId, userId, 'GoodsReceivedNote', grnId, 'ACCEPT', {
-      action: 'GRN accepted',
+      const acceptedQuantity = grn.items.reduce((sum, item) => sum + item.acceptedQuantity, 0);
+      await tx.auditLog.create({
+        data: {
+          id: uuid(),
+          businessId,
+          userId,
+          entityType: 'GoodsReceivedNote',
+          entityId: grn.id,
+          action: 'ACCEPT',
+          beforeData: JSON.stringify({ status: grn.status }),
+          afterData: JSON.stringify({
+            action: 'GRN accepted',
+            grnNumber: grn.grnNumber,
+            status: 'ACCEPTED',
+            purchaseOrderId: grn.purchaseOrderId,
+            receivedQuantity: grn.items.reduce((sum, item) => sum + item.receivedQuantity, 0),
+            acceptedQuantity,
+            rejectedQuantity: grn.items.reduce((sum, item) => sum + item.rejectedQuantity, 0),
+            damagedQuantity: grn.items.reduce((sum, item) => sum + item.damageQuantity, 0),
+            batches: grn.items
+              .filter((item) => item.acceptedQuantity > 0)
+              .map((item) => ({ batchNumber: item.batchNumber, expiryDate: item.expiryDate })),
+          }),
+          description: `ACCEPT GoodsReceivedNote ${grn.grnNumber}`,
+          ipAddress: 'unknown',
+        },
+      });
     });
 
     this.logger.log(`[PURCHASES] GRN accepted: ${grnId}`);
@@ -1676,12 +1774,26 @@ export class PurchaseService {
       });
       if (result.count !== 1) throw new BadRequestException('GRN has already been processed');
       await this._refreshPurchaseOrderReceivingStatus(tx, existing.purchaseOrderId);
-      return existing;
-    });
-
-    await this._createAuditLog(businessId, userId, 'GoodsReceivedNote', grnId, 'REJECT', {
-      action: 'GRN rejected',
-      reason: trimmedReason,
+      await tx.auditLog.create({
+        data: {
+          id: uuid(),
+          businessId,
+          userId,
+          entityType: 'GoodsReceivedNote',
+          entityId: grnId,
+          action: 'REJECT',
+          beforeData: JSON.stringify({ status: existing.status }),
+          afterData: JSON.stringify({
+            action: 'GRN rejected',
+            grnNumber: existing.grnNumber,
+            status: 'REJECTED',
+            purchaseOrderId: existing.purchaseOrderId,
+            reason: trimmedReason,
+          }),
+          description: `REJECT GoodsReceivedNote ${existing.grnNumber}`,
+          ipAddress: 'unknown',
+        },
+      });
     });
 
     this.logger.log(`[PURCHASES] GRN rejected: ${grnId}`);
@@ -2242,7 +2354,10 @@ export class PurchaseService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     const month = new Date().toISOString().slice(0, 7).replace('-', '');
-    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { poPrefix: true } });
+    const settings = await tx.businessSettings.findUnique({
+      where: { businessId },
+      select: { poPrefix: true },
+    });
     const prefix = `${normalizeDocumentPrefix(settings?.poPrefix, 'PO')}-${month}-`;
     const numbers = await tx.purchaseOrder.findMany({
       where: { businessId, poNumber: { startsWith: prefix } },
@@ -2285,7 +2400,10 @@ export class PurchaseService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     const month = new Date().toISOString().slice(0, 7).replace('-', '');
-    const settings = await tx.businessSettings.findUnique({ where: { businessId }, select: { grnPrefix: true } });
+    const settings = await tx.businessSettings.findUnique({
+      where: { businessId },
+      select: { grnPrefix: true },
+    });
     const prefix = `${normalizeDocumentPrefix(settings?.grnPrefix, 'GRN')}-${month}-`;
     const numbers = await tx.goodsReceivedNote.findMany({
       where: { businessId, grnNumber: { startsWith: prefix } },

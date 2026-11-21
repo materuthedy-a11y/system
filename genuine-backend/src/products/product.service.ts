@@ -281,7 +281,10 @@ export class ProductService {
 
   async getUnits(businessId: string, includeInactive = false) {
     return this.prisma.unit.findMany({
-      where: { ...(includeInactive ? {} : { isActive: true }), OR: [{ businessId: null }, { businessId }] },
+      where: {
+        ...(includeInactive ? {} : { isActive: true }),
+        OR: [{ businessId: null }, { businessId }],
+      },
       orderBy: { name: 'asc' },
     });
   }

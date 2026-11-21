@@ -12,6 +12,7 @@ export interface PurchaseOrderItem {
   discount: number;
   lineTotal: number;
   requiresExpiry: boolean;
+  expiryDays?: number | null;
   grnReceivedQty: number;
   grnAcceptedQty: number;
   returnedQty: number;

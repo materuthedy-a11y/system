@@ -28,7 +28,7 @@ export interface InventoryLine {
   notes?: string | null; receivedQuantity?: number; unitCost?: number | null;
   currentQty?: number; adjustedQty?: number; difference?: number; reason?: string;
   systemQuantity?: number; countedQuantity?: number; variance?: number;
-  product: { id: string; name: string; sku: string };
+  product: { id: string; name: string; sku: string; buyingPrice?: number };
   location?: { id: string; name: string } | null;
 }
 export interface StockAdjustment {

@@ -561,7 +561,8 @@ export class AnalyticsService {
         lowStockItems: includeAllLowStock
           ? 'All active product-location pairs at or below the configured minimum or reorder threshold; export is capped at 10,000 rows.'
           : `First ${lowStock.data.length} active product-location pairs at or below the configured minimum or reorder threshold; ${lowStock.total} total match(es).`,
-        topMovingProducts: 'Net units dispatched during the selected period after received customer returns and cancelled-sale reversals; only positive net movement is ranked.',
+        topMovingProducts:
+          'Net units dispatched during the selected period after received customer returns and cancelled-sale reversals; only positive net movement is ranked.',
       },
     };
   }
@@ -638,7 +639,11 @@ export class AnalyticsService {
     const values = points.map((point) => point.value);
     const regression = this.regression(values);
     const projection = Array.from({ length: 3 }, (_, index) => {
-      const date = this.addBucket(this.floorBucket(range.endDate, groupBy, range.weekStartsOn), groupBy, index + 1);
+      const date = this.addBucket(
+        this.floorBucket(range.endDate, groupBy, range.weekStartsOn),
+        groupBy,
+        index + 1,
+      );
       return {
         period: this.bucketLabel(date, groupBy),
         date,
@@ -777,49 +782,50 @@ export class AnalyticsService {
       if (!category) throw new NotFoundException('Product category not found');
     }
     const inventoryAsOf = new Date();
-    const [invoices, returns, movements, stockRows, periodStockChanges, laterStockChanges] = await Promise.all([
-      this.prisma.salesInvoice.findMany({
-        where: {
-          businessId,
-          status: { in: RECOGNIZED_INVOICE_STATUSES },
-          issuedDate: { gte: range.startDate, lte: range.endDate },
-        },
-        include: {
-          items: {
-            include: {
-              product: { include: { category: true, defaultUnit: { select: { name: true } } } },
+    const [invoices, returns, movements, stockRows, periodStockChanges, laterStockChanges] =
+      await Promise.all([
+        this.prisma.salesInvoice.findMany({
+          where: {
+            businessId,
+            status: { in: RECOGNIZED_INVOICE_STATUSES },
+            issuedDate: { gte: range.startDate, lte: range.endDate },
+          },
+          include: {
+            items: {
+              include: {
+                product: { include: { category: true, defaultUnit: { select: { name: true } } } },
+              },
             },
           },
-        },
-      }),
-      this.prisma.salesReturn.findMany({
-        where: {
-          businessId,
-          status: { in: RECOGNIZED_RETURN_STATUSES },
-          returnDate: { gte: range.startDate, lte: range.endDate },
-        },
-        include: { items: true },
-      }),
-      this.prisma.inventoryMovement.findMany({
-        where: {
-          businessId,
-          createdAt: { gte: range.startDate, lte: range.endDate },
-          type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] },
-        },
-        include: { product: { select: { buyingPrice: true } } },
-      }),
-      this.prisma.stockBalance.findMany({ where: { location: { businessId } } }),
-      this.prisma.inventoryMovement.groupBy({
-        by: ['productId'],
-        where: { businessId, createdAt: { gte: range.startDate, lte: range.endDate } },
-        _sum: { quantity: true },
-      }),
-      this.prisma.inventoryMovement.groupBy({
-        by: ['productId'],
-        where: { businessId, createdAt: { gt: range.endDate } },
-        _sum: { quantity: true },
-      }),
-    ]);
+        }),
+        this.prisma.salesReturn.findMany({
+          where: {
+            businessId,
+            status: { in: RECOGNIZED_RETURN_STATUSES },
+            returnDate: { gte: range.startDate, lte: range.endDate },
+          },
+          include: { items: true },
+        }),
+        this.prisma.inventoryMovement.findMany({
+          where: {
+            businessId,
+            createdAt: { gte: range.startDate, lte: range.endDate },
+            type: { in: ['SALE', 'SALE_REVERSAL', 'CUSTOMER_RETURN'] },
+          },
+          include: { product: { select: { buyingPrice: true } } },
+        }),
+        this.prisma.stockBalance.findMany({ where: { location: { businessId } } }),
+        this.prisma.inventoryMovement.groupBy({
+          by: ['productId'],
+          where: { businessId, createdAt: { gte: range.startDate, lte: range.endDate } },
+          _sum: { quantity: true },
+        }),
+        this.prisma.inventoryMovement.groupBy({
+          by: ['productId'],
+          where: { businessId, createdAt: { gt: range.endDate } },
+          _sum: { quantity: true },
+        }),
+      ]);
     type ProductRow = {
       productId: string;
       productName: string;
@@ -945,8 +951,12 @@ export class AnalyticsService {
         // from using today's on-hand quantity as their historical denominator.
         const closingStock = row.currentStock - (laterStockChangeByProduct.get(row.productId) || 0);
         const openingStock = closingStock - (periodStockChangeByProduct.get(row.productId) || 0);
-        const averageStock = Math.max(0, (Math.max(0, openingStock) + Math.max(0, closingStock)) / 2);
-        const rawTurnover = averageStock > MONEY_EPSILON ? Math.max(0, row.quantity) / averageStock : null;
+        const averageStock = Math.max(
+          0,
+          (Math.max(0, openingStock) + Math.max(0, closingStock)) / 2,
+        );
+        const rawTurnover =
+          averageStock > MONEY_EPSILON ? Math.max(0, row.quantity) / averageStock : null;
         const turnover = rawTurnover === null ? null : round(rawTurnover);
         return {
           productId: row.productId,
@@ -961,7 +971,8 @@ export class AnalyticsService {
           profit,
           marginPercent: revenue > MONEY_EPSILON ? round((profit / revenue) * 100) : null,
           inventoryTurnover: turnover,
-          estimatedDaysOfInventory: rawTurnover && rawTurnover > 0 ? round(rangeDays / rawTurnover) : null,
+          estimatedDaysOfInventory:
+            rawTurnover && rawTurnover > 0 ? round(rangeDays / rawTurnover) : null,
           unit: row.unit,
         };
       });
@@ -983,14 +994,21 @@ export class AnalyticsService {
       currency: business.currency,
       inventoryAsOf: inventoryAsOf.toISOString(),
       definitions: {
-        revenue: 'Recognized invoice item sales, less allocated invoice discounts and accepted return line totals; excludes invoice tax.',
-        quantity: 'Issued invoice quantities less accepted return quantities in the selected period.',
+        revenue:
+          'Recognized invoice item sales, less allocated invoice discounts and accepted return line totals; excludes invoice tax.',
+        quantity:
+          'Issued invoice quantities less accepted return quantities in the selected period.',
         cogs: 'Net product cost from inventory sale, reversal and customer-return movements in the selected period.',
-        profit: 'Product revenue less net cost of goods sold; margin is profit divided by product revenue.',
-        currentStock: 'Live stock quantity across all business locations as of inventoryAsOf; it is not a historical stock figure for the selected period.',
-        inventoryTurnover: 'Net units sold divided by average stock quantity for the selected period; opening and closing quantities are reconstructed from signed inventory movements.',
-        estimatedDaysOfInventory: 'Selected period length divided by unrounded inventory turnover; a sales-rate estimate, not a forecast.',
-        catalogLabels: 'Product name, SKU, category and unit are current catalog labels; invoice lines do not store transaction-time catalog label snapshots.',
+        profit:
+          'Product revenue less net cost of goods sold; margin is profit divided by product revenue.',
+        currentStock:
+          'Live stock quantity across all business locations as of inventoryAsOf; it is not a historical stock figure for the selected period.',
+        inventoryTurnover:
+          'Net units sold divided by average stock quantity for the selected period; opening and closing quantities are reconstructed from signed inventory movements.',
+        estimatedDaysOfInventory:
+          'Selected period length divided by unrounded inventory turnover; a sales-rate estimate, not a forecast.',
+        catalogLabels:
+          'Product name, SKU, category and unit are current catalog labels; invoice lines do not store transaction-time catalog label snapshots.',
       },
     };
   }
@@ -1119,13 +1137,20 @@ export class AnalyticsService {
       asOf: range.endDate.toISOString(),
       segmentBy: filter.segmentBy || 'REVENUE',
       definitions: {
-        totalRevenue: 'Selected-period issued invoice totals including tax, less accepted customer returns dated in the selected period; a return can make period revenue negative even when there are no invoices in the period.',
-        invoiceCount: 'Count of recognized invoices issued during the selected period; returns do not reduce invoice count.',
-        averageOrderValue: 'Selected-period net customer revenue divided by selected-period invoice count; unavailable when there are no invoices.',
-        lastPurchaseDate: 'Latest recognized invoice issue date on or before the selected end date; accepted return dates are not purchase dates.',
-        daysInactive: 'Whole calendar-day difference between selected end date and the last purchase date; customers without a recognized purchase have no value.',
-        loyaltyScore: 'Heuristic score: 50% selected-period revenue midrank percentile + 30% selected-period invoice-count midrank percentile + 20% recency score declining linearly over 180 days. Zero/negative spend and zero invoices contribute no percentile points; customers with no purchase history score 0. It is not a financial KPI.',
-        segment: 'INACTIVE when no purchase exists or inactivity exceeds 180 days; AT_RISK above 90 days; otherwise VIP at loyalty score 80 or above, else REGULAR.',
+        totalRevenue:
+          'Selected-period issued invoice totals including tax, less accepted customer returns dated in the selected period; a return can make period revenue negative even when there are no invoices in the period.',
+        invoiceCount:
+          'Count of recognized invoices issued during the selected period; returns do not reduce invoice count.',
+        averageOrderValue:
+          'Selected-period net customer revenue divided by selected-period invoice count; unavailable when there are no invoices.',
+        lastPurchaseDate:
+          'Latest recognized invoice issue date on or before the selected end date; accepted return dates are not purchase dates.',
+        daysInactive:
+          'Whole calendar-day difference between selected end date and the last purchase date; customers without a recognized purchase have no value.',
+        loyaltyScore:
+          'Heuristic score: 50% selected-period revenue midrank percentile + 30% selected-period invoice-count midrank percentile + 20% recency score declining linearly over 180 days. Zero/negative spend and zero invoices contribute no percentile points; customers with no purchase history score 0. It is not a financial KPI.',
+        segment:
+          'INACTIVE when no purchase exists or inactivity exceeds 180 days; AT_RISK above 90 days; otherwise VIP at loyalty score 80 or above, else REGULAR.',
       },
     };
   }
@@ -1145,7 +1170,10 @@ export class AnalyticsService {
           },
           include: {
             grns: {
-              where: { status: { in: ['ACCEPTED', 'REJECTED'] }, receivedDate: { lte: range.endDate } },
+              where: {
+                status: { in: ['ACCEPTED', 'REJECTED'] },
+                receivedDate: { lte: range.endDate },
+              },
               include: { items: { include: { purchaseOrderItem: true } } },
             },
           },
@@ -1179,9 +1207,10 @@ export class AnalyticsService {
           for (const grn of grns) {
             for (const item of grn.items) {
               const accepted = grn.status === 'ACCEPTED' ? item.acceptedQuantity : 0;
-              const rejected = grn.status === 'ACCEPTED'
-                ? item.rejectedQuantity
-                : item.rejectedQuantity + item.acceptedQuantity;
+              const rejected =
+                grn.status === 'ACCEPTED'
+                  ? item.rejectedQuantity
+                  : item.rejectedQuantity + item.acceptedQuantity;
               acceptedQty += accepted;
               rejectedQty += rejected;
               damagedQty += item.damageQuantity;
@@ -1196,7 +1225,9 @@ export class AnalyticsService {
           }
         }
         const inspectedQty = acceptedQty + rejectedQty + damagedQty;
-        const onTimeDeliveryPercent = expectedDateQty ? round((onTimeQty / expectedDateQty) * 100) : null;
+        const onTimeDeliveryPercent = expectedDateQty
+          ? round((onTimeQty / expectedDateQty) * 100)
+          : null;
         const qualityScore = inspectedQty ? round((acceptedQty / inspectedQty) * 100) : null;
         const expectedDateCoveragePercent = acceptedQty
           ? round((expectedDateQty / acceptedQty) * 100)
@@ -1246,16 +1277,26 @@ export class AnalyticsService {
       period: range.periodName,
       asOf: range.endDate.toISOString(),
       definitions: {
-        supplierScope: 'All suppliers with qualifying non-draft purchase orders in the selected business and order-date range; inactive suppliers are retained for historical completeness.',
-        purchaseOrderCount: 'Non-draft, non-cancelled purchase orders with order dates in the selected range.',
-        acceptedPurchaseValue: 'Accepted GRN quantity valued at the purchase-order line amount after line discount, excluding freight, tax, and later supplier returns.',
-        acceptedQuantity: 'Quantity classified as accepted on ACCEPTED GRNs by the selected period end.',
-        rejectedQuantity: 'Rejected quantity on ACCEPTED GRNs plus accepted/rejected-classified quantity on wholly REJECTED GRNs; rejected GRNs never count as stock accepted.',
-        damagedQuantity: 'Quantity classified as damaged on processed GRNs by the selected period end.',
-        onTimeDeliveryPercent: 'Share of accepted quantity from orders with an expected delivery date that arrived on or before that date; unavailable if no eligible expected dates exist.',
-        qualityScore: 'Accepted quantity divided by accepted + rejected + damaged quantity on processed GRNs; unavailable without inspected quantity.',
-        averageLeadTimeDays: 'Average whole days from purchase-order date to first processed GRN for each order; unavailable without a processed GRN.',
-        riskLevel: 'Rule-based indicator: HIGH if on-time delivery is below 70% or quality below 85%; MEDIUM if on-time is below 90% or quality below 95%; otherwise LOW. UNKNOWN when there is no inspected quantity or expected-date coverage is incomplete.',
+        supplierScope:
+          'All suppliers with qualifying non-draft purchase orders in the selected business and order-date range; inactive suppliers are retained for historical completeness.',
+        purchaseOrderCount:
+          'Non-draft, non-cancelled purchase orders with order dates in the selected range.',
+        acceptedPurchaseValue:
+          'Accepted GRN quantity valued at the purchase-order line amount after line discount, excluding freight, tax, and later supplier returns.',
+        acceptedQuantity:
+          'Quantity classified as accepted on ACCEPTED GRNs by the selected period end.',
+        rejectedQuantity:
+          'Rejected quantity on ACCEPTED GRNs plus accepted/rejected-classified quantity on wholly REJECTED GRNs; rejected GRNs never count as stock accepted.',
+        damagedQuantity:
+          'Quantity classified as damaged on processed GRNs by the selected period end.',
+        onTimeDeliveryPercent:
+          'Share of accepted quantity from orders with an expected delivery date that arrived on or before that date; unavailable if no eligible expected dates exist.',
+        qualityScore:
+          'Accepted quantity divided by accepted + rejected + damaged quantity on processed GRNs; unavailable without inspected quantity.',
+        averageLeadTimeDays:
+          'Average whole days from purchase-order date to first processed GRN for each order; unavailable without a processed GRN.',
+        riskLevel:
+          'Rule-based indicator: HIGH if on-time delivery is below 70% or quality below 85%; MEDIUM if on-time is below 90% or quality below 95%; otherwise LOW. UNKNOWN when there is no inspected quantity or expected-date coverage is incomplete.',
       },
     };
   }
@@ -1430,10 +1471,10 @@ export class AnalyticsService {
         );
         break;
       case 'CASH_FLOW':
-        report = await this.payments.getCashFlowReport(
-          businessId,
-          { ...this.asFinancialFilter(await this.getDateRange(businessId, filter)), groupBy: filter.groupBy },
-        );
+        report = await this.payments.getCashFlowReport(businessId, {
+          ...this.asFinancialFilter(await this.getDateRange(businessId, filter)),
+          groupBy: filter.groupBy,
+        });
         break;
       case 'RECEIVABLES_AGEING': {
         const range = await this.getDateRange(businessId, filter);
@@ -1511,16 +1552,22 @@ export class AnalyticsService {
           currency: supplierReport.currency,
           total: supplierReport.total,
           definitions: supplierReport.definitions,
-          suppliers: filter.format === 'JSON'
-            ? supplierReport.data
-            : supplierReport.data.map((supplier) =>
-              Object.fromEntries(Object.entries(supplier).filter(([key]) => key !== 'supplierId')),
-            ),
+          suppliers:
+            filter.format === 'JSON'
+              ? supplierReport.data
+              : supplierReport.data.map((supplier) =>
+                  Object.fromEntries(
+                    Object.entries(supplier).filter(([key]) => key !== 'supplierId'),
+                  ),
+                ),
         };
         break;
       }
       case 'SALES_BY_CHANNEL':
-        report = await this.getSalesByChannel(businessId, { ...common, channelBy: filter.channelBy });
+        report = await this.getSalesByChannel(businessId, {
+          ...common,
+          channelBy: filter.channelBy,
+        });
         break;
       case 'EXPENSE_BREAKDOWN':
         report = await this.getExpenseBreakdown(businessId, common);
@@ -1642,7 +1689,12 @@ export class AnalyticsService {
         where: { id: filter.periodId, businessId },
       });
       if (!period) throw new NotFoundException('Accounting period not found');
-      return { startDate: period.startDate, endDate: period.endDate, periodName: period.period, weekStartsOn: reportSettings.weekStartsOn };
+      return {
+        startDate: period.startDate,
+        endDate: period.endDate,
+        periodName: period.period,
+        weekStartsOn: reportSettings.weekStartsOn,
+      };
     }
     const now = new Date();
     const startDate = filter.dateFrom
@@ -1984,7 +2036,8 @@ export class AnalyticsService {
         : Promise.resolve([]),
     ]);
     const values = new Map(buckets.map((bucket) => [this.bucketLabel(bucket.start, groupBy), 0]));
-    const bucketFor = (date: Date) => this.bucketLabel(this.floorBucket(date, groupBy, range.weekStartsOn), groupBy);
+    const bucketFor = (date: Date) =>
+      this.bucketLabel(this.floorBucket(date, groupBy, range.weekStartsOn), groupBy);
     if (metric === 'REVENUE' || metric === 'PROFIT' || metric === 'CUSTOMER_COUNT') {
       for (const invoice of invoices) {
         if (!invoice.issuedDate) continue;
@@ -2390,9 +2443,10 @@ export class AnalyticsService {
       else high = middle;
     }
     const afterLastEqual = low;
-    const midrank = firstEqualOrGreater < afterLastEqual
-      ? (firstEqualOrGreater + afterLastEqual - 1) / 2
-      : firstEqualOrGreater;
+    const midrank =
+      firstEqualOrGreater < afterLastEqual
+        ? (firstEqualOrGreater + afterLastEqual - 1) / 2
+        : firstEqualOrGreater;
     return round((midrank / (sortedValues.length - 1)) * 100);
   }
 
@@ -2426,7 +2480,12 @@ export class AnalyticsService {
   }
 
   private exportLabel(value: string) {
-    return value.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/^./, (letter) => letter.toUpperCase());
+    return value
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[._-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^./, (letter) => letter.toUpperCase());
   }
 
   private exportValue(value: unknown): string {
@@ -2438,21 +2497,39 @@ export class AnalyticsService {
   }
 
   private exportSections(report: unknown) {
-    const sections: Array<{ title: string; headers: string[]; rows: Array<Record<string, unknown>> }> = [];
+    const sections: Array<{
+      title: string;
+      headers: string[];
+      rows: Array<Record<string, unknown>>;
+    }> = [];
     const details: Array<Record<string, unknown>> = [];
     const metrics: Array<Record<string, unknown>> = [];
     const addRows = (title: string, values: unknown[]) => {
       const rows = values.map((value) => {
         if (!value || typeof value !== 'object' || Array.isArray(value)) return { Value: value };
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [this.exportLabel(key), item && typeof item === 'object' ? this.exportValue(item) : item]));
+        return Object.fromEntries(
+          Object.entries(value).map(([key, item]) => [
+            this.exportLabel(key),
+            item && typeof item === 'object' ? this.exportValue(item) : item,
+          ]),
+        );
       });
       const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
-      sections.push({ title: this.exportLabel(title), headers: headers.length ? headers : ['Value'], rows });
+      sections.push({
+        title: this.exportLabel(title),
+        headers: headers.length ? headers : ['Value'],
+        rows,
+      });
     };
     const visit = (key: string, value: unknown, path: string[] = []) => {
       if (Array.isArray(value)) {
-        if (value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) addRows([...path, key].filter(Boolean).join(' '), value);
-        else addRows([...path, key].filter(Boolean).join(' '), value.map((item, index) => ({ Index: index + 1, Value: item })));
+        if (value.every((item) => item && typeof item === 'object' && !Array.isArray(item)))
+          addRows([...path, key].filter(Boolean).join(' '), value);
+        else
+          addRows(
+            [...path, key].filter(Boolean).join(' '),
+            value.map((item, index) => ({ Index: index + 1, Value: item })),
+          );
         return;
       }
       if (value && typeof value === 'object' && !(value instanceof Date)) {
@@ -2462,22 +2539,40 @@ export class AnalyticsService {
             Metric: record.label ?? record.name ?? this.exportLabel(key),
             Value: record.value,
             Unit: record.unit ?? '',
-            ...(record.previousValue !== undefined ? { 'Previous Value': record.previousValue } : {}),
-            ...(record.changePercent !== undefined ? { 'Change Percent': record.changePercent } : {}),
+            ...(record.previousValue !== undefined
+              ? { 'Previous Value': record.previousValue }
+              : {}),
+            ...(record.changePercent !== undefined
+              ? { 'Change Percent': record.changePercent }
+              : {}),
             Trend: record.trend ?? '',
             Status: record.status ?? '',
           });
           return;
         }
-        const labels = Array.isArray(record.labels) ? record.labels : Array.isArray(record.periods) ? record.periods : null;
+        const labels = Array.isArray(record.labels)
+          ? record.labels
+          : Array.isArray(record.periods)
+            ? record.periods
+            : null;
         if (labels) {
           const series: Record<string, unknown[]> = {};
           const consumed = new Set(['labels', 'periods']);
           for (const [seriesKey, seriesValue] of Object.entries(record)) {
             if (seriesKey === 'labels' || seriesKey === 'periods') continue;
-            if (Array.isArray(seriesValue) && seriesValue.every((item) => item && typeof item === 'object' && Array.isArray((item as any).data))) {
+            if (
+              Array.isArray(seriesValue) &&
+              seriesValue.every(
+                (item) => item && typeof item === 'object' && Array.isArray((item as any).data),
+              )
+            ) {
               consumed.add(seriesKey);
-              for (const item of seriesValue as Array<{ label?: string; name?: string; data: unknown[] }>) series[String(item.label ?? item.name ?? 'Series')] = item.data;
+              for (const item of seriesValue as Array<{
+                label?: string;
+                name?: string;
+                data: unknown[];
+              }>)
+                series[String(item.label ?? item.name ?? 'Series')] = item.data;
             } else if (Array.isArray(seriesValue) && seriesValue.length === labels.length) {
               consumed.add(seriesKey);
               series[seriesKey] = seriesValue;
@@ -2485,24 +2580,55 @@ export class AnalyticsService {
           }
           const columns = Object.keys(series);
           if (columns.length) {
-            addRows([...path, key].filter(Boolean).join(' '), labels.map((label, index) => ({ Period: label, ...Object.fromEntries(columns.map((column) => [this.exportLabel(column), series[column][index]])) })));
+            addRows(
+              [...path, key].filter(Boolean).join(' '),
+              labels.map((label, index) => ({
+                Period: label,
+                ...Object.fromEntries(
+                  columns.map((column) => [this.exportLabel(column), series[column][index]]),
+                ),
+              })),
+            );
           }
           for (const [childKey, child] of Object.entries(record)) {
             if (!consumed.has(childKey)) visit(childKey, child, [...path, key].filter(Boolean));
           }
           return;
         }
-        for (const [childKey, child] of Object.entries(record)) visit(childKey, child, [...path, key].filter(Boolean));
+        for (const [childKey, child] of Object.entries(record))
+          visit(childKey, child, [...path, key].filter(Boolean));
         return;
       }
-      details.push({ Field: [...path, key].filter(Boolean).map((part) => this.exportLabel(part)).join(' · '), Value: value });
+      details.push({
+        Field: [...path, key]
+          .filter(Boolean)
+          .map((part) => this.exportLabel(part))
+          .join(' · '),
+        Value: value,
+      });
     };
     if (Array.isArray(report)) addRows('Report records', report);
-    else if (report && typeof report === 'object') for (const [key, value] of Object.entries(report)) visit(key, value);
+    else if (report && typeof report === 'object')
+      for (const [key, value] of Object.entries(report)) visit(key, value);
     else details.push({ Field: 'Value', Value: report });
-    if (details.length) sections.unshift({ title: 'Report details', headers: [...new Set(details.flatMap((row) => Object.keys(row)))], rows: details });
-    if (metrics.length) sections.unshift({ title: 'Key figures', headers: [...new Set(metrics.flatMap((row) => Object.keys(row)))], rows: metrics });
-    if (!sections.length) sections.push({ title: 'Report records', headers: ['Status'], rows: [{ Status: 'No data for the selected period' }] });
+    if (details.length)
+      sections.unshift({
+        title: 'Report details',
+        headers: [...new Set(details.flatMap((row) => Object.keys(row)))],
+        rows: details,
+      });
+    if (metrics.length)
+      sections.unshift({
+        title: 'Key figures',
+        headers: [...new Set(metrics.flatMap((row) => Object.keys(row)))],
+        rows: metrics,
+      });
+    if (!sections.length)
+      sections.push({
+        title: 'Report records',
+        headers: ['Status'],
+        rows: [{ Status: 'No data for the selected period' }],
+      });
     return sections;
   }
 
@@ -2534,7 +2660,8 @@ export class AnalyticsService {
     for (const section of this.exportSections(report)) {
       allRows.push({ values: [section.title], style: 1 });
       allRows.push({ values: section.headers.map((header) => this.exportLabel(header)), style: 2 });
-      for (const row of section.rows) allRows.push({ values: section.headers.map((header) => row[header] ?? '—'), style: 0 });
+      for (const row of section.rows)
+        allRows.push({ values: section.headers.map((header) => row[header] ?? '—'), style: 0 });
       allRows.push({ values: [], style: 0 });
     }
     const columnName = (index: number) => {
@@ -2554,7 +2681,10 @@ export class AnalyticsService {
       return Math.min(48, Math.max(12, maxLength + 2));
     });
     const worksheetColumns = `<cols>${columnWidths
-      .map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`)
+      .map(
+        (width, index) =>
+          `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`,
+      )
       .join('')}</cols>`;
     const xmlEscape = (value: string) =>
       value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(
@@ -2619,50 +2749,163 @@ export class AnalyticsService {
   }
 
   private toPdf(report: unknown, title: string): Buffer {
-    const width = 842; const height = 595; const margin = 36; const contentWidth = width - margin * 2;
-    const pages: string[][] = [[]]; let commands = pages[0]; let y = height - 42;
-    const safe = (value: unknown) => (value === null || value === undefined
-      ? '—'
-      : typeof value === 'number' && Number.isFinite(value)
-        ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
-        : this.exportValue(value))
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[·•]/g, ' / ')
-      .replace(/[–—]/g, '-')
-      .replace(/[^\x20-\x7E]/g, '');
+    const width = 842;
+    const height = 595;
+    const margin = 36;
+    const contentWidth = width - margin * 2;
+    const pages: string[][] = [[]];
+    let commands = pages[0];
+    let y = height - 42;
+    const safe = (value: unknown) =>
+      (value === null || value === undefined
+        ? '—'
+        : typeof value === 'number' && Number.isFinite(value)
+          ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)
+          : this.exportValue(value)
+      )
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[·•]/g, ' / ')
+        .replace(/[–—]/g, '-')
+        .replace(/[^\x20-\x7E]/g, '');
     const escaped = (value: string) => value.replace(/([\\()])/g, '\\$1');
-    const drawText = (value: string, x: number, baseline: number, size = 8, color = '0.16 0.18 0.15') => commands.push(`${color} rg BT /F1 ${size} Tf ${x.toFixed(1)} ${baseline.toFixed(1)} Td (${escaped(value)}) Tj ET`);
-    const drawRect = (x: number, top: number, w: number, h: number, color: string) => commands.push(`${color} rg ${x.toFixed(1)} ${(top-h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`);
-    const newPage = () => { pages.push([]); commands = pages[pages.length - 1]; y = height - 38; };
+    const drawText = (
+      value: string,
+      x: number,
+      baseline: number,
+      size = 8,
+      color = '0.16 0.18 0.15',
+    ) =>
+      commands.push(
+        `${color} rg BT /F1 ${size} Tf ${x.toFixed(1)} ${baseline.toFixed(1)} Td (${escaped(value)}) Tj ET`,
+      );
+    const drawRect = (x: number, top: number, w: number, h: number, color: string) =>
+      commands.push(
+        `${color} rg ${x.toFixed(1)} ${(top - h).toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f`,
+      );
+    const newPage = () => {
+      pages.push([]);
+      commands = pages[pages.length - 1];
+      y = height - 38;
+    };
     const wrap = (value: unknown, maxChars: number) => {
-      const result: string[] = []; let line = '';
+      const result: string[] = [];
+      let line = '';
       for (const word of safe(value).split(/\s+/)) {
         const parts = word.match(new RegExp(`.{1,${Math.max(maxChars, 4)}}`, 'g')) || [''];
-        for (const part of parts) { if (line && `${line} ${part}`.length > maxChars) { result.push(line); line = part; } else line = line ? `${line} ${part}` : part; }
+        for (const part of parts) {
+          if (line && `${line} ${part}`.length > maxChars) {
+            result.push(line);
+            line = part;
+          } else line = line ? `${line} ${part}` : part;
+        }
       }
-      if (line || !result.length) result.push(line); return result;
+      if (line || !result.length) result.push(line);
+      return result;
     };
     drawRect(0, height, width, 7, '0.98 0.58 0.04');
-    drawText('MIZANIA  |  BUSINESS REPORT', margin, y, 8, '0.35 0.38 0.33'); y -= 22;
-    drawText(title === 'DASHBOARD' ? 'Executive Overview' : this.exportLabel(title), margin, y, 22, '0.10 0.12 0.10'); y -= 20;
-    drawText(`Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, margin, y, 12, '0.40 0.43 0.38'); y -= 15;
-    if (title === 'CUSTOMER_ANALYTICS' && report && typeof report === 'object' && !Array.isArray(report)) {
+    drawText('MIZANIA  |  BUSINESS REPORT', margin, y, 8, '0.35 0.38 0.33');
+    y -= 22;
+    drawText(
+      title === 'DASHBOARD' ? 'Executive Overview' : this.exportLabel(title),
+      margin,
+      y,
+      22,
+      '0.10 0.12 0.10',
+    );
+    y -= 20;
+    drawText(
+      `Generated ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`,
+      margin,
+      y,
+      12,
+      '0.40 0.43 0.38',
+    );
+    y -= 15;
+    if (
+      title === 'CUSTOMER_ANALYTICS' &&
+      report &&
+      typeof report === 'object' &&
+      !Array.isArray(report)
+    ) {
       const customerReport = report as Record<string, unknown>;
-      drawText(`Period ${safe(customerReport.period)}  |  Currency ${safe(customerReport.currency)}  |  Rank by ${safe(customerReport.segmentBy)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 15;
-      drawText(`As of ${safe(customerReport.asOf).slice(0, 10)}  |  Active customers ${safe(customerReport.total)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 20;
-    } else if (title === 'SUPPLIER_ANALYTICS' && report && typeof report === 'object' && !Array.isArray(report)) {
+      drawText(
+        `Period ${safe(customerReport.period)}  |  Currency ${safe(customerReport.currency)}  |  Rank by ${safe(customerReport.segmentBy)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 15;
+      drawText(
+        `As of ${safe(customerReport.asOf).slice(0, 10)}  |  Active customers ${safe(customerReport.total)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 20;
+    } else if (
+      title === 'SUPPLIER_ANALYTICS' &&
+      report &&
+      typeof report === 'object' &&
+      !Array.isArray(report)
+    ) {
       const supplierReport = report as Record<string, unknown>;
-      drawText(`Period ${safe(supplierReport.period)}  |  Currency ${safe(supplierReport.currency)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 15;
-      drawText(`As of ${safe(supplierReport.asOf).slice(0, 10)}  |  Suppliers ${safe(supplierReport.total)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 20;
-    } else if (title === 'INVENTORY_DASHBOARD' && report && typeof report === 'object' && !Array.isArray(report)) {
+      drawText(
+        `Period ${safe(supplierReport.period)}  |  Currency ${safe(supplierReport.currency)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 15;
+      drawText(
+        `As of ${safe(supplierReport.asOf).slice(0, 10)}  |  Suppliers ${safe(supplierReport.total)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 20;
+    } else if (
+      title === 'INVENTORY_DASHBOARD' &&
+      report &&
+      typeof report === 'object' &&
+      !Array.isArray(report)
+    ) {
       const inventoryReport = report as Record<string, any>;
       const metrics = inventoryReport.metrics || {};
-      drawText(`Period ${safe(inventoryReport.period)}  |  Currency ${safe(inventoryReport.currency)}  |  As of ${safe(inventoryReport.asOf).slice(0, 10)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
-      drawText(`Costing ${safe(inventoryReport.costingMethod)}  |  Active products ${safe(metrics.activeProducts)}  |  SKUs with stock ${safe(metrics.stockKeepingUnitsWithStock)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
-      drawText(`On hand ${safe(metrics.totalQuantity)}  |  Stock value ${safe(inventoryReport.currency)} ${safe(metrics.inventoryValue)}  |  Low-stock pairs ${safe(metrics.lowStockCount)}  |  Locations with stock ${safe(metrics.locationCount)}`, margin, y, 10, '0.24 0.27 0.23'); y -= 14;
+      drawText(
+        `Period ${safe(inventoryReport.period)}  |  Currency ${safe(inventoryReport.currency)}  |  As of ${safe(inventoryReport.asOf).slice(0, 10)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 14;
+      drawText(
+        `Costing ${safe(inventoryReport.costingMethod)}  |  Active products ${safe(metrics.activeProducts)}  |  SKUs with stock ${safe(metrics.stockKeepingUnitsWithStock)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 14;
+      drawText(
+        `On hand ${safe(metrics.totalQuantity)}  |  Stock value ${safe(inventoryReport.currency)} ${safe(metrics.inventoryValue)}  |  Low-stock pairs ${safe(metrics.lowStockCount)}  |  Locations with stock ${safe(metrics.locationCount)}`,
+        margin,
+        y,
+        10,
+        '0.24 0.27 0.23',
+      );
+      y -= 14;
       const definitions = inventoryReport.definitions || {};
-      const notes = [definitions.inventoryValue, definitions.lowStockItems, definitions.topMovingProducts].filter(Boolean);
+      const notes = [
+        definitions.inventoryValue,
+        definitions.lowStockItems,
+        definitions.topMovingProducts,
+      ].filter(Boolean);
       for (const note of notes) {
         for (const line of wrap(note, 145)) {
           drawText(line, margin, y, 9, '0.35 0.38 0.33');
@@ -2672,7 +2915,12 @@ export class AnalyticsService {
       y -= 7;
     }
     let pdfReport = report;
-    if (['CUSTOMER_ANALYTICS', 'SUPPLIER_ANALYTICS'].includes(title) && report && typeof report === 'object' && !Array.isArray(report)) {
+    if (
+      ['CUSTOMER_ANALYTICS', 'SUPPLIER_ANALYTICS'].includes(title) &&
+      report &&
+      typeof report === 'object' &&
+      !Array.isArray(report)
+    ) {
       const customerPdfReport = { ...(report as Record<string, unknown>) };
       delete customerPdfReport.definitions;
       pdfReport = customerPdfReport;
@@ -2704,15 +2952,21 @@ export class AnalyticsService {
           return {
             ...section,
             title: 'Top Products',
-            headers: section.headers.map((header) => header === 'Period' ? 'Product' : header),
-            rows: section.rows.map((row) => ({ Product: row.Period, Revenue: row.Revenue, Quantity: row.Quantity })),
+            headers: section.headers.map((header) => (header === 'Period' ? 'Product' : header)),
+            rows: section.rows.map((row) => ({
+              Product: row.Period,
+              Revenue: row.Revenue,
+              Quantity: row.Quantity,
+            })),
           };
         }
         if (section.title === 'Charts') return { ...section, title: 'Revenue and Expenses' };
         return section;
       });
       sections = sections.filter((section) =>
-        ['Key figures', 'Report details', 'Revenue and Expenses', 'Top Products'].includes(section.title),
+        ['Key figures', 'Report details', 'Revenue and Expenses', 'Top Products'].includes(
+          section.title,
+        ),
       );
     }
     if (title === 'PRODUCT_PERFORMANCE') {
@@ -2735,11 +2989,17 @@ export class AnalyticsService {
         const headers = section.headers
           .filter((header) => !/^(?:product|category) id$/i.test(header))
           .map((header) => productLabels[header] || header);
-        const originalHeaders = section.headers.filter((header) => !/^(?:product|category) id$/i.test(header));
+        const originalHeaders = section.headers.filter(
+          (header) => !/^(?:product|category) id$/i.test(header),
+        );
         return {
           ...section,
           headers,
-          rows: section.rows.map((row) => Object.fromEntries(originalHeaders.map((header, index) => [headers[index], row[header]]))),
+          rows: section.rows.map((row) =>
+            Object.fromEntries(
+              originalHeaders.map((header, index) => [headers[index], row[header]]),
+            ),
+          ),
         };
       });
     }
@@ -2761,26 +3021,54 @@ export class AnalyticsService {
         return {
           ...section,
           headers,
-          rows: section.rows.map((row) => Object.fromEntries(section.headers.map((header, index) => {
-            const value = row[header];
-            if (headers[index] === 'Last Purchase' && typeof value === 'string')
-              return [headers[index], value.slice(0, 10)];
-            if (headers[index] === 'Loyalty' && typeof value === 'number')
-              return [headers[index], `${value}%`];
-            return [headers[index], value];
-          }))),
+          rows: section.rows.map((row) =>
+            Object.fromEntries(
+              section.headers.map((header, index) => {
+                const value = row[header];
+                if (headers[index] === 'Last Purchase' && typeof value === 'string')
+                  return [headers[index], value.slice(0, 10)];
+                if (headers[index] === 'Loyalty' && typeof value === 'number')
+                  return [headers[index], `${value}%`];
+                return [headers[index], value];
+              }),
+            ),
+          ),
         };
       });
       sections.push({
         title: 'Metric guide',
         headers: ['Metric', 'Meaning'],
         rows: [
-          { Metric: 'Revenue', Meaning: 'Selected-period issued invoice totals including tax, less accepted returns dated in the period.' },
-          { Metric: 'Invoices', Meaning: 'Recognized invoices issued in the selected period; returns do not reduce the count.' },
-          { Metric: 'Average order', Meaning: 'Period net revenue divided by period invoices; unavailable when there are no invoices.' },
-          { Metric: 'Last purchase / days idle', Meaning: 'Latest recognized invoice on or before period end; whole days from that date to period end.' },
-          { Metric: 'Loyalty score', Meaning: 'Guide only: 50% revenue rank, 30% invoice-count rank, 20% recency. No purchase history scores 0.' },
-          { Metric: 'Segment', Meaning: 'Inactive: no purchase or over 180 days; At risk: over 90; VIP: score 80 or above; otherwise Regular.' },
+          {
+            Metric: 'Revenue',
+            Meaning:
+              'Selected-period issued invoice totals including tax, less accepted returns dated in the period.',
+          },
+          {
+            Metric: 'Invoices',
+            Meaning:
+              'Recognized invoices issued in the selected period; returns do not reduce the count.',
+          },
+          {
+            Metric: 'Average order',
+            Meaning:
+              'Period net revenue divided by period invoices; unavailable when there are no invoices.',
+          },
+          {
+            Metric: 'Last purchase / days idle',
+            Meaning:
+              'Latest recognized invoice on or before period end; whole days from that date to period end.',
+          },
+          {
+            Metric: 'Loyalty score',
+            Meaning:
+              'Guide only: 50% revenue rank, 30% invoice-count rank, 20% recency. No purchase history scores 0.',
+          },
+          {
+            Metric: 'Segment',
+            Meaning:
+              'Inactive: no purchase or over 180 days; At risk: over 90; VIP: score 80 or above; otherwise Regular.',
+          },
         ],
       });
       sections = sections.filter((section) => section.title !== 'Report details');
@@ -2806,25 +3094,60 @@ export class AnalyticsService {
         return {
           ...section,
           headers,
-          rows: section.rows.map((row) => Object.fromEntries(section.headers.map((header, index) => {
-            const value = row[header];
-            if (['On-time %', 'Quality %'].includes(headers[index]) && typeof value === 'number')
-              return [headers[index], `${value}%`];
-            return [headers[index], value];
-          })) ),
+          rows: section.rows.map((row) =>
+            Object.fromEntries(
+              section.headers.map((header, index) => {
+                const value = row[header];
+                if (
+                  ['On-time %', 'Quality %'].includes(headers[index]) &&
+                  typeof value === 'number'
+                )
+                  return [headers[index], `${value}%`];
+                return [headers[index], value];
+              }),
+            ),
+          ),
         };
       });
       sections.push({
         title: 'Metric guide',
         headers: ['Metric', 'Meaning'],
         rows: [
-          { Metric: 'Purchase orders', Meaning: 'Non-draft, non-cancelled orders dated in the selected period; this is an order cohort.' },
-          { Metric: 'Accepted value', Meaning: 'Accepted quantity at PO line value after line discount. Freight, tax, and later supplier returns are excluded.' },
-          { Metric: 'Accepted / rejected / damaged', Meaning: 'Item quantities on processed GRNs through the selected end date. Fully rejected GRNs never count accepted quantity.' },
-          { Metric: 'On-time delivery', Meaning: 'Share of accepted units received by their expected date; unavailable without expected dates. Coverage shows the share of accepted units with a due date.' },
-          { Metric: 'Quality score', Meaning: 'Accepted quantity divided by accepted, rejected, and damaged quantity; unavailable without inspected quantity.' },
-          { Metric: 'Lead time', Meaning: 'Average whole days from each order date to its first processed GRN; unavailable without a processed GRN.' },
-          { Metric: 'Risk', Meaning: 'HIGH if on-time is below 70% or quality below 85%; MEDIUM if on-time is below 90% or quality below 95%; otherwise LOW. UNKNOWN when measures or expected-date coverage are incomplete.' },
+          {
+            Metric: 'Purchase orders',
+            Meaning:
+              'Non-draft, non-cancelled orders dated in the selected period; this is an order cohort.',
+          },
+          {
+            Metric: 'Accepted value',
+            Meaning:
+              'Accepted quantity at PO line value after line discount. Freight, tax, and later supplier returns are excluded.',
+          },
+          {
+            Metric: 'Accepted / rejected / damaged',
+            Meaning:
+              'Item quantities on processed GRNs through the selected end date. Fully rejected GRNs never count accepted quantity.',
+          },
+          {
+            Metric: 'On-time delivery',
+            Meaning:
+              'Share of accepted units received by their expected date; unavailable without expected dates. Coverage shows the share of accepted units with a due date.',
+          },
+          {
+            Metric: 'Quality score',
+            Meaning:
+              'Accepted quantity divided by accepted, rejected, and damaged quantity; unavailable without inspected quantity.',
+          },
+          {
+            Metric: 'Lead time',
+            Meaning:
+              'Average whole days from each order date to its first processed GRN; unavailable without a processed GRN.',
+          },
+          {
+            Metric: 'Risk',
+            Meaning:
+              'HIGH if on-time is below 70% or quality below 85%; MEDIUM if on-time is below 90% or quality below 95%; otherwise LOW. UNKNOWN when measures or expected-date coverage are incomplete.',
+          },
         ],
       });
       sections = sections.filter((section) => section.title !== 'Report details');
@@ -2848,7 +3171,9 @@ export class AnalyticsService {
           ...section,
           headers,
           rows: section.rows.map((row) =>
-            Object.fromEntries(section.headers.map((header, index) => [headers[index], row[header]])),
+            Object.fromEntries(
+              section.headers.map((header, index) => [headers[index], row[header]]),
+            ),
           ),
         };
       });
@@ -2892,37 +3217,75 @@ export class AnalyticsService {
         const label = header.toLowerCase();
         if (title === 'PRODUCT_PERFORMANCE' && section.title === 'Products') {
           const productWeights: Record<string, number> = {
-            product: 2.4, sku: 2.25, category: 1.65, stock: 0.8, sold: 0.75,
-            revenue: 1.1, cogs: 1, profit: 0.95, margin: 0.9, turns: 0.85, days: 1, unit: 0.8,
+            product: 2.4,
+            sku: 2.25,
+            category: 1.65,
+            stock: 0.8,
+            sold: 0.75,
+            revenue: 1.1,
+            cogs: 1,
+            profit: 0.95,
+            margin: 0.9,
+            turns: 0.85,
+            days: 1,
+            unit: 0.8,
           };
           return productWeights[label] || 0.9;
         }
         if (title === 'CUSTOMER_ANALYTICS' && section.title === 'Customers') {
           const customerWeights: Record<string, number> = {
-            customer: 4.2, code: 1.5, type: 1.45, revenue: 1.25, inv: 0.6,
-            avg: 0.85, 'last purchase': 1.35, 'idle days': 0.8, loyalty: 1.05, segment: 1.15,
+            customer: 4.2,
+            code: 1.5,
+            type: 1.45,
+            revenue: 1.25,
+            inv: 0.6,
+            avg: 0.85,
+            'last purchase': 1.35,
+            'idle days': 0.8,
+            loyalty: 1.05,
+            segment: 1.15,
           };
           return customerWeights[label] || 1;
         }
         if (title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers') {
           const supplierWeights: Record<string, number> = {
-            supplier: 3, code: 1.7, orders: 0.8, 'accepted value': 1.5,
-            'accept qty': 0.95, 'reject qty': 0.95, 'damage qty': 0.95,
-            'on-time %': 1.2, 'quality %': 1.1, 'lead days': 0.9, risk: 1.8, coverage: 2.5,
+            supplier: 3,
+            code: 1.7,
+            orders: 0.8,
+            'accepted value': 1.5,
+            'accept qty': 0.95,
+            'reject qty': 0.95,
+            'damage qty': 0.95,
+            'on-time %': 1.2,
+            'quality %': 1.1,
+            'lead days': 0.9,
+            risk: 1.8,
+            coverage: 2.5,
           };
           return supplierWeights[label] || 1;
         }
         if (title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items') {
           const inventoryWeights: Record<string, number> = {
-            sku: 1.6, product: 2.4, location: 1.7, qty: 0.65, min: 0.9,
-            reorder: 1.25, 'below min': 1.45, 'at reorder': 1.7,
+            sku: 1.6,
+            product: 2.4,
+            location: 1.7,
+            qty: 0.65,
+            min: 0.9,
+            reorder: 1.25,
+            'below min': 1.45,
+            'at reorder': 1.7,
             stockout: 1.5,
           };
           return inventoryWeights[label] || 1;
         }
         if (/^channel$/.test(label)) return 2.5;
         if (/(formula|definition|description|message|notes|reason)/.test(label)) return 3;
-        if (/(name|product|customer|supplier|account|field|metric|period|date|invoice|location|category)/.test(label)) return 2;
+        if (
+          /(name|product|customer|supplier|account|field|metric|period|date|invoice|location|category)/.test(
+            label,
+          )
+        )
+          return 2;
         if (/(status|trend|unit|quantity|count|percent|margin|sku)/.test(label)) return 1.15;
         return 1.5;
       });
@@ -2934,20 +3297,28 @@ export class AnalyticsService {
           : title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items'
             ? 8
             : 0;
-      const weightedColumnWidth = Math.max(0, tableContentWidth - columnGap * Math.max(0, columnWeights.length - 1));
-      const columnWidths = columnWeights.map((weight) => weightedColumnWidth * weight / totalColumnWeight);
-      const rows = section.rows.length ? section.rows : [{ Status: 'No data for the selected period' }];
+      const weightedColumnWidth = Math.max(
+        0,
+        tableContentWidth - columnGap * Math.max(0, columnWeights.length - 1),
+      );
+      const columnWidths = columnWeights.map(
+        (weight) => (weightedColumnWidth * weight) / totalColumnWeight,
+      );
+      const rows = section.rows.length
+        ? section.rows
+        : [{ Status: 'No data for the selected period' }];
       // Product PDFs have many compact columns. Use a conservative character
       // estimate so numeric values such as 12,000 and 242.5 stay on one line.
-      const charsPerWidthUnit = title === 'PRODUCT_PERFORMANCE' && section.title === 'Products'
-        ? 4.5
-        : title === 'CUSTOMER_ANALYTICS' && section.title === 'Customers'
-          ? 6.2
-          : title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers'
-            ? 4.0
-          : title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items'
-            ? 7.5
-          : 7;
+      const charsPerWidthUnit =
+        title === 'PRODUCT_PERFORMANCE' && section.title === 'Products'
+          ? 4.5
+          : title === 'CUSTOMER_ANALYTICS' && section.title === 'Customers'
+            ? 6.2
+            : title === 'SUPPLIER_ANALYTICS' && section.title === 'Suppliers'
+              ? 4.0
+              : title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items'
+                ? 7.5
+                : 7;
       const preparedRows = rows.map((row, rowIndex) => {
         const cells = section.headers.map((header, index) =>
           wrap(row[header], Math.floor((columnWidths[index] - 10) / charsPerWidthUnit)),
@@ -2958,37 +3329,54 @@ export class AnalyticsService {
           height: Math.max(22, Math.max(1, ...cells.map((cell) => cell.length)) * 14 + 8),
         };
       });
-      const completeSectionHeight = 28 + 29 + preparedRows.reduce((sum, row) => sum + row.height, 0) + 12;
+      const completeSectionHeight =
+        28 + 29 + preparedRows.reduce((sum, row) => sum + row.height, 0) + 12;
       const remainingPageHeight = y - 42;
       const freshPageHeight = height - 38 - 42;
       if (
         !(title === 'INVENTORY_DASHBOARD' && section.title === 'Low Stock Items') &&
         completeSectionHeight <= freshPageHeight &&
         completeSectionHeight > remainingPageHeight
-      ) newPage();
+      )
+        newPage();
       if (y < 75) newPage();
       drawRect(margin, y + 12, contentWidth, 22, '0.98 0.95 0.87');
-      drawText(this.exportLabel(section.title), margin + 8, y - 3, 14, '0.42 0.24 0.02'); y -= 28;
+      drawText(this.exportLabel(section.title), margin + 8, y - 3, 14, '0.42 0.24 0.02');
+      y -= 28;
       const drawHeader = () => {
         if (y < 55) newPage();
         const headerCells = section.headers.map((header, index) =>
-          wrap(this.exportLabel(header), Math.floor((columnWidths[index] - 10) / charsPerWidthUnit)),
+          wrap(
+            this.exportLabel(header),
+            Math.floor((columnWidths[index] - 10) / charsPerWidthUnit),
+          ),
         );
-        const headerHeight = Math.max(27, Math.max(1, ...headerCells.map((cell) => cell.length)) * 14 + 10);
+        const headerHeight = Math.max(
+          27,
+          Math.max(1, ...headerCells.map((cell) => cell.length)) * 14 + 10,
+        );
         drawRect(margin, y + 13, contentWidth, headerHeight, '0.17 0.18 0.16');
         let x = margin + 5;
         headerCells.forEach((headerLines, index) => {
-          headerLines.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12, '1 1 1'));
+          headerLines.forEach((line, lineIndex) =>
+            drawText(line, x, y - lineIndex * 14, 12, '1 1 1'),
+          );
           x += columnWidths[index] + columnGap;
         });
         y -= headerHeight + 2;
       };
       drawHeader();
       preparedRows.forEach(({ rowIndex, cells, height: rowHeight }) => {
-        if (y - rowHeight < 42) { newPage(); drawHeader(); }
+        if (y - rowHeight < 42) {
+          newPage();
+          drawHeader();
+        }
         if (rowIndex % 2) drawRect(margin, y + 10, contentWidth, rowHeight, '0.965 0.97 0.955');
         let x = margin + 5;
-        cells.forEach((cell, index) => { cell.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12)); x += columnWidths[index] + columnGap; });
+        cells.forEach((cell, index) => {
+          cell.forEach((line, lineIndex) => drawText(line, x, y - lineIndex * 14, 12));
+          x += columnWidths[index] + columnGap;
+        });
         y -= rowHeight;
       });
       y -= 12;
@@ -3003,7 +3391,9 @@ export class AnalyticsService {
     const fontId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>');
     const pageIds: number[] = [];
     pages.forEach((pageCommands, index) => {
-      pageCommands.push(`0.42 0.45 0.40 rg BT /F1 9 Tf ${width - margin - 58} 20 Td (Page ${index + 1} of ${pages.length}) Tj ET`);
+      pageCommands.push(
+        `0.42 0.45 0.40 rg BT /F1 9 Tf ${width - margin - 58} 20 Td (Page ${index + 1} of ${pages.length}) Tj ET`,
+      );
       const stream = pageCommands.join('\n');
       const streamId = addObject(
         `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream`,

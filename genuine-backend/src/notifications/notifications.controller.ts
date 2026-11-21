@@ -126,7 +126,11 @@ export class NotificationsController {
 
   @Delete('inbox/in-app/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  deleteInboxEntry(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+  deleteInboxEntry(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
     return this.notifications.deleteInAppInboxEntry(businessId, userId, id);
   }
 
@@ -176,13 +180,21 @@ export class NotificationsController {
 
   @Post('config/sms')
   @RequirePermission('settings.edit')
-  setSmsConfig(@Business() businessId: string, @UserId() userId: string, @Body() dto: SMSConfigDto) {
+  setSmsConfig(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: SMSConfigDto,
+  ) {
     return this.notifications.setSmsConfig(businessId, userId, dto);
   }
 
   @Post('config/sms/test')
   @RequirePermission('settings.edit')
-  testSmsConfig(@Business() businessId: string, @UserId() userId: string, @Body() dto: TestSMSConfigDto) {
+  testSmsConfig(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: TestSMSConfigDto,
+  ) {
     return this.notifications.sendTestSms(businessId, userId, dto);
   }
 }

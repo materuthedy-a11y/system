@@ -11,7 +11,7 @@ import { formatBusinessCalendarDate, formatBusinessDateTime, getBusinessFinancia
 import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type DashboardMetric, type DashboardTransaction, type ExpenseBreakdownRow, type LowStockRow } from '@/lib/api/dashboard';
 import { getApiError } from '@/lib/api';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
-import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, RecentActivity, RevenueExpenseChart, SalesTrendChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
+import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, ProfitMarginSphere, RecentActivity, RevenueExpenseChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
 import { notify } from '@/components/ui/AppToaster';
 
 type PeriodKey = 'week' | 'month' | 'quarter' | 'year';
@@ -306,7 +306,6 @@ export default function DashboardPage() {
     { metric: availableMetrics.totalRevenue, href: permissions.includes('sales.view') ? '/dashboard/sales/invoices' : '/dashboard/reports?tab=sales' },
     { metric: availableMetrics.totalExpenses, href: '/dashboard/reports?tab=finance', invertTrend: true },
     { metric: availableMetrics.totalProfit, href: '/dashboard/reports?tab=finance' },
-    { metric: availableMetrics.profitMargin, href: '/dashboard/reports?tab=finance' },
     { metric: availableMetrics.cashOnHand, href: '/dashboard/reports?tab=finance' },
     { metric: availableMetrics.outstandingReceivables, href: '/dashboard/reports?tab=finance', invertTrend: true },
     { metric: availableMetrics.outstandingPayables, href: '/dashboard/reports?tab=finance', invertTrend: true },
@@ -342,11 +341,13 @@ export default function DashboardPage() {
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-[1.4fr_1fr]">
           <RevenueExpenseChart data={executive} currency={executive.currency} />
-          <SalesTrendChart data={executive} currency={executive.currency} />
+          <div className="grid min-w-0 gap-5">
+            <ExpenseBreakdown rows={expenseRows} currency={executive.currency} unavailable={expenseUnavailable} />
+            <ProfitMarginSphere metric={availableMetrics!.profitMargin} />
+          </div>
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-2">
-          <ExpenseBreakdown rows={expenseRows} currency={executive.currency} unavailable={expenseUnavailable} />
           <CashFlowPanel data={executive} currency={executive.currency} />
           <TopProducts data={executive} currency={executive.currency} />
           <InventoryAlerts rows={lowStockRows} total={lowStockTotal} canView={canViewInventory} canViewProducts={canViewProducts} unavailable={inventoryUnavailable} />
@@ -354,7 +355,7 @@ export default function DashboardPage() {
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-2">
           <RecentActivity transactions={transactions} unavailableSources={unavailableActivitySources} currency={executive.currency} />
-          <section className="rounded-2xl border border-violet-200/80 bg-violet-50/80 p-5 shadow-sm shadow-violet-950/[0.03] sm:p-6 dark:border-violet-900/60 dark:bg-[#211d2d] dark:shadow-black/20" aria-label="Dashboard data definitions">
+          <section className="rounded-2xl border border-violet-200/80 bg-violet-50/80 p-5 shadow-sm shadow-violet-950/[0.03] sm:p-6 dark:border-[#343b33] dark:bg-[#191d19] dark:shadow-black/20" aria-label="Dashboard data definitions">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-800 dark:text-emerald-300">{definitionsLanguage === 'sw' ? 'Mwongozo wa takwimu' : 'About these figures'}</p><h2 className="mt-1 text-base font-semibold text-[#292d27] dark:text-[#f0f1ed]">{definitionsLanguage === 'sw' ? 'Hesabu kwa lugha rahisi' : 'Clear numbers, real rules'}</h2><p className="mt-1 text-xs text-[#62675f] dark:text-[#afb5ac]">{definitionsLanguage === 'sw' ? 'Takwimu hizi zinamaanisha nini kwenye biashara yako.' : 'What each figure means for your business.'}</p></div>
               <div role="group" aria-label="Choose explanation language" className="inline-flex items-center gap-1 border-b border-violet-200 dark:border-violet-900/60">

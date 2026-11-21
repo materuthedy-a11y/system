@@ -10,7 +10,12 @@ import { PaymentsService } from '../payments/payments.service';
 
 function createPrismaMock() {
   return {
-    user: { findFirst: jest.fn().mockResolvedValue({ userRoles: [{ role: { name: 'Manager', isSystem: true } }], assignedLocations: [{ id: 'location-a' }] }) },
+    user: {
+      findFirst: jest.fn().mockResolvedValue({
+        userRoles: [{ role: { name: 'Manager', isSystem: true } }],
+        assignedLocations: [{ id: 'location-a' }],
+      }),
+    },
     location: { findFirst: jest.fn().mockResolvedValue(null) },
   };
 }
@@ -25,8 +30,9 @@ describe('Financial location filters', () => {
       {} as NotificationsService,
     );
 
-    await expect(service.getAllSalesInvoices('business-a', 'user-a', { locationId: 'location-b' }))
-      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getAllSalesInvoices('business-a', 'user-a', { locationId: 'location-b' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.location.findFirst).toHaveBeenCalledWith({
       where: { id: 'location-b', businessId: 'business-a' },
       select: { id: true },
@@ -42,8 +48,9 @@ describe('Financial location filters', () => {
       {} as InventoryService,
     );
 
-    await expect(service.getAllPurchaseOrders('business-a', 'user-a', { locationId: 'location-b' }))
-      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getAllPurchaseOrders('business-a', 'user-a', { locationId: 'location-b' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.location.findFirst).toHaveBeenCalledWith({
       where: { id: 'location-b', businessId: 'business-a' },
       select: { id: true },
@@ -52,10 +59,14 @@ describe('Financial location filters', () => {
 
   it('rejects a location outside the business for expense filters', async () => {
     const prisma = createPrismaMock();
-    const service = new ExpensesService(prisma as unknown as PrismaService, {} as NotificationsService);
+    const service = new ExpensesService(
+      prisma as unknown as PrismaService,
+      {} as NotificationsService,
+    );
 
-    await expect(service.listExpenses('business-a', 'user-a', { locationId: 'location-b' }))
-      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.listExpenses('business-a', 'user-a', { locationId: 'location-b' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.location.findFirst).toHaveBeenCalledWith({
       where: { id: 'location-b', businessId: 'business-a' },
       select: { id: true },
@@ -70,8 +81,9 @@ describe('Financial location filters', () => {
       {} as NotificationsService,
     );
 
-    await expect(service.getAllPayments('business-a', 'user-a', { locationId: 'location-b' }))
-      .rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getAllPayments('business-a', 'user-a', { locationId: 'location-b' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.location.findFirst).toHaveBeenCalledWith({
       where: { id: 'location-b', businessId: 'business-a' },
       select: { id: true },

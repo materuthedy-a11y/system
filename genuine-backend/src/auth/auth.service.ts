@@ -152,7 +152,10 @@ export class AuthService {
         await tx.userRole.create({ data: { userId: user.id, roleId: ownerRole.id } });
         const userWithDetails = await tx.user.findUniqueOrThrow({
           where: { id: user.id },
-          include: { userRoles: { include: { role: { include: { permissions: true } } } }, permissions: true },
+          include: {
+            userRoles: { include: { role: { include: { permissions: true } } } },
+            permissions: true,
+          },
         });
         const sessionId = uuid();
         const tokens = await this._generateTokens(
@@ -241,14 +244,26 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      await this.recordLoginFailure(user.businessId, user.id, ipAddress, userAgent, 'Inactive account');
+      await this.recordLoginFailure(
+        user.businessId,
+        user.id,
+        ipAddress,
+        userAgent,
+        'Inactive account',
+      );
       throw new UnauthorizedException('User account is deactivated');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isPasswordValid) {
       this.logger.warn(`[AUTH] Invalid password for ${normalizedEmail}`);
-      await this.recordLoginFailure(user.businessId, user.id, ipAddress, userAgent, 'Invalid credentials');
+      await this.recordLoginFailure(
+        user.businessId,
+        user.id,
+        ipAddress,
+        userAgent,
+        'Invalid credentials',
+      );
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -333,7 +348,12 @@ export class AuthService {
   async refreshToken(
     refreshTokenValue: string,
     userId: string,
-  ): Promise<Pick<AuthResponseDto, 'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'> & { refreshTokenCookie: string }> {
+  ): Promise<
+    Pick<
+      AuthResponseDto,
+      'accessToken' | 'expiresIn' | 'idleTimeoutSeconds' | 'idleExpiresAt' | 'absoluteExpiresAt'
+    > & { refreshTokenCookie: string }
+  > {
     this.logger.log(`[AUTH] Refresh token attempt for user: ${userId}`);
 
     let payload: any;
@@ -578,14 +598,16 @@ export class AuthService {
       if (consumed.count !== 1) {
         throw new UnauthorizedException('Invalid or expired reset token');
       }
-      await tx.auditLog.create({ data: {
-        businessId: user.businessId,
-        userId: user.id,
-        entityType: 'User',
-        entityId: user.id,
-        action: 'PASSWORD_RESET',
-        description: 'User reset their password using the account recovery flow',
-      } });
+      await tx.auditLog.create({
+        data: {
+          businessId: user.businessId,
+          userId: user.id,
+          entityType: 'User',
+          entityId: user.id,
+          action: 'PASSWORD_RESET',
+          description: 'User reset their password using the account recovery flow',
+        },
+      });
       await tx.userSession.deleteMany({ where: { userId: user.id } });
     });
 
@@ -622,14 +644,16 @@ export class AuthService {
         where: { id: userId },
         data: { passwordHash: hashedPassword },
       });
-      await tx.auditLog.create({ data: {
-        businessId: user.businessId,
-        userId,
-        entityType: 'User',
-        entityId: userId,
-        action: 'PASSWORD_CHANGE',
-        description: 'User changed their password',
-      } });
+      await tx.auditLog.create({
+        data: {
+          businessId: user.businessId,
+          userId,
+          entityType: 'User',
+          entityId: userId,
+          action: 'PASSWORD_CHANGE',
+          description: 'User changed their password',
+        },
+      });
       await tx.userSession.deleteMany({ where: { userId } });
     });
 
@@ -709,11 +733,16 @@ export class AuthService {
     });
   }
 
-  private _permissionKeys(user: { userRoles?: Array<{ role: { permissions: Array<{ key: string }> } }>; permissions?: Array<{ key: string }> }): string[] {
-    return [...new Set([
-      ...(user.userRoles || []).flatMap(({ role }) => role.permissions.map(({ key }) => key)),
-      ...(user.permissions || []).map(({ key }) => key),
-    ])];
+  private _permissionKeys(user: {
+    userRoles?: Array<{ role: { permissions: Array<{ key: string }> } }>;
+    permissions?: Array<{ key: string }>;
+  }): string[] {
+    return [
+      ...new Set([
+        ...(user.userRoles || []).flatMap(({ role }) => role.permissions.map(({ key }) => key)),
+        ...(user.permissions || []).map(({ key }) => key),
+      ]),
+    ];
   }
 
   private async _generateTokens(
@@ -854,7 +883,9 @@ export class AuthService {
       });
     }
     const supportedPermissionKeys = new Set(permissionsData.map(({ key }) => key));
-    const obsoletePermissions = existingPermissions.filter(({ key }) => !supportedPermissionKeys.has(key));
+    const obsoletePermissions = existingPermissions.filter(
+      ({ key }) => !supportedPermissionKeys.has(key),
+    );
     if (obsoletePermissions.length) {
       const obsoleteIds = obsoletePermissions.map(({ id }) => id);
       const rolesWithObsoletePermissions = await client.role.findMany({
@@ -862,17 +893,39 @@ export class AuthService {
         select: { id: true },
       });
       for (const role of rolesWithObsoletePermissions) {
-        const retained = await client.permission.findMany({ where: { businessId, roles: { some: { id: role.id } }, key: { in: [...supportedPermissionKeys] } }, select: { id: true } });
-        await client.role.update({ where: { id: role.id }, data: { permissions: { set: retained.map(({ id }) => ({ id })) } } });
-        await client.userSession.deleteMany({ where: { user: { userRoles: { some: { roleId: role.id } } } } });
+        const retained = await client.permission.findMany({
+          where: {
+            businessId,
+            roles: { some: { id: role.id } },
+            key: { in: [...supportedPermissionKeys] },
+          },
+          select: { id: true },
+        });
+        await client.role.update({
+          where: { id: role.id },
+          data: { permissions: { set: retained.map(({ id }) => ({ id })) } },
+        });
+        await client.userSession.deleteMany({
+          where: { user: { userRoles: { some: { roleId: role.id } } } },
+        });
       }
       const usersWithObsoletePermissions = await client.user.findMany({
         where: { businessId, permissions: { some: { id: { in: obsoleteIds } } } },
         select: { id: true },
       });
       for (const user of usersWithObsoletePermissions) {
-        const retained = await client.permission.findMany({ where: { businessId, users: { some: { id: user.id } }, key: { in: [...supportedPermissionKeys] } }, select: { id: true } });
-        await client.user.update({ where: { id: user.id }, data: { permissions: { set: retained.map(({ id }) => ({ id })) } } });
+        const retained = await client.permission.findMany({
+          where: {
+            businessId,
+            users: { some: { id: user.id } },
+            key: { in: [...supportedPermissionKeys] },
+          },
+          select: { id: true },
+        });
+        await client.user.update({
+          where: { id: user.id },
+          data: { permissions: { set: retained.map(({ id }) => ({ id })) } },
+        });
         await client.userSession.deleteMany({ where: { userId: user.id } });
       }
       await client.permission.deleteMany({ where: { id: { in: obsoleteIds } } });
@@ -883,8 +936,15 @@ export class AuthService {
       if (definition) {
         const title = definition.action.charAt(0).toUpperCase() + definition.action.slice(1);
         const name = `${definition.category} · ${title}`;
-        if (permission.name !== name || permission.category !== definition.category || permission.action !== definition.action) {
-          await client.permission.update({ where: { id: permission.id }, data: { name, category: definition.category, action: definition.action } });
+        if (
+          permission.name !== name ||
+          permission.category !== definition.category ||
+          permission.action !== definition.action
+        ) {
+          await client.permission.update({
+            where: { id: permission.id },
+            data: { name, category: definition.category, action: definition.action },
+          });
         }
       }
     }
@@ -898,7 +958,8 @@ export class AuthService {
       },
       {
         name: 'Admin',
-        description: 'Manage workspace operations and roles; Owner assignment and user deletion stay Owner-only.',
+        description:
+          'Manage workspace operations and roles; Owner assignment and user deletion stay Owner-only.',
         isSystem: true,
         permissionKeys: createdPermissions
           .filter((p) => p.key !== 'users.delete')
@@ -945,7 +1006,8 @@ export class AuthService {
       },
       {
         name: 'Salesperson',
-        description: 'Create and issue sales, find products and customers, and record customer payments.',
+        description:
+          'Create and issue sales, find products and customers, and record customer payments.',
         isSystem: true,
         permissionKeys: [
           'products.view',
@@ -969,24 +1031,32 @@ export class AuthService {
       const missingRolePermissions = desired.filter(
         (permission) => !currentPermissionIds.has(permission.id),
       );
-      const obsoleteRolePermissionIds = current?.permissions
-        .filter((permission) => !roleConfig.permissionKeys.includes(permission.key))
-        .map((permission) => permission.id) ?? [];
+      const obsoleteRolePermissionIds =
+        current?.permissions
+          .filter((permission) => !roleConfig.permissionKeys.includes(permission.key))
+          .map((permission) => permission.id) ?? [];
       if (current) {
-        if (missingRolePermissions.length || obsoleteRolePermissionIds.length || current.description !== roleConfig.description) {
-          const permissionsChanged = missingRolePermissions.length > 0 || obsoleteRolePermissionIds.length > 0;
+        if (
+          missingRolePermissions.length ||
+          obsoleteRolePermissionIds.length ||
+          current.description !== roleConfig.description
+        ) {
+          const permissionsChanged =
+            missingRolePermissions.length > 0 || obsoleteRolePermissionIds.length > 0;
           const updatedRole = await client.role.update({
-                where: { id: current.id },
-                data: {
-                  description: roleConfig.description,
-                  permissions: {
-                    set: desired.map((permission) => ({ id: permission.id })),
-                  },
-                },
-                include: { permissions: true },
-              });
+            where: { id: current.id },
+            data: {
+              description: roleConfig.description,
+              permissions: {
+                set: desired.map((permission) => ({ id: permission.id })),
+              },
+            },
+            include: { permissions: true },
+          });
           if (permissionsChanged) {
-            await client.userSession.deleteMany({ where: { user: { userRoles: { some: { roleId: current.id } } } } });
+            await client.userSession.deleteMany({
+              where: { user: { userRoles: { some: { roleId: current.id } } } },
+            });
           }
           roles.push(updatedRole);
         } else {
@@ -1011,16 +1081,29 @@ export class AuthService {
     // Repair custom roles created before permission dependencies were enforced.
     // Keep each role internally complete so its grants still make sense on their own.
     const dependencies: Record<string, string[]> = {
-      'products.edit': ['products.view'], 'products.delete': ['products.view'],
-      'suppliers.edit': ['suppliers.view'], 'suppliers.delete': ['suppliers.view'],
-      'customers.edit': ['customers.view'], 'customers.delete': ['customers.view'],
-      'users.edit': ['users.view'], 'users.delete': ['users.view'],
+      'products.edit': ['products.view'],
+      'products.delete': ['products.view'],
+      'suppliers.edit': ['suppliers.view'],
+      'suppliers.delete': ['suppliers.view'],
+      'customers.edit': ['customers.view'],
+      'customers.delete': ['customers.view'],
+      'users.edit': ['users.view'],
+      'users.delete': ['users.view'],
       'purchases.create': ['products.view', 'suppliers.view'],
-      'purchases.edit': ['purchases.view'], 'purchases.approve': ['purchases.view'], 'purchases.cancel': ['purchases.view'],
+      'purchases.edit': ['purchases.view'],
+      'purchases.approve': ['purchases.view'],
+      'purchases.cancel': ['purchases.view'],
       'sales.create': ['products.view', 'customers.view'],
-      'sales.edit': ['sales.view'], 'sales.discount': ['sales.view'], 'sales.approve': ['sales.view'], 'sales.cancel': ['sales.view'],
-      'inventory.adjust': ['inventory.view'], 'inventory.transfer': ['inventory.view'],
-      'expenses.edit': ['expenses.view'], 'expenses.delete': ['expenses.view'], 'expenses.approve': ['expenses.view'], 'expenses.pay': ['expenses.view'],
+      'sales.edit': ['sales.view'],
+      'sales.discount': ['sales.view'],
+      'sales.approve': ['sales.view'],
+      'sales.cancel': ['sales.view'],
+      'inventory.adjust': ['inventory.view'],
+      'inventory.transfer': ['inventory.view'],
+      'expenses.edit': ['expenses.view'],
+      'expenses.delete': ['expenses.view'],
+      'expenses.approve': ['expenses.view'],
+      'expenses.pay': ['expenses.view'],
       'reports.export': ['reports.view'],
       'audit.export': ['audit.view'],
     };
@@ -1031,34 +1114,60 @@ export class AuthService {
         changed = false;
         for (const [key, required] of Object.entries(dependencies)) {
           if (normalized.has(key) && required.some((dependency) => !normalized.has(dependency))) {
-            normalized.delete(key); changed = true;
+            normalized.delete(key);
+            changed = true;
           }
         }
-        if (normalized.has('payments.create') && !['sales.view', 'purchases.view', 'expenses.view'].some((key) => normalized.has(key))) {
-          normalized.delete('payments.create'); changed = true;
+        if (
+          normalized.has('payments.create') &&
+          !['sales.view', 'purchases.view', 'expenses.view'].some((key) => normalized.has(key))
+        ) {
+          normalized.delete('payments.create');
+          changed = true;
         }
       }
       return normalized;
     };
-    const currentRoles = await client.role.findMany({ where: { businessId }, include: { permissions: { select: { id: true, key: true } } } });
+    const currentRoles = await client.role.findMany({
+      where: { businessId },
+      include: { permissions: { select: { id: true, key: true } } },
+    });
     const permissionIdByKey = new Map(createdPermissions.map(({ id, key }) => [key, id] as const));
     for (const role of currentRoles.filter(({ isSystem }) => !isSystem)) {
       const normalized = normalizeGrants(role.permissions.map(({ key }) => key));
       if (normalized.size !== role.permissions.length) {
-        await client.role.update({ where: { id: role.id }, data: { permissions: { set: [...normalized].flatMap((key) => { const id = permissionIdByKey.get(key); return id ? [{ id }] : []; }) } } });
-        await client.userSession.deleteMany({ where: { user: { userRoles: { some: { roleId: role.id } } } } });
+        await client.role.update({
+          where: { id: role.id },
+          data: {
+            permissions: {
+              set: [...normalized].flatMap((key) => {
+                const id = permissionIdByKey.get(key);
+                return id ? [{ id }] : [];
+              }),
+            },
+          },
+        });
+        await client.userSession.deleteMany({
+          where: { user: { userRoles: { some: { roleId: role.id } } } },
+        });
       }
     }
     const usersWithDirectPermissions = await client.user.findMany({
       where: { businessId, permissions: { some: {} } },
-      include: { permissions: { select: { id: true, key: true } }, userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } } },
+      include: {
+        permissions: { select: { id: true, key: true } },
+        userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } },
+      },
     });
     for (const user of usersWithDirectPermissions) {
       const roleKeys = user.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key));
       const allowed = normalizeGrants([...roleKeys, ...user.permissions.map(({ key }) => key)]);
       const retainedDirect = user.permissions.filter(({ key }) => allowed.has(key));
       if (retainedDirect.length !== user.permissions.length) {
-        await client.user.update({ where: { id: user.id }, data: { permissions: { set: retainedDirect.map(({ id }) => ({ id })) } } });
+        await client.user.update({
+          where: { id: user.id },
+          data: { permissions: { set: retainedDirect.map(({ id }) => ({ id })) } },
+        });
         await client.userSession.deleteMany({ where: { userId: user.id } });
       }
     }
@@ -1076,16 +1185,18 @@ export class AuthService {
     reason: string,
   ) {
     try {
-      await this.prisma.auditLog.create({ data: {
-        businessId,
-        userId,
-        entityType: 'UserSession',
-        entityId: userId,
-        action: 'LOGIN_FAILED',
-        ipAddress,
-        userAgent: userAgent?.slice(0, 500),
-        description: `Sign-in attempt rejected: ${reason}`,
-      } });
+      await this.prisma.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          entityType: 'UserSession',
+          entityId: userId,
+          action: 'LOGIN_FAILED',
+          ipAddress,
+          userAgent: userAgent?.slice(0, 500),
+          description: `Sign-in attempt rejected: ${reason}`,
+        },
+      });
     } catch {
       // Never turn an authentication rejection into a server error because the audit store failed.
     }

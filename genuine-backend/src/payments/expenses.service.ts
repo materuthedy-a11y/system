@@ -202,7 +202,9 @@ export class ExpensesService {
   }
 
   async getExpenseById(businessId: string, id: string, userId?: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const row = await this.prisma.expense.findFirst({
       where: { id, businessId, ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}) },
       include: this.expenseInclude(),
@@ -213,7 +215,11 @@ export class ExpensesService {
       _sum: { amount: true },
     });
     const paidAmount = roundMoney(paid._sum.amount || 0);
-    return { ...this.mapExpense(row), paidAmount, balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)) };
+    return {
+      ...this.mapExpense(row),
+      paidAmount,
+      balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)),
+    };
   }
 
   async getExpenseOptions(businessId: string, userId: string) {
@@ -225,7 +231,11 @@ export class ExpensesService {
         select: { id: true, name: true, code: true, budgetLimit: true, budgetPeriod: true },
       }),
       this.prisma.location.findMany({
-        where: { businessId, isActive: true, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
+        where: {
+          businessId,
+          isActive: true,
+          ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+        },
         orderBy: { name: 'asc' },
         select: { id: true, name: true, code: true },
       }),
@@ -241,7 +251,13 @@ export class ExpensesService {
       }),
       this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } }),
     ]);
-    return { categories, locations, suppliers, paymentMethods, currency: business?.currency || 'TZS' };
+    return {
+      categories,
+      locations,
+      suppliers,
+      paymentMethods,
+      currency: business?.currency || 'TZS',
+    };
   }
 
   async listExpenses(businessId: string, userId: string, filter: ExpenseFilterDto) {
@@ -264,17 +280,29 @@ export class ExpensesService {
       businessId,
       ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       AND: [
-        ...(filter.categoryId ? [{ OR: [
-          { categoryId: filter.categoryId },
-          { items: { some: { categoryId: filter.categoryId } } },
-        ] } satisfies Prisma.ExpenseWhereInput] : []),
-        ...(search ? [{ OR: [
-          { expenseNumber: { contains: search, mode: 'insensitive' as const } },
-          { description: { contains: search, mode: 'insensitive' as const } },
-          { reference: { contains: search, mode: 'insensitive' as const } },
-          { category: { name: { contains: search, mode: 'insensitive' as const } } },
-          { supplier: { name: { contains: search, mode: 'insensitive' as const } } },
-        ] } satisfies Prisma.ExpenseWhereInput] : []),
+        ...(filter.categoryId
+          ? [
+              {
+                OR: [
+                  { categoryId: filter.categoryId },
+                  { items: { some: { categoryId: filter.categoryId } } },
+                ],
+              } satisfies Prisma.ExpenseWhereInput,
+            ]
+          : []),
+        ...(search
+          ? [
+              {
+                OR: [
+                  { expenseNumber: { contains: search, mode: 'insensitive' as const } },
+                  { description: { contains: search, mode: 'insensitive' as const } },
+                  { reference: { contains: search, mode: 'insensitive' as const } },
+                  { category: { name: { contains: search, mode: 'insensitive' as const } } },
+                  { supplier: { name: { contains: search, mode: 'insensitive' as const } } },
+                ],
+              } satisfies Prisma.ExpenseWhereInput,
+            ]
+          : []),
       ],
       ...(filter.status && { status: filter.status }),
       ...(filter.supplierId && { supplierId: filter.supplierId }),
@@ -307,16 +335,33 @@ export class ExpensesService {
       this.prisma.expense.count({ where }),
     ]);
     const ids = data.map((row) => row.id);
-    const paidRows = ids.length ? await this.prisma.payment.groupBy({
-      by: ['expenseId'],
-      where: { businessId, expenseId: { in: ids }, status: { in: ACTIVE_EXPENSE_PAYMENT_STATUSES } },
-      _sum: { amount: true },
-    }) : [];
-    const paidByExpense = new Map(paidRows.map((row) => [row.expenseId, roundMoney(row._sum.amount || 0)]));
-    return { data: data.map((row) => {
-      const paidAmount = paidByExpense.get(row.id) || 0;
-      return { ...this.mapExpense(row), paidAmount, balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)) };
-    }), total, page, limit };
+    const paidRows = ids.length
+      ? await this.prisma.payment.groupBy({
+          by: ['expenseId'],
+          where: {
+            businessId,
+            expenseId: { in: ids },
+            status: { in: ACTIVE_EXPENSE_PAYMENT_STATUSES },
+          },
+          _sum: { amount: true },
+        })
+      : [];
+    const paidByExpense = new Map(
+      paidRows.map((row) => [row.expenseId, roundMoney(row._sum.amount || 0)]),
+    );
+    return {
+      data: data.map((row) => {
+        const paidAmount = paidByExpense.get(row.id) || 0;
+        return {
+          ...this.mapExpense(row),
+          paidAmount,
+          balanceDue: roundMoney(Math.max(0, row.amount - paidAmount)),
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
   }
 
   async updateExpense(businessId: string, userId: string, id: string, dto: UpdateExpenseDto) {
@@ -692,7 +737,9 @@ export class ExpensesService {
       if (url.protocol !== 'https:' || url.username || url.password)
         throw new Error('invalid URL scheme or credentials');
     } catch {
-      throw new BadRequestException('Expense attachment must be a valid HTTPS URL without embedded credentials');
+      throw new BadRequestException(
+        'Expense attachment must be a valid HTTPS URL without embedded credentials',
+      );
     }
   }
 

@@ -40,6 +40,27 @@ type MovementLayer = {
 };
 const EPSILON = 1e-8;
 const round = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
+const startOfUtcDay = (date: Date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+const startOfBusinessDay = (date: Date, timezone: string) => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(parts.find((item) => item.type === type)?.value);
+    const year = part('year');
+    const month = part('month');
+    const day = part('day');
+    if (!year || !month || !day) return startOfUtcDay(date);
+    return new Date(Date.UTC(year, month - 1, day));
+  } catch {
+    return startOfUtcDay(date);
+  }
+};
 
 @Injectable()
 export class InventoryService {
@@ -49,22 +70,47 @@ export class InventoryService {
   ) {}
 
   async getStockBalances(businessId: string, userId: string, filter: StockBalanceQueryDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (userId && filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (userId && filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
     const search = filter.search?.trim();
     const where: Prisma.StockBalanceWhereInput = {
-      product: { businessId, ...(search ? { OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-      ] } : {}) },
-      location: { businessId, ...(accessibleIds ? { id: { in: accessibleIds } } : {}), ...(filter.locationId ? { id: filter.locationId } : {}) },
+      product: {
+        businessId,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { sku: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      location: {
+        businessId,
+        ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+        ...(filter.locationId ? { id: filter.locationId } : {}),
+      },
     };
     const [data, total] = await Promise.all([
       this.prisma.stockBalance.findMany({
-        where, skip, take: limit,
+        where,
+        skip,
+        take: limit,
         include: {
-          product: { select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true } },
+          product: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              minimumStock: true,
+              reorderLevel: true,
+              buyingPrice: true,
+            },
+          },
           location: { select: { id: true, name: true, code: true } },
         },
         orderBy: [{ product: { name: 'asc' } }, { location: { name: 'asc' } }],
@@ -76,15 +122,28 @@ export class InventoryService {
 
   /** Inventory-only picklists avoid requiring the separate Products permission. */
   async getInventoryOptions(businessId: string, userId: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const [products, locations] = await Promise.all([
       this.prisma.product.findMany({
         where: { businessId, status: 'ACTIVE' },
-        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          minimumStock: true,
+          reorderLevel: true,
+          buyingPrice: true,
+        },
         orderBy: { name: 'asc' },
       }),
       this.prisma.location.findMany({
-        where: { businessId, isActive: true, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
+        where: {
+          businessId,
+          isActive: true,
+          ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+        },
         select: { id: true, name: true, code: true, type: true, isActive: true },
         orderBy: { name: 'asc' },
       }),
@@ -93,34 +152,61 @@ export class InventoryService {
   }
 
   async getReorderPoints(businessId: string, userId: string, filter: ReorderPointQueryDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const { page, limit, skip } = this.pagination(filter);
     const search = filter.search?.trim();
     const where: Prisma.ProductWhereInput = {
       businessId,
       status: 'ACTIVE',
-      ...(search ? { OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-      ] } : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { sku: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
     const [products, total] = await Promise.all([
       this.prisma.product.findMany({
-        where, skip, take: limit,
-        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          minimumStock: true,
+          reorderLevel: true,
+          buyingPrice: true,
+        },
         orderBy: { name: 'asc' },
       }),
       this.prisma.product.count({ where }),
     ]);
-    const balances = products.length ? await this.prisma.stockBalance.groupBy({
-      by: ['productId'],
-      where: { productId: { in: products.map((product) => product.id) }, location: { businessId, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) } },
-      _sum: { quantity: true },
-    }) : [];
-    const quantityByProduct = new Map(balances.map((balance) => [balance.productId, balance._sum.quantity ?? 0]));
+    const balances = products.length
+      ? await this.prisma.stockBalance.groupBy({
+          by: ['productId'],
+          where: {
+            productId: { in: products.map((product) => product.id) },
+            location: { businessId, ...(accessibleIds ? { id: { in: accessibleIds } } : {}) },
+          },
+          _sum: { quantity: true },
+        })
+      : [];
+    const quantityByProduct = new Map(
+      balances.map((balance) => [balance.productId, balance._sum.quantity ?? 0]),
+    );
     return {
-      data: products.map((product) => ({ ...product, currentStock: quantityByProduct.get(product.id) ?? 0 })),
-      total, page, limit,
+      data: products.map((product) => ({
+        ...product,
+        currentStock: quantityByProduct.get(product.id) ?? 0,
+      })),
+      total,
+      page,
+      limit,
     };
   }
 
@@ -133,7 +219,9 @@ export class InventoryService {
     if (dto.minimumStock === undefined && dto.reorderLevel === undefined)
       throw new BadRequestException('Provide minimumStock or reorderLevel');
     return this.serializableTransaction(async (tx) => {
-      const product = await tx.product.findFirst({ where: { id: productId, businessId, status: 'ACTIVE' } });
+      const product = await tx.product.findFirst({
+        where: { id: productId, businessId, status: 'ACTIVE' },
+      });
       if (!product) throw new NotFoundException('Active product not found');
       const minimumStock = dto.minimumStock ?? product.minimumStock;
       const reorderLevel = dto.reorderLevel ?? product.reorderLevel;
@@ -151,33 +239,71 @@ export class InventoryService {
       const updated = await tx.product.update({
         where: { id: product.id },
         data: { minimumStock, reorderLevel },
-        select: { id: true, name: true, sku: true, minimumStock: true, reorderLevel: true, buyingPrice: true },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          minimumStock: true,
+          reorderLevel: true,
+          buyingPrice: true,
+        },
       });
-      await this.audit(tx, businessId, userId, 'UPDATE_REORDER_POINTS', 'Product', product.id,
+      await this.audit(
+        tx,
+        businessId,
+        userId,
+        'UPDATE_REORDER_POINTS',
+        'Product',
+        product.id,
         { minimumStock: product.minimumStock, reorderLevel: product.reorderLevel },
-        { minimumStock: updated.minimumStock, reorderLevel: updated.reorderLevel });
+        { minimumStock: updated.minimumStock, reorderLevel: updated.reorderLevel },
+      );
       return updated;
     });
   }
 
   async listStockAdjustments(businessId: string, userId: string, filter: InventoryListQueryDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const { page, limit, skip } = this.pagination(filter);
     const search = filter.search?.trim();
     const where: Prisma.StockAdjustmentWhereInput = {
       businessId,
-      ...(accessibleIds ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } } : {}),
+      ...(accessibleIds
+        ? {
+            items: {
+              some: { locationId: { in: accessibleIds } },
+              every: { locationId: { in: accessibleIds } },
+            },
+          }
+        : {}),
       ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.locationId ? { AND: [{ items: { some: { locationId: filter.locationId } } }] } : {}),
-      ...(search ? { OR: [
-        { adjustmentNumber: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-      ] } : {}),
+      ...(filter.locationId
+        ? { AND: [{ items: { some: { locationId: filter.locationId } } }] }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { adjustmentNumber: { contains: search, mode: 'insensitive' } },
+              { notes: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.stockAdjustment.findMany({
-        where, skip, take: limit,
-        include: { items: { include: { product: { select: { id: true, name: true, sku: true } }, location: { select: { id: true, name: true } } } } },
+        where,
+        skip,
+        take: limit,
+        include: {
+          items: {
+            include: {
+              product: { select: { id: true, name: true, sku: true } },
+              location: { select: { id: true, name: true } },
+            },
+          },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
       this.prisma.stockAdjustment.count({ where }),
@@ -186,26 +312,49 @@ export class InventoryService {
   }
 
   async listStockTransfers(businessId: string, userId: string, filter: InventoryListQueryDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (userId && filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (userId && filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
     const search = filter.search?.trim();
     const where: Prisma.StockTransferWhereInput = {
       businessId,
       ...(filter.status ? { status: filter.status } : {}),
       AND: [
-        ...(accessibleIds ? [{ fromLocationId: { in: accessibleIds } }, { toLocationId: { in: accessibleIds } }] : []),
-        ...(filter.locationId ? [{ OR: [{ fromLocationId: filter.locationId }, { toLocationId: filter.locationId }] } satisfies Prisma.StockTransferWhereInput] : []),
-        ...(search ? [{ OR: [
-          { transferNumber: { contains: search, mode: 'insensitive' as const } },
-          { notes: { contains: search, mode: 'insensitive' as const } },
-        ] } satisfies Prisma.StockTransferWhereInput] : []),
+        ...(accessibleIds
+          ? [{ fromLocationId: { in: accessibleIds } }, { toLocationId: { in: accessibleIds } }]
+          : []),
+        ...(filter.locationId
+          ? [
+              {
+                OR: [{ fromLocationId: filter.locationId }, { toLocationId: filter.locationId }],
+              } satisfies Prisma.StockTransferWhereInput,
+            ]
+          : []),
+        ...(search
+          ? [
+              {
+                OR: [
+                  { transferNumber: { contains: search, mode: 'insensitive' as const } },
+                  { notes: { contains: search, mode: 'insensitive' as const } },
+                ],
+              } satisfies Prisma.StockTransferWhereInput,
+            ]
+          : []),
       ],
     };
     const [data, total] = await Promise.all([
       this.prisma.stockTransfer.findMany({
-        where, skip, take: limit,
-        include: { fromLocation: { select: { id: true, name: true, code: true } }, toLocation: { select: { id: true, name: true, code: true } }, items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+        where,
+        skip,
+        take: limit,
+        include: {
+          fromLocation: { select: { id: true, name: true, code: true } },
+          toLocation: { select: { id: true, name: true, code: true } },
+          items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
       this.prisma.stockTransfer.count({ where }),
@@ -214,7 +363,9 @@ export class InventoryService {
   }
 
   async listPhysicalCounts(businessId: string, userId: string, filter: InventoryListQueryDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const { page, limit, skip } = this.pagination(filter);
     const search = filter.search?.trim();
     const where: Prisma.PhysicalCountWhereInput = {
@@ -222,15 +373,24 @@ export class InventoryService {
       ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       ...(filter.locationId ? { AND: [{ locationId: filter.locationId }] } : {}),
       ...(filter.status ? { status: filter.status } : {}),
-      ...(search ? { OR: [
-        { countNumber: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
-      ] } : {}),
+      ...(search
+        ? {
+            OR: [
+              { countNumber: { contains: search, mode: 'insensitive' } },
+              { notes: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.physicalCount.findMany({
-        where, skip, take: limit,
-        include: { location: { select: { id: true, name: true, code: true } }, items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
+        where,
+        skip,
+        take: limit,
+        include: {
+          location: { select: { id: true, name: true, code: true } },
+          items: { include: { product: { select: { id: true, name: true, sku: true } } } },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
       this.prisma.physicalCount.count({ where }),
@@ -259,7 +419,9 @@ export class InventoryService {
   async createStockAdjustment(businessId: string, userId: string, dto: CreateStockAdjustmentDto) {
     const allowed = await accessibleLocationIds(this.prisma, businessId, userId);
     if (allowed && dto.items.some((item) => !allowed.includes(item.locationId)))
-      throw new ForbiddenException('You do not have access to one or more locations in this adjustment');
+      throw new ForbiddenException(
+        'You do not have access to one or more locations in this adjustment',
+      );
     this.assertUniqueLines(
       dto.items,
       (i) => `${i.productId}:${i.locationId}:${i.batchNumber || ''}`,
@@ -325,13 +487,20 @@ export class InventoryService {
   }
 
   async getStockAdjustmentById(businessId: string, id: string, userId?: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const result = await this.prisma.stockAdjustment.findFirst({
       where: {
         id,
         businessId,
         ...(accessibleIds
-          ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } }
+          ? {
+              items: {
+                some: { locationId: { in: accessibleIds } },
+                every: { locationId: { in: accessibleIds } },
+              },
+            }
           : {}),
       },
       include: { items: { include: { product: true, location: true } } },
@@ -499,8 +668,13 @@ export class InventoryService {
         });
         if (!product) throw new NotFoundException(`Active product ${line.productId} not found`);
         const baseUnit = product.defaultUnit?.name || 'UNIT';
-        if (line.unit?.trim() && line.unit.trim().toLocaleLowerCase() !== baseUnit.toLocaleLowerCase()) {
-          throw new BadRequestException(`Inventory transfers use the product base unit (${baseUnit}); convert alternate units before transferring`);
+        if (
+          line.unit?.trim() &&
+          line.unit.trim().toLocaleLowerCase() !== baseUnit.toLocaleLowerCase()
+        ) {
+          throw new BadRequestException(
+            `Inventory transfers use the product base unit (${baseUnit}); convert alternate units before transferring`,
+          );
         }
         items.push({
           productId: product.id,
@@ -540,9 +714,17 @@ export class InventoryService {
   }
 
   async getStockTransferById(businessId: string, id: string, userId?: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const result = await this.prisma.stockTransfer.findFirst({
-      where: { id, businessId, ...(accessibleIds ? { fromLocationId: { in: accessibleIds }, toLocationId: { in: accessibleIds } } : {}) },
+      where: {
+        id,
+        businessId,
+        ...(accessibleIds
+          ? { fromLocationId: { in: accessibleIds }, toLocationId: { in: accessibleIds } }
+          : {}),
+      },
       include: { fromLocation: true, toLocation: true, items: { include: { product: true } } },
     });
     if (!result) throw new NotFoundException('Stock transfer not found');
@@ -716,6 +898,8 @@ export class InventoryService {
       const now = new Date();
       const countNumber = await this.nextNumber(tx, businessId, 'CNT', now);
       const items = [];
+      let varianceCount = 0;
+      let totalVarianceAmount = 0;
       for (const line of dto.items) {
         this.assertFinite(line.countedQuantity, 'countedQuantity');
         if (line.countedQuantity < 0)
@@ -729,6 +913,10 @@ export class InventoryService {
         });
         const systemQuantity = round(stock?.quantity || 0);
         const variance = round(line.countedQuantity - systemQuantity);
+        if (Math.abs(variance) > EPSILON) {
+          varianceCount += 1;
+          totalVarianceAmount += Math.abs(variance) * (product.buyingPrice || 0);
+        }
         items.push({
           productId: product.id,
           systemQuantity,
@@ -746,6 +934,8 @@ export class InventoryService {
           status: 'DRAFT',
           createdBy: userId,
           notes: dto.notes,
+          varianceCount,
+          totalVarianceAmount: round(totalVarianceAmount),
           items: { create: items },
         },
         include: { location: true, items: { include: { product: true } } },
@@ -756,7 +946,9 @@ export class InventoryService {
   }
 
   async getPhysicalCountById(businessId: string, id: string, userId?: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const result = await this.prisma.physicalCount.findFirst({
       where: { id, businessId, ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}) },
       include: { location: true, items: { include: { product: true } } },
@@ -872,9 +1064,16 @@ export class InventoryService {
     return result;
   }
 
-  async getStockValuationReport(businessId: string, userId: string, filter: StockValuationReportDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+  async getStockValuationReport(
+    businessId: string,
+    userId: string,
+    filter: StockValuationReportDto,
+  ) {
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
     const products = await this.prisma.product.findMany({
       where: { businessId, ...(filter.productId ? { id: filter.productId } : {}) },
@@ -984,8 +1183,11 @@ export class InventoryService {
   }
 
   async getLowStockReport(businessId: string, userId: string, filter: LowStockReportDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
     const [products, locations, settings] = await Promise.all([
       this.prisma.product.findMany({
@@ -995,7 +1197,17 @@ export class InventoryService {
           ...(filter.productId ? { id: filter.productId } : {}),
         },
         include: {
-          stocks: { where: accessibleIds || filter.locationId ? { locationId: { ...(accessibleIds ? { in: accessibleIds } : {}), ...(filter.locationId ? { equals: filter.locationId } : {}) } } : undefined },
+          stocks: {
+            where:
+              accessibleIds || filter.locationId
+                ? {
+                    locationId: {
+                      ...(accessibleIds ? { in: accessibleIds } : {}),
+                      ...(filter.locationId ? { equals: filter.locationId } : {}),
+                    },
+                  }
+                : undefined,
+          },
         },
         orderBy: { name: 'asc' },
       }),
@@ -1008,7 +1220,10 @@ export class InventoryService {
         },
         select: { id: true, name: true },
       }),
-      this.prisma.businessSettings.findUnique({ where: { businessId }, select: { lowStockThreshold: true } }),
+      this.prisma.businessSettings.findUnique({
+        where: { businessId },
+        select: { lowStockThreshold: true },
+      }),
     ]);
     const globalThreshold = settings?.lowStockThreshold ?? 0;
     const usageSince = new Date(Date.now() - 30 * 86400000);
@@ -1067,10 +1282,25 @@ export class InventoryService {
   }
 
   async getStockExpiryReport(businessId: string, userId: string, filter: ExpiryReportDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
-    const asOf = filter.asOfDate ? new Date(filter.asOfDate) : new Date();
+    const requestedAsOf = filter.asOfDate ? new Date(filter.asOfDate) : new Date();
+    if (!Number.isFinite(requestedAsOf.getTime()))
+      throw new BadRequestException('Invalid as-of date');
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { timezone: true },
+    });
+    const timezone = business?.timezone || 'UTC';
+    const asOfIsCalendarDate =
+      typeof filter.asOfDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(filter.asOfDate);
+    const asOf = asOfIsCalendarDate
+      ? startOfUtcDay(requestedAsOf)
+      : startOfBusinessDay(requestedAsOf, timezone);
     const cutoffDays =
       filter.status === 'EXPIRING_7_DAYS'
         ? 7
@@ -1079,19 +1309,34 @@ export class InventoryService {
           : filter.status === 'EXPIRING_90_DAYS'
             ? 90
             : undefined;
-    const layers = await this.getCurrentLayers(businessId, filter.productId, filter.locationId, accessibleIds || undefined);
+    const locationRows = await this.prisma.location.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+        ...(filter.locationId ? { id: filter.locationId } : {}),
+      },
+      select: { id: true },
+    });
+    const reportLocationIds = locationRows.map((location) => location.id);
+    const layers = await this.getCurrentLayers(
+      businessId,
+      filter.productId,
+      undefined,
+      reportLocationIds,
+    );
     const untracked = await this.getUntrackedQuantity(
       businessId,
       layers,
       filter.productId,
-      filter.locationId,
+      reportLocationIds,
       true,
     );
     const rows = layers
       .filter((x) => !x.untracked && x.quantity > EPSILON && x.expiryDate)
       .map((x) => {
         const expiry = x.expiryDate!;
-        const daysUntilExpiry = Math.floor((expiry.getTime() - asOf.getTime()) / 86400000);
+        const daysUntilExpiry = (startOfUtcDay(expiry).getTime() - asOf.getTime()) / 86400000;
         return {
           ...x,
           quantity: round(x.quantity),
@@ -1113,21 +1358,43 @@ export class InventoryService {
       limit,
       asOfDate: asOf,
       untrackedExpiryQuantity: untracked.quantity,
+      untrackedExpiryQuantityByUnit: untracked.quantityByUnit,
       untrackedExpiryBalances: untracked.balances,
     };
   }
 
   async getStockAgeingReport(businessId: string, userId: string, filter: StockAgeingReportDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
-    const asOf = filter.asOfDate ? new Date(filter.asOfDate) : new Date();
-    const layers = await this.getCurrentLayers(businessId, filter.productId, filter.locationId, accessibleIds || undefined);
+    const requestedAsOf = filter.asOfDate ? new Date(filter.asOfDate) : new Date();
+    if (!Number.isFinite(requestedAsOf.getTime()))
+      throw new BadRequestException('Invalid as-of date');
+    const asOf = startOfUtcDay(requestedAsOf);
+    const locationRows = await this.prisma.location.findMany({
+      where: {
+        businessId,
+        isActive: true,
+        ...(accessibleIds ? { id: { in: accessibleIds } } : {}),
+        ...(filter.locationId ? { id: filter.locationId } : {}),
+      },
+      select: { id: true },
+    });
+    const reportLocationIds = locationRows.map((location) => location.id);
+    const layers = await this.getCurrentLayers(
+      businessId,
+      filter.productId,
+      undefined,
+      reportLocationIds,
+    );
     const untracked = await this.getUntrackedQuantity(
       businessId,
       layers,
       filter.productId,
-      filter.locationId,
+      reportLocationIds,
       false,
     );
     const rows = layers
@@ -1135,7 +1402,7 @@ export class InventoryService {
       .map((x) => {
         const ageDays = Math.max(
           0,
-          Math.floor((asOf.getTime() - x.receivedAt.getTime()) / 86400000),
+          (asOf.getTime() - startOfUtcDay(x.receivedAt).getTime()) / 86400000,
         );
         const bucket =
           ageDays <= 30
@@ -1164,13 +1431,21 @@ export class InventoryService {
       asOfDate: asOf,
       totalValue: round(rows.reduce((s, x) => s + x.value, 0)),
       untrackedStockQuantity: untracked.quantity,
+      untrackedStockQuantityByUnit: untracked.quantityByUnit,
       untrackedBalances: untracked.balances,
     };
   }
 
-  async getInventoryMovementReport(businessId: string, userId: string, filter: InventoryMovementReportDto) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
-    if (filter.locationId) await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
+  async getInventoryMovementReport(
+    businessId: string,
+    userId: string,
+    filter: InventoryMovementReportDto,
+  ) {
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
+    if (filter.locationId)
+      await assertLocationAccess(this.prisma, businessId, userId, filter.locationId);
     const { page, limit, skip } = this.pagination(filter);
     const sortBy = filter.sortBy || 'createdAt';
     const sortOrder = filter.sortOrder || 'desc';
@@ -1225,44 +1500,66 @@ export class InventoryService {
   }
 
   async getInventoryDashboard(businessId: string, userId: string) {
-    const accessibleIds = userId ? await accessibleLocationIds(this.prisma, businessId, userId) : null;
+    const accessibleIds = userId
+      ? await accessibleLocationIds(this.prisma, businessId, userId)
+      : null;
     const locationScope = accessibleIds ? { id: { in: accessibleIds } } : {};
     const transferScope = accessibleIds
       ? { fromLocationId: { in: accessibleIds }, toLocationId: { in: accessibleIds } }
       : {};
     const adjustmentScope = accessibleIds
-      ? { items: { some: { locationId: { in: accessibleIds } }, every: { locationId: { in: accessibleIds } } } }
-      : {};
-    const [balances, products, movements, pendingAdjustments, pendingTransfers, pendingCounts, settings] =
-      await Promise.all([
-        this.prisma.stockBalance.findMany({
-          where: { product: { businessId }, location: { businessId, ...locationScope } },
-          include: { product: { include: { defaultUnit: true } }, location: true },
-        }),
-        this.prisma.product.findMany({
-          where: { businessId, status: 'ACTIVE' },
-          select: { id: true, minimumStock: true, reorderLevel: true, defaultUnit: { select: { symbol: true } } },
-        }),
-        this.prisma.inventoryMovement.findMany({
-          where: { businessId, product: { businessId }, location: { businessId, ...locationScope } },
-          include: {
-            product: { select: { id: true, name: true, sku: true } },
-            location: { select: { id: true, name: true } },
+      ? {
+          items: {
+            some: { locationId: { in: accessibleIds } },
+            every: { locationId: { in: accessibleIds } },
           },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        }),
-        this.prisma.stockAdjustment.count({
-          where: { businessId, status: { in: ['PENDING', 'DRAFT'] }, ...adjustmentScope },
-        }),
-        this.prisma.stockTransfer.count({
-          where: { businessId, status: { in: ['DRAFT', 'SENT', 'PARTIAL'] }, ...transferScope },
-        }),
-        this.prisma.physicalCount.count({
-          where: { businessId, location: locationScope, status: { in: ['DRAFT', 'COMPLETED'] } },
-        }),
-        this.prisma.businessSettings.findUnique({ where: { businessId }, select: { lowStockThreshold: true } }),
-      ]);
+        }
+      : {};
+    const [
+      balances,
+      products,
+      movements,
+      pendingAdjustments,
+      pendingTransfers,
+      pendingCounts,
+      settings,
+    ] = await Promise.all([
+      this.prisma.stockBalance.findMany({
+        where: { product: { businessId }, location: { businessId, ...locationScope } },
+        include: { product: { include: { defaultUnit: true } }, location: true },
+      }),
+      this.prisma.product.findMany({
+        where: { businessId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          minimumStock: true,
+          reorderLevel: true,
+          defaultUnit: { select: { symbol: true } },
+        },
+      }),
+      this.prisma.inventoryMovement.findMany({
+        where: { businessId, product: { businessId }, location: { businessId, ...locationScope } },
+        include: {
+          product: { select: { id: true, name: true, sku: true } },
+          location: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.stockAdjustment.count({
+        where: { businessId, status: { in: ['PENDING', 'DRAFT'] }, ...adjustmentScope },
+      }),
+      this.prisma.stockTransfer.count({
+        where: { businessId, status: { in: ['DRAFT', 'SENT', 'PARTIAL'] }, ...transferScope },
+      }),
+      this.prisma.physicalCount.count({
+        where: { businessId, location: locationScope, status: { in: ['DRAFT', 'COMPLETED'] } },
+      }),
+      this.prisma.businessSettings.findUnique({
+        where: { businessId },
+        select: { lowStockThreshold: true },
+      }),
+    ]);
     const globalThreshold = settings?.lowStockThreshold ?? 0;
     const activeLocations = await this.prisma.location.findMany({
       where: { businessId, isActive: true, ...locationScope },
@@ -1276,11 +1573,14 @@ export class InventoryService {
         total +
         activeLocations.filter(
           (location) =>
-            (balanceByKey.get(`${product.id}:${location.id}`) || 0) <= Math.max(product.reorderLevel, globalThreshold),
+            (balanceByKey.get(`${product.id}:${location.id}`) || 0) <=
+            Math.max(product.reorderLevel, globalThreshold),
         ).length,
       0,
     );
-    const unitByProductId = new Map(products.map((product) => [product.id, product.defaultUnit?.symbol || 'UNIT']));
+    const unitByProductId = new Map(
+      products.map((product) => [product.id, product.defaultUnit?.symbol || 'UNIT']),
+    );
     const stockQuantityByUnit = new Map<string, number>();
     for (const balance of balances) {
       const unit = unitByProductId.get(balance.productId) || 'UNIT';
@@ -1481,10 +1781,18 @@ export class InventoryService {
     return round(totalCost / quantityToIssue);
   }
 
-  private async getCurrentLayers(businessId: string, productId?: string, locationId?: string, locationIds?: string[]) {
+  private async getCurrentLayers(
+    businessId: string,
+    productId?: string,
+    locationId?: string,
+    locationIds?: string[],
+  ) {
     const productWhere = { businessId, ...(productId ? { id: productId } : {}) };
     const effectiveLocationIds = locationId ? [locationId] : locationIds;
-    const locationWhere = { businessId, ...(effectiveLocationIds ? { id: { in: effectiveLocationIds } } : {}) };
+    const locationWhere = {
+      businessId,
+      ...(effectiveLocationIds ? { id: { in: effectiveLocationIds } } : {}),
+    };
     const [movements, balances] = await Promise.all([
       this.prisma.inventoryMovement.findMany({
         where: { businessId, product: productWhere, location: locationWhere },
@@ -1536,17 +1844,21 @@ export class InventoryService {
     businessId: string,
     layers: MovementLayer[],
     productId?: string,
-    locationId?: string,
+    locationIds?: string[],
     expiryOnly = false,
   ) {
     const balances = await this.prisma.stockBalance.findMany({
       where: {
         product: { businessId },
-        location: { businessId },
+        location: { businessId, ...(locationIds ? { id: { in: locationIds } } : {}) },
         ...(productId ? { productId } : {}),
-        ...(locationId ? { locationId } : {}),
       },
-      select: { productId: true, locationId: true, quantity: true },
+      select: {
+        productId: true,
+        locationId: true,
+        quantity: true,
+        product: { select: { defaultUnit: { select: { symbol: true } } } },
+      },
     });
     const tracked = new Map<string, number>();
     for (const layer of layers) {
@@ -1564,8 +1876,20 @@ export class InventoryService {
         ),
       }))
       .filter((row) => row.quantity > EPSILON);
+    const balanceByKey = new Map(
+      balances.map((balance) => [`${balance.productId}:${balance.locationId}`, balance]),
+    );
+    const quantityByUnit = new Map<string, number>();
+    for (const row of unknown) {
+      const balance = balanceByKey.get(row.key);
+      const unit = balance?.product.defaultUnit?.symbol || 'UNIT';
+      quantityByUnit.set(unit, (quantityByUnit.get(unit) || 0) + row.quantity);
+    }
     return {
       quantity: round(unknown.reduce((sum, row) => sum + row.quantity, 0)),
+      quantityByUnit: [...quantityByUnit.entries()]
+        .map(([unit, quantity]) => ({ unit, quantity: round(quantity) }))
+        .sort((a, b) => a.unit.localeCompare(b.unit)),
       balances: unknown.length,
     };
   }

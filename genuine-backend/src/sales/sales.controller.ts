@@ -65,7 +65,11 @@ export class SalesController {
   @Get('invoices')
   @RequirePermission('sales.view')
   @ApiOperation({ summary: 'List invoices with filters and pagination' })
-  getInvoices(@Business() businessId: string, @UserId() userId: string, @Query() filter: SalesInvoiceFilterDto) {
+  getInvoices(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Query() filter: SalesInvoiceFilterDto,
+  ) {
     return this.salesService.getAllSalesInvoices(businessId, userId, filter);
   }
 
@@ -147,7 +151,11 @@ export class SalesController {
 
   @Get('returns')
   @RequirePermission('sales.view')
-  getReturns(@Business() businessId: string, @UserId() userId: string, @Query() filter: SalesReturnFilterDto) {
+  getReturns(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Query() filter: SalesReturnFilterDto,
+  ) {
     return this.salesService.getAllSalesReturns(businessId, userId, filter);
   }
 

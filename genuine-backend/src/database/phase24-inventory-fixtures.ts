@@ -5,7 +5,8 @@ const prisma = new PrismaClient();
 const BUSINESS_NAME = 'Genuine Liquor Store';
 const FIXTURE_SKU = 'PH24-QA-TRANSFER-001';
 const FIXTURE_NAME = 'PH24 QA Transfer Reconciliation';
-const FIXTURE_DESCRIPTION = 'PH24 QA synthetic inventory reconciliation fixture; no real customer or supplier.';
+const FIXTURE_DESCRIPTION =
+  'PH24 QA synthetic inventory reconciliation fixture; no real customer or supplier.';
 
 function assertSafeTarget() {
   const raw = process.env.DATABASE_URL;
@@ -15,20 +16,32 @@ function assertSafeTarget() {
   const url = new URL(raw);
   const database = decodeURIComponent(url.pathname.slice(1));
   if (!['localhost', '127.0.0.1', '::1'].includes(url.hostname) || database !== 'genuine') {
-    throw new Error('Refusing to seed: fixtures only run against the local development database genuine.');
+    throw new Error(
+      'Refusing to seed: fixtures only run against the local development database genuine.',
+    );
   }
 }
 
 async function reportFixture(productId: string) {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    include: { defaultUnit: { select: { name: true, symbol: true } }, stocks: { include: { location: { select: { name: true, code: true } } } } },
+    include: {
+      defaultUnit: { select: { name: true, symbol: true } },
+      stocks: { include: { location: { select: { name: true, code: true } } } },
+    },
   });
   if (!product) throw new Error('Fixture product disappeared during verification.');
   const [movements, adjustments] = await Promise.all([
     prisma.inventoryMovement.findMany({
-      where: { productId }, orderBy: { createdAt: 'asc' },
-      select: { type: true, quantity: true, referenceType: true, referenceId: true, location: { select: { code: true } } },
+      where: { productId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        type: true,
+        quantity: true,
+        referenceType: true,
+        referenceId: true,
+        location: { select: { code: true } },
+      },
     }),
     prisma.stockAdjustment.findMany({
       where: { businessId: product?.businessId, adjustmentNumber: { startsWith: 'PH24-QA-OPEN-' } },
@@ -42,11 +55,18 @@ async function reportFixture(productId: string) {
     sku: product?.sku,
     product: product?.name,
     baseUnit: product?.defaultUnit?.symbol ?? 'UNIT',
-    balances: product?.stocks.map((balance) => ({ location: balance.location.code, quantity: balance.quantity })) ?? [],
+    balances:
+      product?.stocks.map((balance) => ({
+        location: balance.location.code,
+        quantity: balance.quantity,
+      })) ?? [],
     fixtureOpeningAdjustments: adjustments.map((adjustment) => ({
       adjustmentNumber: adjustment.adjustmentNumber,
       status: adjustment.status,
-      lines: adjustment.items.map((item) => ({ locationId: item.locationId, quantity: item.difference })),
+      lines: adjustment.items.map((item) => ({
+        locationId: item.locationId,
+        quantity: item.difference,
+      })),
     })),
     movementCount: movements.length,
     movementNet,
@@ -54,19 +74,22 @@ async function reportFixture(productId: string) {
     balanced: Math.abs(movementNet - balanceTotal) < 0.0001,
   };
   console.log(JSON.stringify(report, null, 2));
-  if (!report.balanced) throw new Error('Fixture ledger does not reconcile; stop and inspect before UI testing.');
+  if (!report.balanced)
+    throw new Error('Fixture ledger does not reconcile; stop and inspect before UI testing.');
 }
 
 async function main() {
   assertSafeTarget();
   const business = await prisma.business.findUnique({ where: { name: BUSINESS_NAME } });
-  const owner = business ? await prisma.user.findFirst({
-    where: {
-      businessId: business.id,
-      isActive: true,
-      userRoles: { some: { role: { isSystem: true, name: 'Owner' } } },
-    },
-  }) : null;
+  const owner = business
+    ? await prisma.user.findFirst({
+        where: {
+          businessId: business.id,
+          isActive: true,
+          userRoles: { some: { role: { isSystem: true, name: 'Owner' } } },
+        },
+      })
+    : null;
   if (!business || !owner) {
     throw new Error('Seeded QA business owner was not found; no fixture was created.');
   }
@@ -76,20 +99,31 @@ async function main() {
   });
   if (existing) {
     if (existing.name !== FIXTURE_NAME || existing.description !== FIXTURE_DESCRIPTION) {
-      throw new Error(`SKU ${FIXTURE_SKU} already belongs to a different product; refusing to alter it.`);
+      throw new Error(
+        `SKU ${FIXTURE_SKU} already belongs to a different product; refusing to alter it.`,
+      );
     }
-    console.log('Fixture already exists; it was not reset or overwritten. Current ledger snapshot follows.');
+    console.log(
+      'Fixture already exists; it was not reset or overwritten. Current ledger snapshot follows.',
+    );
     await reportFixture(existing.id);
     return;
   }
 
   const [referenceProduct, main, branch] = await Promise.all([
-    prisma.product.findFirst({ where: { businessId: business.id, sku: 'PH25-QA-UNIT-001', status: 'ACTIVE' }, select: { categoryId: true, defaultUnitId: true } }),
+    prisma.product.findFirst({
+      where: { businessId: business.id, sku: 'PH25-QA-UNIT-001', status: 'ACTIVE' },
+      select: { categoryId: true, defaultUnitId: true },
+    }),
     prisma.location.findFirst({ where: { businessId: business.id, code: 'MAIN', isActive: true } }),
-    prisma.location.findFirst({ where: { businessId: business.id, code: 'PH21-BR-01', isActive: true } }),
+    prisma.location.findFirst({
+      where: { businessId: business.id, code: 'PH21-BR-01', isActive: true },
+    }),
   ]);
   if (!referenceProduct?.defaultUnitId || !main || !branch || main.id === branch.id) {
-    throw new Error('Expected active PH25 base-unit product plus MAIN and PH21-BR-01 locations; no fixture was created.');
+    throw new Error(
+      'Expected active PH25 base-unit product plus MAIN and PH21-BR-01 locations; no fixture was created.',
+    );
   }
 
   const product = await prisma.$transaction(async (tx) => {
@@ -126,17 +160,27 @@ async function main() {
           approvedBy: owner.id,
           approvedAt: now,
           notes: 'Synthetic QA opening quantity; reconciled to one ADJUSTMENT movement.',
-          items: { create: [{
-            productId: created.id,
-            currentQty: 0,
-            adjustedQty: opening.quantity,
-            difference: opening.quantity,
-            locationId: opening.location.id,
-            reason: 'PH24 QA opening balance fixture',
-          }] },
+          items: {
+            create: [
+              {
+                productId: created.id,
+                currentQty: 0,
+                adjustedQty: opening.quantity,
+                difference: opening.quantity,
+                locationId: opening.location.id,
+                reason: 'PH24 QA opening balance fixture',
+              },
+            ],
+          },
         },
       });
-      await tx.stockBalance.create({ data: { productId: created.id, locationId: opening.location.id, quantity: opening.quantity } });
+      await tx.stockBalance.create({
+        data: {
+          productId: created.id,
+          locationId: opening.location.id,
+          quantity: opening.quantity,
+        },
+      });
       await tx.inventoryMovement.create({
         data: {
           businessId: business.id,
@@ -179,7 +223,9 @@ async function main() {
     return created;
   });
 
-  console.log('Created a synthetic Phase 24 fixture. No existing product or historical movement was changed.');
+  console.log(
+    'Created a synthetic Phase 24 fixture. No existing product or historical movement was changed.',
+  );
   await reportFixture(product.id);
 }
 

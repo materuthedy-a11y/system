@@ -5,6 +5,7 @@ export class PurchaseOrderItemResponseDto {
   productName: string;
   productSku: string;
   requiresExpiry: boolean;
+  expiryDays?: number | null;
   quantity: number;
   unitPrice: number;
   discount: number;

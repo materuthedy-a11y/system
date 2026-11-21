@@ -39,7 +39,9 @@ describe('Business user and role authorization boundaries', () => {
     prisma.role.findFirst.mockResolvedValue(null);
     const service = createService(prisma);
 
-    await expect(service.listManagedUsers('business-a', 'role-from-business-b')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.listManagedUsers('business-a', 'role-from-business-b'),
+    ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.role.findFirst).toHaveBeenCalledWith({
       where: { id: 'role-from-business-b', businessId: 'business-a' },
@@ -52,11 +54,17 @@ describe('Business user and role authorization boundaries', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     const service = createService(prisma);
 
-    await expect(service.updateManagedUser('business-a', 'owner-a', 'user-from-business-b', { firstName: 'Changed' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.updateManagedUser('business-a', 'owner-a', 'user-from-business-b', {
+        firstName: 'Changed',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(prisma.user.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'user-from-business-b', businessId: 'business-a' },
-    }));
+    expect(prisma.user.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'user-from-business-b', businessId: 'business-a' },
+      }),
+    );
   });
 
   it('does not assign a role ID from another business to a new user', async () => {
@@ -64,10 +72,15 @@ describe('Business user and role authorization boundaries', () => {
     prisma.role.findFirst.mockResolvedValue(null);
     const service = createService(prisma);
 
-    await expect(service.createManagedUser('business-a', 'owner-a', {
-      email: 'new-user@example.test', firstName: 'New', lastName: 'User',
-      password: 'ValidPass1!', roleId: 'role-from-business-b',
-    })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.createManagedUser('business-a', 'owner-a', {
+        email: 'new-user@example.test',
+        firstName: 'New',
+        lastName: 'User',
+        password: 'ValidPass1!',
+        roleId: 'role-from-business-b',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(prisma.role.findFirst).toHaveBeenCalledWith({
       where: { id: 'role-from-business-b', businessId: 'business-a' },
@@ -80,9 +93,11 @@ describe('Business user and role authorization boundaries', () => {
     prisma.user.findFirst.mockResolvedValue(null);
     const service = createService(prisma);
 
-    await expect(service.resetManagedUserPassword('business-a', 'owner-a', 'user-from-business-b', {
-      newPassword: 'ValidPass1!',
-    })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.resetManagedUserPassword('business-a', 'owner-a', 'user-from-business-b', {
+        newPassword: 'ValidPass1!',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.user.findFirst).toHaveBeenCalledWith({
       where: { id: 'user-from-business-b', businessId: 'business-a' },
@@ -96,26 +111,43 @@ describe('Business user and role authorization boundaries', () => {
     prisma.role.findFirst.mockResolvedValue(null);
     const service = createService(prisma);
 
-    await expect(service.updateRole('business-a', 'owner-a', 'role-from-business-b', { name: 'Changed' })).rejects.toBeInstanceOf(NotFoundException);
-    await expect(service.deleteRole('business-a', 'owner-a', 'role-from-business-b')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.updateRole('business-a', 'owner-a', 'role-from-business-b', { name: 'Changed' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.deleteRole('business-a', 'owner-a', 'role-from-business-b'),
+    ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(prisma.role.findFirst).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      where: { id: 'role-from-business-b', businessId: 'business-a' },
-    }));
-    expect(prisma.role.findFirst).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      where: { id: 'role-from-business-b', businessId: 'business-a' },
-    }));
+    expect(prisma.role.findFirst).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: 'role-from-business-b', businessId: 'business-a' },
+      }),
+    );
+    expect(prisma.role.findFirst).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'role-from-business-b', businessId: 'business-a' },
+      }),
+    );
     expect(prisma.role.delete).not.toHaveBeenCalled();
   });
 
   it('blocks a salesperson from the business role API when no accepted permission is present', async () => {
     const prisma = createPrismaMock();
     const requiredPermissions = ['roles.manage', 'users.view', 'users.create', 'users.edit'];
-    const reflector = { get: jest.fn().mockReturnValue(requiredPermissions) } as unknown as Reflector;
+    const reflector = {
+      get: jest.fn().mockReturnValue(requiredPermissions),
+    } as unknown as Reflector;
     const guard = new PermissionGuard(reflector, prisma as unknown as PrismaService);
     const handler = () => undefined;
     const request = {
-      user: { id: 'salesperson-a', businessId: 'business-a', permissions: ['sales.view'], userRoles: [] },
+      user: {
+        id: 'salesperson-a',
+        businessId: 'business-a',
+        permissions: ['sales.view'],
+        userRoles: [],
+      },
       method: 'GET',
       originalUrl: '/api/v1/business/roles',
       path: '/api/v1/business/roles',
@@ -126,23 +158,32 @@ describe('Business user and role authorization boundaries', () => {
     };
 
     await expect(guard.canActivate(context as never)).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        businessId: 'business-a',
-        userId: 'salesperson-a',
-        entityType: 'Authorization',
-        action: 'ACCESS_DENIED',
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: 'business-a',
+          userId: 'salesperson-a',
+          entityType: 'Authorization',
+          action: 'ACCESS_DENIED',
+        }),
       }),
-    }));
+    );
   });
 
   it('allows the role list API when the user has one of its allowed access permissions', async () => {
     const prisma = createPrismaMock();
     const requiredPermissions = ['roles.manage', 'users.view', 'users.create', 'users.edit'];
-    const reflector = { get: jest.fn().mockReturnValue(requiredPermissions) } as unknown as Reflector;
+    const reflector = {
+      get: jest.fn().mockReturnValue(requiredPermissions),
+    } as unknown as Reflector;
     const guard = new PermissionGuard(reflector, prisma as unknown as PrismaService);
     const request = {
-      user: { id: 'user-manager-a', businessId: 'business-a', permissions: ['users.view'], userRoles: [] },
+      user: {
+        id: 'user-manager-a',
+        businessId: 'business-a',
+        permissions: ['users.view'],
+        userRoles: [],
+      },
       method: 'GET',
       originalUrl: '/api/v1/business/roles',
       path: '/api/v1/business/roles',
@@ -161,11 +202,16 @@ describe('Business user and role authorization boundaries', () => {
     const requiredPermissions = Reflect.getMetadata(PERMISSION_KEY, handler);
     expect(requiredPermissions).toEqual(['settings.edit']);
     const reflector = {
-      get: jest.fn((key: string, target: Function) => Reflect.getMetadata(key, target)),
+      get: jest.fn((key: string, target: object) => Reflect.getMetadata(key, target)),
     } as unknown as Reflector;
     const guard = new PermissionGuard(reflector, prisma as unknown as PrismaService);
     const request = {
-      user: { id: 'settings-viewer-a', businessId: 'business-a', permissions: ['settings.view'], userRoles: [] },
+      user: {
+        id: 'settings-viewer-a',
+        businessId: 'business-a',
+        permissions: ['settings.view'],
+        userRoles: [],
+      },
       method: 'PATCH',
       originalUrl: '/api/v1/business/profile',
       path: '/api/v1/business/profile',
@@ -178,13 +224,15 @@ describe('Business user and role authorization boundaries', () => {
     };
 
     await expect(guard.canActivate(context as never)).rejects.toBeInstanceOf(ForbiddenException);
-    expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        businessId: 'business-a',
-        entityType: 'Authorization',
-        action: 'ACCESS_DENIED',
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          businessId: 'business-a',
+          entityType: 'Authorization',
+          action: 'ACCESS_DENIED',
+        }),
       }),
-    }));
+    );
   });
 
   it('keeps general settings updates scoped to the selected business', async () => {
@@ -193,19 +241,26 @@ describe('Business user and role authorization boundaries', () => {
       ['business-a', { businessId: 'business-a', invoicePrefix: 'A-INV-', lowStockThreshold: 5 }],
       ['business-b', { businessId: 'business-b', invoicePrefix: 'B-INV-', lowStockThreshold: 12 }],
     ]);
-    prisma.businessSettings.findUnique.mockImplementation(({ where }: { where: { businessId: string } }) =>
-      Promise.resolve(settingsByBusiness.get(where.businessId) ?? null),
+    prisma.businessSettings.findUnique.mockImplementation(
+      ({ where }: { where: { businessId: string } }) =>
+        Promise.resolve(settingsByBusiness.get(where.businessId) ?? null),
     );
-    prisma.businessSettings.upsert.mockImplementation(({ where, create, update }: {
-      where: { businessId: string };
-      create: Record<string, unknown>;
-      update: Record<string, unknown>;
-    }) => {
-      const businessId = where.businessId;
-      const row = { ...(settingsByBusiness.get(businessId) ?? create), ...update, businessId };
-      settingsByBusiness.set(businessId, row);
-      return Promise.resolve(row);
-    });
+    prisma.businessSettings.upsert.mockImplementation(
+      ({
+        where,
+        create,
+        update,
+      }: {
+        where: { businessId: string };
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) => {
+        const businessId = where.businessId;
+        const row = { ...(settingsByBusiness.get(businessId) ?? create), ...update, businessId };
+        settingsByBusiness.set(businessId, row);
+        return Promise.resolve(row);
+      },
+    );
     prisma.auditLog.create.mockResolvedValue({ id: 'audit-settings-a' });
     const service = createService(prisma);
 
@@ -215,11 +270,17 @@ describe('Business user and role authorization boundaries', () => {
 
     expect(businessASettings.invoicePrefix).toBe('A-UPDATED-');
     expect(businessBSettings.invoicePrefix).toBe('B-INV-');
-    expect(prisma.businessSettings.upsert).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.businessSettings.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: 'business-a' },
+        update: { invoicePrefix: 'A-UPDATED-' },
+      }),
+    );
+    expect(prisma.businessSettings.findUnique).toHaveBeenNthCalledWith(2, {
       where: { businessId: 'business-a' },
-      update: { invoicePrefix: 'A-UPDATED-' },
-    }));
-    expect(prisma.businessSettings.findUnique).toHaveBeenNthCalledWith(2, { where: { businessId: 'business-a' } });
-    expect(prisma.businessSettings.findUnique).toHaveBeenNthCalledWith(3, { where: { businessId: 'business-b' } });
+    });
+    expect(prisma.businessSettings.findUnique).toHaveBeenNthCalledWith(3, {
+      where: { businessId: 'business-b' },
+    });
   });
 });

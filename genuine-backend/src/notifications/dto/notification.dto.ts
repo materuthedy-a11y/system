@@ -314,7 +314,9 @@ export class TestSMSConfigDto {
   @IsNotEmpty()
   @IsString()
   @MaxLength(30)
-  @Matches(/^\+?[0-9][0-9\s()-]{6,28}$/, { message: 'Enter a valid phone number, including country code when needed' })
+  @Matches(/^\+?[0-9][0-9\s()-]{6,28}$/, {
+    message: 'Enter a valid phone number, including country code when needed',
+  })
   to: string;
 }
 

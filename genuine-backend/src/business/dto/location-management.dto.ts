@@ -25,7 +25,6 @@ export class CreateLocationDto {
   @IsOptional()
   @IsString()
   managerId?: string | null;
-
 }
 
 export class UpdateLocationDto {

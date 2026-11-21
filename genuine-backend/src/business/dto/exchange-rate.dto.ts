@@ -1,8 +1,18 @@
 import { Transform } from 'class-transformer';
-import { IsDateString, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateExchangeRateDto {
-  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
   @IsString()
   @Matches(/^[A-Z]{3}$/, { message: 'Currency code must be a three-letter ISO code' })
   currencyCode: string;
@@ -22,7 +32,7 @@ export class CreateExchangeRateDto {
 }
 
 export class ConvertCurrencyDto {
-  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
   @IsString()
   @Matches(/^[A-Z]{3}$/, { message: 'Currency code must be a three-letter ISO code' })
   currencyCode: string;

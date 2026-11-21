@@ -65,7 +65,10 @@ export class BusinessController {
   @Get('brand')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get the signed-in business name and logo for workspace identity' })
-  @ApiResponse({ status: 200, schema: { example: { name: 'Example Business', logoUrl: 'https://example.com/logo.webp' } } })
+  @ApiResponse({
+    status: 200,
+    schema: { example: { name: 'Example Business', logoUrl: 'https://example.com/logo.webp' } },
+  })
   async getBusinessBrand(@Business() businessId: string) {
     return this.businessService.getBusinessBrand(businessId);
   }
@@ -109,38 +112,64 @@ export class BusinessController {
 
   @Patch('settings')
   @RequirePermission('settings.edit')
-  updateBusinessSettings(@Business() businessId: string, @UserId() userId: string, @Body() dto: UpdateBusinessSettingsDto) {
+  updateBusinessSettings(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: UpdateBusinessSettingsDto,
+  ) {
     return this.businessService.updateBusinessSettings(businessId, userId, dto);
   }
 
   @Get('users')
   @RequirePermission('users.view', 'users.edit', 'users.delete')
-  listManagedUsers(@Business() businessId: string, @Query('roleId') roleId?: string, @Query('status') status?: string) {
+  listManagedUsers(
+    @Business() businessId: string,
+    @Query('roleId') roleId?: string,
+    @Query('status') status?: string,
+  ) {
     return this.businessService.listManagedUsers(businessId, roleId, status);
   }
 
   @Post('users')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('users.create')
-  createManagedUser(@Business() businessId: string, @UserId() userId: string, @Body() dto: CreateManagedUserDto) {
+  createManagedUser(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: CreateManagedUserDto,
+  ) {
     return this.businessService.createManagedUser(businessId, userId, dto);
   }
 
   @Patch('users/:id')
   @RequirePermission('users.edit')
-  updateManagedUser(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string, @Body() dto: UpdateManagedUserDto) {
+  updateManagedUser(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateManagedUserDto,
+  ) {
     return this.businessService.updateManagedUser(businessId, userId, id, dto);
   }
 
   @Delete('users/:id')
   @RequirePermission('users.delete')
-  deactivateManagedUser(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+  deactivateManagedUser(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
     return this.businessService.deactivateManagedUser(businessId, userId, id);
   }
 
   @Post('users/:id/reset-password')
   @RequirePermission('users.edit')
-  resetManagedUserPassword(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string, @Body() dto: ResetManagedUserPasswordDto) {
+  resetManagedUserPassword(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() dto: ResetManagedUserPasswordDto,
+  ) {
     return this.businessService.resetManagedUserPassword(businessId, userId, id, dto);
   }
 
@@ -165,7 +194,12 @@ export class BusinessController {
 
   @Patch('roles/:id')
   @RequirePermission('roles.manage')
-  updateRole(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string, @Body() dto: UpdateRoleDto) {
+  updateRole(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateRoleDto,
+  ) {
     return this.businessService.updateRole(businessId, userId, id, dto);
   }
 
@@ -190,7 +224,12 @@ export class BusinessController {
 
   @Patch('tax-rates/:id')
   @RequirePermission('settings.edit')
-  updateTaxRate(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string, @Body() dto: TaxRateDto) {
+  updateTaxRate(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+    @Body() dto: TaxRateDto,
+  ) {
     return this.businessService.updateTaxRate(businessId, userId, id, dto);
   }
 
@@ -209,7 +248,11 @@ export class BusinessController {
   @Post('exchange-rates')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermission('settings.edit')
-  createExchangeRate(@Business() businessId: string, @UserId() userId: string, @Body() dto: CreateExchangeRateDto) {
+  createExchangeRate(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: CreateExchangeRateDto,
+  ) {
     return this.businessService.createExchangeRate(businessId, userId, dto);
   }
 
@@ -248,10 +291,18 @@ export class BusinessController {
   @Get('location-options')
   @HttpCode(HttpStatus.OK)
   @RequirePermission(
-    'sales.view', 'sales.create', 'sales.edit',
-    'purchases.view', 'purchases.create',
-    'inventory.view', 'products.view', 'settings.view', 'settings.edit',
-    'payments.view', 'expenses.view', 'expenses.create',
+    'sales.view',
+    'sales.create',
+    'sales.edit',
+    'purchases.view',
+    'purchases.create',
+    'inventory.view',
+    'products.view',
+    'settings.view',
+    'settings.edit',
+    'payments.view',
+    'expenses.view',
+    'expenses.create',
   )
   @ApiOperation({ summary: 'Get active locations for the current workspace' })
   @ApiResponse({ status: 200 })

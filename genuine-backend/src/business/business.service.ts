@@ -54,22 +54,34 @@ export class BusinessService {
   ) {}
 
   async listManagedUsers(businessId: string, roleId?: string, status?: string) {
-    if (status && !['ACTIVE', 'INACTIVE'].includes(status)) throw new BadRequestException('Status must be ACTIVE or INACTIVE');
+    if (status && !['ACTIVE', 'INACTIVE'].includes(status))
+      throw new BadRequestException('Status must be ACTIVE or INACTIVE');
     if (roleId) {
       const role = await this.prisma.role.findFirst({ where: { id: roleId, businessId } });
       if (!role) throw new NotFoundException('Role not found');
     }
     const users = await this.prisma.user.findMany({
-      where: { businessId, ...(status ? { isActive: status === 'ACTIVE' } : {}), ...(roleId ? { userRoles: { some: { roleId } } } : {}) },
+      where: {
+        businessId,
+        ...(status ? { isActive: status === 'ACTIVE' } : {}),
+        ...(roleId ? { userRoles: { some: { roleId } } } : {}),
+      },
       include: { userRoles: { include: { role: { select: { id: true, name: true } } } } },
       orderBy: [{ isActive: 'desc' }, { firstName: 'asc' }, { lastName: 'asc' }],
     });
     return users.map((user) => ({
-      id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName,
-      phone: user.phone, isActive: user.isActive, status: user.isActive ? 'ACTIVE' : 'INACTIVE',
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      isActive: user.isActive,
+      status: user.isActive ? 'ACTIVE' : 'INACTIVE',
       roles: user.userRoles.map(({ role }) => ({ id: role.id, name: role.name })),
-      roleId: user.userRoles[0]?.role.id ?? null, roleName: user.userRoles.map(({ role }) => role.name).join(', ') || 'No role',
-      createdAt: user.createdAt, lastLogin: user.lastLogin,
+      roleId: user.userRoles[0]?.role.id ?? null,
+      roleName: user.userRoles.map(({ role }) => role.name).join(', ') || 'No role',
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin,
     }));
   }
 
@@ -83,177 +95,418 @@ export class BusinessService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const user = await tx.user.create({ data: {
-          id: uuid(), businessId, email, passwordHash, firstName: dto.firstName.trim(), lastName: dto.lastName.trim(),
-          phone: dto.phone?.trim() || null, isActive: true,
-        } });
+        const user = await tx.user.create({
+          data: {
+            id: uuid(),
+            businessId,
+            email,
+            passwordHash,
+            firstName: dto.firstName.trim(),
+            lastName: dto.lastName.trim(),
+            phone: dto.phone?.trim() || null,
+            isActive: true,
+          },
+        });
         await tx.userRole.create({ data: { userId: user.id, roleId: role.id } });
-        await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'User', entityId: user.id, action: 'CREATE', afterData: JSON.stringify({ id: user.id, email, firstName: user.firstName, lastName: user.lastName, roleId: role.id }), description: 'CREATE managed user' } });
-        return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone, isActive: user.isActive, status: 'ACTIVE', roleId: role.id, roleName: role.name, roles: [{ id: role.id, name: role.name }], createdAt: user.createdAt, lastLogin: user.lastLogin };
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId: actorId,
+            entityType: 'User',
+            entityId: user.id,
+            action: 'CREATE',
+            afterData: JSON.stringify({
+              id: user.id,
+              email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              roleId: role.id,
+            }),
+            description: 'CREATE managed user',
+          },
+        });
+        return {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          phone: user.phone,
+          isActive: user.isActive,
+          status: 'ACTIVE',
+          roleId: role.id,
+          roleName: role.name,
+          roles: [{ id: role.id, name: role.name }],
+          createdAt: user.createdAt,
+          lastLogin: user.lastLogin,
+        };
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('This email address is already registered');
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException('This email address is already registered');
       throw error;
     }
   }
 
-  async updateManagedUser(businessId: string, actorId: string, id: string, dto: UpdateManagedUserDto) {
-    const before = await this.prisma.user.findFirst({ where: { id, businessId }, include: { userRoles: { include: { role: true } } } });
+  async updateManagedUser(
+    businessId: string,
+    actorId: string,
+    id: string,
+    dto: UpdateManagedUserDto,
+  ) {
+    const before = await this.prisma.user.findFirst({
+      where: { id, businessId },
+      include: { userRoles: { include: { role: true } } },
+    });
     if (!before) throw new NotFoundException('User not found');
     const actorIsOwner = await this.isBusinessOwner(businessId, actorId);
-    if (before.userRoles.some(({ role }) => role.name === 'Owner' && role.isSystem) && !actorIsOwner) {
+    if (
+      before.userRoles.some(({ role }) => role.name === 'Owner' && role.isSystem) &&
+      !actorIsOwner
+    ) {
       throw new ForbiddenException('Only an Owner can manage the Owner account');
     }
-    if (actorId === id && dto.isActive === false) throw new BadRequestException('You cannot deactivate your own account');
-    const nextRole = dto.roleId ? await this.prisma.role.findFirst({ where: { id: dto.roleId, businessId } }) : null;
+    if (actorId === id && dto.isActive === false)
+      throw new BadRequestException('You cannot deactivate your own account');
+    const nextRole = dto.roleId
+      ? await this.prisma.role.findFirst({ where: { id: dto.roleId, businessId } })
+      : null;
     if (dto.roleId && !nextRole) throw new BadRequestException('Choose a role from this business');
     if (nextRole) await this.assertRoleDelegable(businessId, actorId, nextRole.id);
     const hadOwnerRole = before.userRoles.some(({ role }) => role.name === 'Owner');
-    const removesOwner = hadOwnerRole && (dto.isActive === false || (nextRole && nextRole.name !== 'Owner'));
+    const removesOwner =
+      hadOwnerRole && (dto.isActive === false || (nextRole && nextRole.name !== 'Owner'));
     const normalizedEmail = dto.email?.trim().toLowerCase();
     if (normalizedEmail) {
-      const duplicate = await this.prisma.user.findFirst({ where: { email: normalizedEmail, id: { not: id } } });
+      const duplicate = await this.prisma.user.findFirst({
+        where: { email: normalizedEmail, id: { not: id } },
+      });
       if (duplicate) throw new ConflictException('This email address is already registered');
     }
     const updated = await this.prisma.$transaction(async (tx) => {
       if (removesOwner) {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`owner-count:${businessId}`}, 0)) IS NULL AS locked`;
-        const activeOwners = await tx.user.count({ where: { businessId, isActive: true, userRoles: { some: { role: { name: 'Owner', businessId } } } } });
-        if (activeOwners <= 1) throw new BadRequestException('The business must keep at least one active Owner');
+        const activeOwners = await tx.user.count({
+          where: {
+            businessId,
+            isActive: true,
+            userRoles: { some: { role: { name: 'Owner', businessId } } },
+          },
+        });
+        if (activeOwners <= 1)
+          throw new BadRequestException('The business must keep at least one active Owner');
       }
-      const user = await tx.user.update({ where: { id }, data: {
-        ...(normalizedEmail !== undefined && { email: normalizedEmail }),
-        ...(dto.firstName !== undefined && { firstName: dto.firstName.trim() }),
-        ...(dto.lastName !== undefined && { lastName: dto.lastName.trim() }),
-        ...(dto.phone !== undefined && { phone: dto.phone.trim() || null }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      } });
+      const user = await tx.user.update({
+        where: { id },
+        data: {
+          ...(normalizedEmail !== undefined && { email: normalizedEmail }),
+          ...(dto.firstName !== undefined && { firstName: dto.firstName.trim() }),
+          ...(dto.lastName !== undefined && { lastName: dto.lastName.trim() }),
+          ...(dto.phone !== undefined && { phone: dto.phone.trim() || null }),
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        },
+      });
       if (nextRole) {
         await tx.userRole.deleteMany({ where: { userId: id } });
         await tx.userRole.create({ data: { userId: id, roleId: nextRole.id } });
         await tx.userSession.deleteMany({ where: { userId: id } });
       }
-      if (dto.isActive === false || normalizedEmail !== undefined) await tx.userSession.deleteMany({ where: { userId: id } });
-      await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'User', entityId: id, action: 'UPDATE', beforeData: JSON.stringify({ id, email: before.email, isActive: before.isActive, roles: before.userRoles.map(({ role }) => role.name) }), afterData: JSON.stringify({ id, email: user.email, isActive: user.isActive, role: nextRole?.name }), description: 'UPDATE managed user' } });
+      if (dto.isActive === false || normalizedEmail !== undefined)
+        await tx.userSession.deleteMany({ where: { userId: id } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: actorId,
+          entityType: 'User',
+          entityId: id,
+          action: 'UPDATE',
+          beforeData: JSON.stringify({
+            id,
+            email: before.email,
+            isActive: before.isActive,
+            roles: before.userRoles.map(({ role }) => role.name),
+          }),
+          afterData: JSON.stringify({
+            id,
+            email: user.email,
+            isActive: user.isActive,
+            role: nextRole?.name,
+          }),
+          description: 'UPDATE managed user',
+        },
+      });
       return user;
     });
     const assignedRole = nextRole ?? before.userRoles[0]?.role;
-    return { id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, phone: updated.phone, isActive: updated.isActive, status: updated.isActive ? 'ACTIVE' : 'INACTIVE', roles: assignedRole ? [{ id: assignedRole.id, name: assignedRole.name }] : [], roleId: assignedRole?.id ?? null, roleName: assignedRole?.name ?? 'No role', createdAt: updated.createdAt, lastLogin: updated.lastLogin };
+    return {
+      id: updated.id,
+      email: updated.email,
+      firstName: updated.firstName,
+      lastName: updated.lastName,
+      phone: updated.phone,
+      isActive: updated.isActive,
+      status: updated.isActive ? 'ACTIVE' : 'INACTIVE',
+      roles: assignedRole ? [{ id: assignedRole.id, name: assignedRole.name }] : [],
+      roleId: assignedRole?.id ?? null,
+      roleName: assignedRole?.name ?? 'No role',
+      createdAt: updated.createdAt,
+      lastLogin: updated.lastLogin,
+    };
   }
 
   async deactivateManagedUser(businessId: string, actorId: string, id: string) {
     return this.updateManagedUser(businessId, actorId, id, { isActive: false });
   }
 
-  async resetManagedUserPassword(businessId: string, actorId: string, id: string, dto: ResetManagedUserPasswordDto) {
-    const user = await this.prisma.user.findFirst({ where: { id, businessId }, select: { id: true } });
+  async resetManagedUserPassword(
+    businessId: string,
+    actorId: string,
+    id: string,
+    dto: ResetManagedUserPasswordDto,
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id, businessId },
+      select: { id: true },
+    });
     if (!user) throw new NotFoundException('User not found');
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id }, data: { passwordHash, passwordResetTokenHash: null, passwordResetExpiresAt: null } });
+      await tx.user.update({
+        where: { id },
+        data: { passwordHash, passwordResetTokenHash: null, passwordResetExpiresAt: null },
+      });
       await tx.userSession.deleteMany({ where: { userId: id } });
-      await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'User', entityId: id, action: 'PASSWORD_RESET', description: 'ADMIN reset managed user password' } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: actorId,
+          entityType: 'User',
+          entityId: id,
+          action: 'PASSWORD_RESET',
+          description: 'ADMIN reset managed user password',
+        },
+      });
     });
     return { message: 'Password updated; the user must sign in again.' };
   }
 
   async listRoles(businessId: string, actorId: string) {
-    const roles = await this.prisma.role.findMany({ where: { businessId }, include: { permissions: { select: { key: true } }, _count: { select: { userRoles: true } } }, orderBy: [{ isSystem: 'desc' }, { name: 'asc' }] });
+    const roles = await this.prisma.role.findMany({
+      where: { businessId },
+      include: { permissions: { select: { key: true } }, _count: { select: { userRoles: true } } },
+      orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+    });
     const actor = await this.prisma.user.findFirst({
       where: { id: actorId, businessId, isActive: true },
-      include: { userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } }, permissions: { select: { key: true } } },
+      include: {
+        userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } },
+        permissions: { select: { key: true } },
+      },
     });
     if (!actor) throw new ForbiddenException('Your account cannot view team roles');
-    const actorPermissionKeys = new Set([...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)), ...actor.permissions.map(({ key }) => key)]);
+    const actorPermissionKeys = new Set([
+      ...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)),
+      ...actor.permissions.map(({ key }) => key),
+    ]);
     const canManage = actorPermissionKeys.has('roles.manage');
     const isOwner = actor.userRoles.some(({ role }) => role.name === 'Owner' && role.isSystem);
     return roles
-      .filter((role) => (isOwner || role.name !== 'Owner') && (canManage || role.permissions.every(({ key }) => actorPermissionKeys.has(key))))
+      .filter(
+        (role) =>
+          (isOwner || role.name !== 'Owner') &&
+          (canManage || role.permissions.every(({ key }) => actorPermissionKeys.has(key))),
+      )
       .map(({ permissions, _count, ...role }) => ({
         ...role,
         // Only role managers need the grant matrix; user managers receive safe assignment options.
         permissions: canManage ? permissions.map(({ key }) => key) : [],
         usersCount: _count.userRoles,
-        ...((role.name === 'Owner' && isOwner) ? { permissions: permissions.map(({ key }) => key) } : {}),
+        ...(role.name === 'Owner' && isOwner
+          ? { permissions: permissions.map(({ key }) => key) }
+          : {}),
       }));
   }
 
   async listPermissions(businessId: string) {
-    return this.prisma.permission.findMany({ where: { businessId }, orderBy: [{ category: 'asc' }, { name: 'asc' }], select: { id: true, key: true, name: true, description: true, category: true, action: true } });
+    return this.prisma.permission.findMany({
+      where: { businessId },
+      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+      select: { id: true, key: true, name: true, description: true, category: true, action: true },
+    });
   }
 
   private assertPermissionDependencies(permissionKeys: string[]) {
     const granted = new Set(permissionKeys);
     const allOf: Record<string, string[]> = {
-      'products.edit': ['products.view'], 'products.delete': ['products.view'],
-      'suppliers.edit': ['suppliers.view'], 'suppliers.delete': ['suppliers.view'],
-      'customers.edit': ['customers.view'], 'customers.delete': ['customers.view'],
-      'users.edit': ['users.view'], 'users.delete': ['users.view'],
+      'products.edit': ['products.view'],
+      'products.delete': ['products.view'],
+      'suppliers.edit': ['suppliers.view'],
+      'suppliers.delete': ['suppliers.view'],
+      'customers.edit': ['customers.view'],
+      'customers.delete': ['customers.view'],
+      'users.edit': ['users.view'],
+      'users.delete': ['users.view'],
       'purchases.create': ['products.view', 'suppliers.view'],
-      'purchases.edit': ['purchases.view'], 'purchases.approve': ['purchases.view'], 'purchases.cancel': ['purchases.view'],
+      'purchases.edit': ['purchases.view'],
+      'purchases.approve': ['purchases.view'],
+      'purchases.cancel': ['purchases.view'],
       'sales.create': ['products.view', 'customers.view'],
-      'sales.edit': ['sales.view'], 'sales.discount': ['sales.view'], 'sales.approve': ['sales.view'], 'sales.cancel': ['sales.view'],
-      'inventory.adjust': ['inventory.view'], 'inventory.transfer': ['inventory.view'],
-      'expenses.edit': ['expenses.view'], 'expenses.delete': ['expenses.view'], 'expenses.approve': ['expenses.view'], 'expenses.pay': ['expenses.view'],
+      'sales.edit': ['sales.view'],
+      'sales.discount': ['sales.view'],
+      'sales.approve': ['sales.view'],
+      'sales.cancel': ['sales.view'],
+      'inventory.adjust': ['inventory.view'],
+      'inventory.transfer': ['inventory.view'],
+      'expenses.edit': ['expenses.view'],
+      'expenses.delete': ['expenses.view'],
+      'expenses.approve': ['expenses.view'],
+      'expenses.pay': ['expenses.view'],
       'reports.export': ['reports.view'],
       'audit.export': ['audit.view'],
     };
     const missing = new Set<string>();
     for (const [permission, dependencies] of Object.entries(allOf)) {
-      if (granted.has(permission)) for (const dependency of dependencies) if (!granted.has(dependency)) missing.add(dependency);
+      if (granted.has(permission))
+        for (const dependency of dependencies)
+          if (!granted.has(dependency)) missing.add(dependency);
     }
-    if (granted.has('payments.create') && !['sales.view', 'purchases.view', 'expenses.view'].some((key) => granted.has(key))) {
+    if (
+      granted.has('payments.create') &&
+      !['sales.view', 'purchases.view', 'expenses.view'].some((key) => granted.has(key))
+    ) {
       missing.add('sales.view or purchases.view or expenses.view');
     }
-    if (missing.size) throw new BadRequestException(`These permissions need their related view access: ${[...missing].join(', ')}`);
+    if (missing.size)
+      throw new BadRequestException(
+        `These permissions need their related view access: ${[...missing].join(', ')}`,
+      );
   }
 
   async createRole(businessId: string, actorId: string, dto: CreateRoleDto) {
     const name = dto.name.trim();
-    if (['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('That name is reserved for a built-in role. Please choose a different name for your custom role.');
-    const permissions = await this.prisma.permission.findMany({ where: { businessId, key: { in: [...new Set(dto.permissions)] } } });
-    if (permissions.length !== new Set(dto.permissions).size) throw new BadRequestException('One or more permissions are not available in this business');
+    if (['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase()))
+      throw new BadRequestException(
+        'That name is reserved for a built-in role. Please choose a different name for your custom role.',
+      );
+    const permissions = await this.prisma.permission.findMany({
+      where: { businessId, key: { in: [...new Set(dto.permissions)] } },
+    });
+    if (permissions.length !== new Set(dto.permissions).size)
+      throw new BadRequestException('One or more permissions are not available in this business');
     this.assertPermissionDependencies(permissions.map(({ key }) => key));
-    await this.assertPermissionsDelegable(businessId, actorId, permissions.map(({ key }) => key));
+    await this.assertPermissionsDelegable(
+      businessId,
+      actorId,
+      permissions.map(({ key }) => key),
+    );
     try {
       return await this.prisma.$transaction(async (tx) => {
-        const role = await tx.role.create({ data: { id: uuid(), businessId, name, description: dto.description?.trim() || null, isSystem: false, permissions: { connect: permissions.map(({ id }) => ({ id })) } }, include: { permissions: { select: { key: true } } } });
-        await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'Role', entityId: role.id, action: 'CREATE', afterData: JSON.stringify(role), description: 'CREATE role' } });
+        const role = await tx.role.create({
+          data: {
+            id: uuid(),
+            businessId,
+            name,
+            description: dto.description?.trim() || null,
+            isSystem: false,
+            permissions: { connect: permissions.map(({ id }) => ({ id })) },
+          },
+          include: { permissions: { select: { key: true } } },
+        });
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId: actorId,
+            entityType: 'Role',
+            entityId: role.id,
+            action: 'CREATE',
+            afterData: JSON.stringify(role),
+            description: 'CREATE role',
+          },
+        });
         return { ...role, permissions: role.permissions.map(({ key }) => key), usersCount: 0 };
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('A role with this name already exists');
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException('A role with this name already exists');
       throw error;
     }
   }
 
   async updateRole(businessId: string, actorId: string, id: string, dto: UpdateRoleDto) {
-    const before = await this.prisma.role.findFirst({ where: { id, businessId }, include: { permissions: { select: { id: true } } } });
+    const before = await this.prisma.role.findFirst({
+      where: { id, businessId },
+      include: { permissions: { select: { id: true } } },
+    });
     if (!before) throw new NotFoundException('Role not found');
-    if (before.isSystem) throw new BadRequestException('System roles are protected and cannot be edited');
+    if (before.isSystem)
+      throw new BadRequestException('System roles are protected and cannot be edited');
     let permissionIds: string[] | undefined;
     if (dto.permissions) {
-      const permissions = await this.prisma.permission.findMany({ where: { businessId, key: { in: [...new Set(dto.permissions)] } }, select: { id: true } });
-      if (permissions.length !== new Set(dto.permissions).size) throw new BadRequestException('One or more permissions are not available in this business');
+      const permissions = await this.prisma.permission.findMany({
+        where: { businessId, key: { in: [...new Set(dto.permissions)] } },
+        select: { id: true },
+      });
+      if (permissions.length !== new Set(dto.permissions).size)
+        throw new BadRequestException('One or more permissions are not available in this business');
       this.assertPermissionDependencies(dto.permissions);
       await this.assertPermissionsDelegable(businessId, actorId, dto.permissions);
       permissionIds = permissions.map(({ id: permissionId }) => permissionId);
     }
     const name = dto.name?.trim();
-    if (name && ['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase())) throw new BadRequestException('That name is reserved for a built-in role. Please choose a different name for your custom role.');
+    if (name && ['owner', 'admin', 'manager', 'salesperson'].includes(name.toLowerCase()))
+      throw new BadRequestException(
+        'That name is reserved for a built-in role. Please choose a different name for your custom role.',
+      );
     try {
       return await this.prisma.$transaction(async (tx) => {
-        if (permissionIds) await tx.role.update({ where: { id }, data: { permissions: { set: permissionIds.map((permissionId) => ({ id: permissionId })) } } });
-        const role = await tx.role.update({ where: { id }, data: { ...(name && { name }), ...(dto.description !== undefined && { description: dto.description.trim() || null }) }, include: { permissions: { select: { key: true } }, _count: { select: { userRoles: true } } } });
-        await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'Role', entityId: id, action: 'UPDATE', beforeData: JSON.stringify(before), afterData: JSON.stringify(role), description: 'UPDATE role' } });
+        if (permissionIds)
+          await tx.role.update({
+            where: { id },
+            data: {
+              permissions: { set: permissionIds.map((permissionId) => ({ id: permissionId })) },
+            },
+          });
+        const role = await tx.role.update({
+          where: { id },
+          data: {
+            ...(name && { name }),
+            ...(dto.description !== undefined && { description: dto.description.trim() || null }),
+          },
+          include: {
+            permissions: { select: { key: true } },
+            _count: { select: { userRoles: true } },
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId: actorId,
+            entityType: 'Role',
+            entityId: id,
+            action: 'UPDATE',
+            beforeData: JSON.stringify(before),
+            afterData: JSON.stringify(role),
+            description: 'UPDATE role',
+          },
+        });
         if (permissionIds) {
-          const assigned = await tx.userRole.findMany({ where: { roleId: id }, select: { userId: true } });
-          if (assigned.length) await tx.userSession.deleteMany({ where: { userId: { in: assigned.map(({ userId }) => userId) } } });
+          const assigned = await tx.userRole.findMany({
+            where: { roleId: id },
+            select: { userId: true },
+          });
+          if (assigned.length)
+            await tx.userSession.deleteMany({
+              where: { userId: { in: assigned.map(({ userId }) => userId) } },
+            });
         }
-        return { ...role, permissions: role.permissions.map(({ key }) => key), usersCount: role._count.userRoles };
+        return {
+          ...role,
+          permissions: role.permissions.map(({ key }) => key),
+          usersCount: role._count.userRoles,
+        };
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ConflictException('A role with this name already exists');
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+        throw new ConflictException('A role with this name already exists');
       throw error;
     }
   }
@@ -272,57 +525,106 @@ export class BusinessService {
       include: { permissions: { select: { key: true } } },
     });
     if (!role) throw new BadRequestException('Choose a role from this business');
-    if (role.name === 'Owner' && role.isSystem && !(await this.isBusinessOwner(businessId, actorId))) {
+    if (
+      role.name === 'Owner' &&
+      role.isSystem &&
+      !(await this.isBusinessOwner(businessId, actorId))
+    ) {
       throw new ForbiddenException('Only an Owner can assign the Owner role');
     }
-    await this.assertPermissionsDelegable(businessId, actorId, role.permissions.map(({ key }) => key));
+    await this.assertPermissionsDelegable(
+      businessId,
+      actorId,
+      role.permissions.map(({ key }) => key),
+    );
   }
 
-  private async assertPermissionsDelegable(businessId: string, actorId: string, requested: string[]) {
+  private async assertPermissionsDelegable(
+    businessId: string,
+    actorId: string,
+    requested: string[],
+  ) {
     if (await this.isBusinessOwner(businessId, actorId)) return;
     const actor = await this.prisma.user.findFirst({
       where: { id: actorId, businessId, isActive: true },
-      include: { userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } }, permissions: { select: { key: true } } },
+      include: {
+        userRoles: { include: { role: { include: { permissions: { select: { key: true } } } } } },
+        permissions: { select: { key: true } },
+      },
     });
     if (!actor) throw new ForbiddenException('Your account cannot delegate permissions');
-    const available = new Set([...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)), ...actor.permissions.map(({ key }) => key)]);
+    const available = new Set([
+      ...actor.userRoles.flatMap(({ role }) => role.permissions.map(({ key }) => key)),
+      ...actor.permissions.map(({ key }) => key),
+    ]);
     const denied = requested.filter((key) => !available.has(key));
-    if (denied.length) throw new ForbiddenException(`You cannot grant permissions you do not hold: ${denied.join(', ')}`);
+    if (denied.length)
+      throw new ForbiddenException(
+        `You cannot grant permissions you do not hold: ${denied.join(', ')}`,
+      );
   }
 
   async deleteRole(businessId: string, actorId: string, id: string) {
-    const role = await this.prisma.role.findFirst({ where: { id, businessId }, include: { _count: { select: { userRoles: true } } } });
+    const role = await this.prisma.role.findFirst({
+      where: { id, businessId },
+      include: { _count: { select: { userRoles: true } } },
+    });
     if (!role) throw new NotFoundException('Role not found');
     if (role.isSystem) throw new BadRequestException('System roles cannot be deleted');
-    if (role._count.userRoles) throw new BadRequestException('Reassign users before deleting this role');
+    if (role._count.userRoles)
+      throw new BadRequestException('Reassign users before deleting this role');
     await this.prisma.$transaction(async (tx) => {
       await tx.role.delete({ where: { id } });
-      await tx.auditLog.create({ data: { businessId, userId: actorId, entityType: 'Role', entityId: id, action: 'DELETE', beforeData: JSON.stringify(role), description: 'DELETE role' } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: actorId,
+          entityType: 'Role',
+          entityId: id,
+          action: 'DELETE',
+          beforeData: JSON.stringify(role),
+          description: 'DELETE role',
+        },
+      });
     });
     return { message: 'Role deleted successfully' };
   }
 
   async getBusinessSettings(businessId: string) {
     const settings = await this.prisma.businessSettings.findUnique({ where: { businessId } });
-    return settings ?? {
-      businessId,
-      defaultLocationId: null,
-      defaultPaymentMethodId: null,
-      invoicePrefix: 'INV', poPrefix: 'PO', grnPrefix: 'GRN', receiptPrefix: 'PAY',
-      dateFormat: 'DD/MM/YYYY', timeFormat: '24', weekStartsOn: 'MONDAY',
-      lowStockThreshold: 0, theme: 'SYSTEM',
-    };
+    return (
+      settings ?? {
+        businessId,
+        defaultLocationId: null,
+        defaultPaymentMethodId: null,
+        invoicePrefix: 'INV',
+        poPrefix: 'PO',
+        grnPrefix: 'GRN',
+        receiptPrefix: 'PAY',
+        dateFormat: 'DD/MM/YYYY',
+        timeFormat: '24',
+        weekStartsOn: 'MONDAY',
+        lowStockThreshold: 0,
+        theme: 'SYSTEM',
+      }
+    );
   }
 
   async updateBusinessSettings(businessId: string, userId: string, dto: UpdateBusinessSettingsDto) {
     const before = await this.prisma.businessSettings.findUnique({ where: { businessId } });
     if (dto.defaultLocationId) {
-      const location = await this.prisma.location.findFirst({ where: { id: dto.defaultLocationId, businessId, isActive: true } });
-      if (!location) throw new BadRequestException('Select an active location belonging to this business');
+      const location = await this.prisma.location.findFirst({
+        where: { id: dto.defaultLocationId, businessId, isActive: true },
+      });
+      if (!location)
+        throw new BadRequestException('Select an active location belonging to this business');
     }
     if (dto.defaultPaymentMethodId) {
-      const method = await this.prisma.paymentMethod.findFirst({ where: { id: dto.defaultPaymentMethodId, businessId, isActive: true } });
-      if (!method) throw new BadRequestException('Select an active payment method belonging to this business');
+      const method = await this.prisma.paymentMethod.findFirst({
+        where: { id: dto.defaultPaymentMethodId, businessId, isActive: true },
+      });
+      if (!method)
+        throw new BadRequestException('Select an active payment method belonging to this business');
     }
     const settings = await this.prisma.$transaction(async (tx) => {
       const row = await tx.businessSettings.upsert({
@@ -331,7 +633,16 @@ export class BusinessService {
         update: dto,
       });
       await tx.auditLog.create({
-        data: { businessId, userId, entityType: 'BusinessSettings', entityId: row.id, action: before ? 'UPDATE' : 'CREATE', beforeData: before ? JSON.stringify(before) : undefined, afterData: JSON.stringify(row), description: 'SAVE general settings' },
+        data: {
+          businessId,
+          userId,
+          entityType: 'BusinessSettings',
+          entityId: row.id,
+          action: before ? 'UPDATE' : 'CREATE',
+          beforeData: before ? JSON.stringify(before) : undefined,
+          afterData: JSON.stringify(row),
+          description: 'SAVE general settings',
+        },
       });
       return row;
     });
@@ -339,11 +650,17 @@ export class BusinessService {
   }
 
   async listTaxRates(businessId: string) {
-    return this.prisma.taxRate.findMany({ where: { businessId }, orderBy: [{ isDefault: 'desc' }, { name: 'asc' }] });
+    return this.prisma.taxRate.findMany({
+      where: { businessId },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    });
   }
 
   async listExchangeRates(businessId: string) {
-    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { currency: true },
+    });
     if (!business) throw new NotFoundException('Business not found');
     const rates = await this.prisma.businessExchangeRate.findMany({
       where: { businessId, baseCurrency: business.currency },
@@ -354,9 +671,13 @@ export class BusinessService {
 
   async createExchangeRate(businessId: string, userId: string, dto: CreateExchangeRateDto) {
     assertSupportedCurrency(dto.currencyCode);
-    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { currency: true },
+    });
     if (!business) throw new NotFoundException('Business not found');
-    if (dto.currencyCode === business.currency) throw new BadRequestException('Choose a currency different from the business base currency');
+    if (dto.currencyCode === business.currency)
+      throw new BadRequestException('Choose a currency different from the business base currency');
     const effectiveFrom = new Date(`${dto.effectiveFrom.slice(0, 10)}T00:00:00.000Z`);
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -386,25 +707,47 @@ export class BusinessService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw new ConflictException('A rate for this currency and effective date already exists. Add a new effective date to change it without altering history.');
+        throw new ConflictException(
+          'A rate for this currency and effective date already exists. Add a new effective date to change it without altering history.',
+        );
       }
       throw error;
     }
   }
 
   async convertCurrency(businessId: string, dto: ConvertCurrencyDto) {
-    const business = await this.prisma.business.findUnique({ where: { id: businessId }, select: { currency: true } });
+    const business = await this.prisma.business.findUnique({
+      where: { id: businessId },
+      select: { currency: true },
+    });
     if (!business) throw new NotFoundException('Business not found');
     if (dto.currencyCode === business.currency) {
-      return { amount: dto.amount, result: dto.amount, currencyCode: dto.currencyCode, baseCurrency: business.currency, rateToBase: 1, effectiveFrom: dto.asOf.slice(0, 10), direction: dto.direction };
+      return {
+        amount: dto.amount,
+        result: dto.amount,
+        currencyCode: dto.currencyCode,
+        baseCurrency: business.currency,
+        rateToBase: 1,
+        effectiveFrom: dto.asOf.slice(0, 10),
+        direction: dto.direction,
+      };
     }
     const asOf = new Date(`${dto.asOf.slice(0, 10)}T23:59:59.999Z`);
     const rate = await this.prisma.businessExchangeRate.findFirst({
-      where: { businessId, baseCurrency: business.currency, currencyCode: dto.currencyCode, effectiveFrom: { lte: asOf } },
+      where: {
+        businessId,
+        baseCurrency: business.currency,
+        currencyCode: dto.currencyCode,
+        effectiveFrom: { lte: asOf },
+      },
       orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }],
     });
-    if (!rate) throw new NotFoundException(`No ${dto.currencyCode} exchange rate is configured for ${dto.asOf.slice(0, 10)}`);
-    const converted = dto.direction === 'TO_BASE' ? dto.amount * rate.rateToBase : dto.amount / rate.rateToBase;
+    if (!rate)
+      throw new NotFoundException(
+        `No ${dto.currencyCode} exchange rate is configured for ${dto.asOf.slice(0, 10)}`,
+      );
+    const converted =
+      dto.direction === 'TO_BASE' ? dto.amount * rate.rateToBase : dto.amount / rate.rateToBase;
     const result = Math.round((converted + Number.EPSILON) * 100) / 100;
     return {
       amount: dto.amount,
@@ -418,40 +761,104 @@ export class BusinessService {
   }
 
   async createTaxRate(businessId: string, userId: string, dto: TaxRateDto) {
-    if (!dto.name?.trim() || !dto.code?.trim() || dto.rate == null) throw new BadRequestException('Tax name, code and rate are required');
-    if (dto.isDefault && dto.isActive === false) throw new BadRequestException('An inactive tax rate cannot be the default');
+    if (!dto.name?.trim() || !dto.code?.trim() || dto.rate == null)
+      throw new BadRequestException('Tax name, code and rate are required');
+    if (dto.isDefault && dto.isActive === false)
+      throw new BadRequestException('An inactive tax rate cannot be the default');
     const name = dto.name.trim();
     const code = dto.code.trim().toUpperCase();
-    return this.prisma.$transaction(async (tx) => {
-      if (dto.isDefault && (dto.appliesTo || 'BOTH') !== 'PURCHASES') {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:SALES`}, 0)) IS NULL AS locked`;
-        await tx.taxRate.updateMany({ where: { businessId, isDefault: true }, data: { isDefault: false } });
-        await tx.business.update({ where: { id: businessId }, data: { taxPercentage: dto.rate } });
-      }
-      const row = await tx.taxRate.create({ data: { businessId, name, code, rate: dto.rate, description: dto.description?.trim() || null, appliesTo: dto.appliesTo || 'BOTH', isDefault: dto.isDefault ?? false, isActive: dto.isActive ?? true } });
-      await tx.auditLog.create({ data: { businessId, userId, entityType: 'TaxRate', entityId: row.id, action: 'CREATE', afterData: JSON.stringify(row), description: 'CREATE TaxRate' } });
-      return row;
-    }).catch((error) => {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') throw new ConflictException('Tax name or code already exists');
-      throw error;
-    });
+    return this.prisma
+      .$transaction(async (tx) => {
+        if (dto.isDefault && (dto.appliesTo || 'BOTH') !== 'PURCHASES') {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:SALES`}, 0)) IS NULL AS locked`;
+          await tx.taxRate.updateMany({
+            where: { businessId, isDefault: true },
+            data: { isDefault: false },
+          });
+          await tx.business.update({
+            where: { id: businessId },
+            data: { taxPercentage: dto.rate },
+          });
+        }
+        const row = await tx.taxRate.create({
+          data: {
+            businessId,
+            name,
+            code,
+            rate: dto.rate,
+            description: dto.description?.trim() || null,
+            appliesTo: dto.appliesTo || 'BOTH',
+            isDefault: dto.isDefault ?? false,
+            isActive: dto.isActive ?? true,
+          },
+        });
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId,
+            entityType: 'TaxRate',
+            entityId: row.id,
+            action: 'CREATE',
+            afterData: JSON.stringify(row),
+            description: 'CREATE TaxRate',
+          },
+        });
+        return row;
+      })
+      .catch((error) => {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002')
+          throw new ConflictException('Tax name or code already exists');
+        throw error;
+      });
   }
 
   async updateTaxRate(businessId: string, userId: string, id: string, dto: TaxRateDto) {
     const before = await this.prisma.taxRate.findFirst({ where: { id, businessId } });
     if (!before) throw new NotFoundException('Tax rate not found');
-    if (dto.isDefault && dto.isActive === false) throw new BadRequestException('An inactive tax rate cannot be the default');
-    if (before.isDefault && dto.isActive === false) throw new ConflictException('Choose another default tax rate before deactivating this one');
+    if (dto.isDefault && dto.isActive === false)
+      throw new BadRequestException('An inactive tax rate cannot be the default');
+    if (before.isDefault && dto.isActive === false)
+      throw new ConflictException('Choose another default tax rate before deactivating this one');
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
         const scope = dto.appliesTo ?? before.appliesTo;
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:${scope === 'PURCHASES' ? 'PURCHASES' : 'SALES'}`}, 0)) IS NULL AS locked`;
-        await tx.taxRate.updateMany({ where: { businessId, id: { not: id }, isDefault: true }, data: { isDefault: false } });
-        if (dto.rate === undefined && before.appliesTo !== 'PURCHASES') await tx.business.update({ where: { id: businessId }, data: { taxPercentage: before.rate } });
+        await tx.taxRate.updateMany({
+          where: { businessId, id: { not: id }, isDefault: true },
+          data: { isDefault: false },
+        });
+        if (dto.rate === undefined && before.appliesTo !== 'PURCHASES')
+          await tx.business.update({
+            where: { id: businessId },
+            data: { taxPercentage: before.rate },
+          });
       }
-      const row = await tx.taxRate.update({ where: { id }, data: { ...(dto.name !== undefined && { name: dto.name.trim() }), ...(dto.code !== undefined && { code: dto.code.trim().toUpperCase() }), ...(dto.rate !== undefined && { rate: dto.rate }), ...(dto.description !== undefined && { description: dto.description.trim() || null }), ...(dto.appliesTo !== undefined && { appliesTo: dto.appliesTo }), ...(dto.isActive !== undefined && { isActive: dto.isActive }), ...(dto.isDefault !== undefined && { isDefault: dto.isDefault }) } });
-      if (row.isDefault && row.isActive && row.appliesTo !== 'PURCHASES') await tx.business.update({ where: { id: businessId }, data: { taxPercentage: row.rate } });
-      await tx.auditLog.create({ data: { businessId, userId, entityType: 'TaxRate', entityId: id, action: 'UPDATE', beforeData: JSON.stringify(before), afterData: JSON.stringify(row), description: 'UPDATE TaxRate' } });
+      const row = await tx.taxRate.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name.trim() }),
+          ...(dto.code !== undefined && { code: dto.code.trim().toUpperCase() }),
+          ...(dto.rate !== undefined && { rate: dto.rate }),
+          ...(dto.description !== undefined && { description: dto.description.trim() || null }),
+          ...(dto.appliesTo !== undefined && { appliesTo: dto.appliesTo }),
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+          ...(dto.isDefault !== undefined && { isDefault: dto.isDefault }),
+        },
+      });
+      if (row.isDefault && row.isActive && row.appliesTo !== 'PURCHASES')
+        await tx.business.update({ where: { id: businessId }, data: { taxPercentage: row.rate } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          entityType: 'TaxRate',
+          entityId: id,
+          action: 'UPDATE',
+          beforeData: JSON.stringify(before),
+          afterData: JSON.stringify(row),
+          description: 'UPDATE TaxRate',
+        },
+      });
       return row;
     });
   }
@@ -459,9 +866,21 @@ export class BusinessService {
   async deleteTaxRate(businessId: string, userId: string, id: string) {
     const before = await this.prisma.taxRate.findFirst({ where: { id, businessId } });
     if (!before) throw new NotFoundException('Tax rate not found');
-    if (before.isDefault) throw new ConflictException('Choose another default tax rate before deactivating this one');
+    if (before.isDefault)
+      throw new ConflictException('Choose another default tax rate before deactivating this one');
     const row = await this.prisma.taxRate.update({ where: { id }, data: { isActive: false } });
-    await this.prisma.auditLog.create({ data: { businessId, userId, entityType: 'TaxRate', entityId: id, action: 'DEACTIVATE', beforeData: JSON.stringify(before), afterData: JSON.stringify(row), description: 'DEACTIVATE TaxRate' } });
+    await this.prisma.auditLog.create({
+      data: {
+        businessId,
+        userId,
+        entityType: 'TaxRate',
+        entityId: id,
+        action: 'DEACTIVATE',
+        beforeData: JSON.stringify(before),
+        afterData: JSON.stringify(row),
+        description: 'DEACTIVATE TaxRate',
+      },
+    });
     return { message: 'Tax rate deactivated' };
   }
 
@@ -780,16 +1199,22 @@ export class BusinessService {
         const encoded = dto.logoUrl.match(/^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/);
         const bytes = encoded ? Buffer.from(encoded[1], 'base64') : Buffer.alloc(0);
         if (
-          !encoded || bytes.length === 0 || bytes.length > 65_536 ||
-          bytes.length < 12 || bytes.toString('ascii', 0, 4) !== 'RIFF' ||
+          !encoded ||
+          bytes.length === 0 ||
+          bytes.length > 65_536 ||
+          bytes.length < 12 ||
+          bytes.toString('ascii', 0, 4) !== 'RIFF' ||
           bytes.toString('ascii', 8, 12) !== 'WEBP'
         ) {
           throw new BadRequestException('Business logo must be a valid WebP image under 64 KB');
         }
       } else {
         let logoUrl: URL;
-        try { logoUrl = new URL(dto.logoUrl); }
-        catch { throw new BadRequestException('Business logo URL must be a valid HTTPS URL'); }
+        try {
+          logoUrl = new URL(dto.logoUrl);
+        } catch {
+          throw new BadRequestException('Business logo URL must be a valid HTTPS URL');
+        }
         if (logoUrl.protocol !== 'https:' || !logoUrl.hostname) {
           throw new BadRequestException('Business logo URL must be a valid HTTPS URL');
         }
@@ -817,7 +1242,24 @@ export class BusinessService {
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.currency && dto.currency !== before.currency) {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`business-currency:${businessId}`}, 0)) IS NULL AS locked`;
-        const [products, sales, purchases, payments, expenses, salesReturns, purchaseReturns, customerBalances, supplierBalances, exchangeRates, stockMovements, stockAdjustments, stockTransfers, physicalCounts, financialSummaries, accountingPeriods] = await Promise.all([
+        const [
+          products,
+          sales,
+          purchases,
+          payments,
+          expenses,
+          salesReturns,
+          purchaseReturns,
+          customerBalances,
+          supplierBalances,
+          exchangeRates,
+          stockMovements,
+          stockAdjustments,
+          stockTransfers,
+          physicalCounts,
+          financialSummaries,
+          accountingPeriods,
+        ] = await Promise.all([
           tx.product.count({ where: { businessId } }),
           tx.salesInvoice.count({ where: { businessId } }),
           tx.purchaseOrder.count({ where: { businessId } }),
@@ -825,8 +1267,18 @@ export class BusinessService {
           tx.expense.count({ where: { businessId } }),
           tx.salesReturn.count({ where: { businessId } }),
           tx.purchaseReturn.count({ where: { businessId } }),
-          tx.customer.count({ where: { businessId, OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }] } }),
-          tx.supplier.count({ where: { businessId, OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }] } }),
+          tx.customer.count({
+            where: {
+              businessId,
+              OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }],
+            },
+          }),
+          tx.supplier.count({
+            where: {
+              businessId,
+              OR: [{ openingBalance: { not: 0 } }, { creditLimit: { not: 0 } }],
+            },
+          }),
           tx.businessExchangeRate.count({ where: { businessId } }),
           tx.inventoryMovement.count({ where: { businessId } }),
           tx.stockAdjustment.count({ where: { businessId } }),
@@ -835,48 +1287,75 @@ export class BusinessService {
           tx.financialSummary.count({ where: { businessId } }),
           tx.accountingPeriod.count({ where: { businessId } }),
         ]);
-        if (products || sales || purchases || payments || expenses || salesReturns || purchaseReturns || customerBalances || supplierBalances || exchangeRates || stockMovements || stockAdjustments || stockTransfers || physicalCounts || financialSummaries || accountingPeriods) {
-          throw new ConflictException('Business base currency cannot be changed after products, balances, stock activity, exchange rates or financial records exist. Existing amounts are not converted. Keep the original currency or create a new business workspace.');
+        if (
+          products ||
+          sales ||
+          purchases ||
+          payments ||
+          expenses ||
+          salesReturns ||
+          purchaseReturns ||
+          customerBalances ||
+          supplierBalances ||
+          exchangeRates ||
+          stockMovements ||
+          stockAdjustments ||
+          stockTransfers ||
+          physicalCounts ||
+          financialSummaries ||
+          accountingPeriods
+        ) {
+          throw new ConflictException(
+            'Business base currency cannot be changed after products, balances, stock activity, exchange rates or financial records exist. Existing amounts are not converted. Keep the original currency or create a new business workspace.',
+          );
         }
       }
       if (dto.taxPercentage !== undefined) {
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`default-tax:${businessId}:SALES`}, 0)) IS NULL AS locked`;
       }
-      const salesDefaultRatesBefore = dto.taxPercentage === undefined
-        ? []
-        : await tx.taxRate.findMany({
-            where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } },
-          });
+      const salesDefaultRatesBefore =
+        dto.taxPercentage === undefined
+          ? []
+          : await tx.taxRate.findMany({
+              where: {
+                businessId,
+                isActive: true,
+                isDefault: true,
+                appliesTo: { in: ['SALES', 'BOTH'] },
+              },
+            });
       const row = await tx.business.update({
         where: { id: businessId },
         data: {
-        ...((dto.name || dto.businessName) && { name: dto.name || dto.businessName }),
-        ...(dto.phone !== undefined && { phone: dto.phone }),
-        ...(dto.phone2 !== undefined && { phone2: dto.phone2 }),
-        ...(dto.legalName !== undefined && { legalName: dto.legalName }),
-        ...(dto.registrationNumber !== undefined && { registrationNumber: dto.registrationNumber }),
-        ...(dto.email !== undefined && { email: dto.email }),
-        ...(dto.address !== undefined && { address: dto.address }),
-        ...(dto.city !== undefined && { city: dto.city }),
-        ...(dto.region !== undefined && { region: dto.region }),
-        ...(dto.country !== undefined && { country: dto.country }),
-        ...(dto.taxId !== undefined && { taxId: dto.taxId }),
-        ...(dto.timezone !== undefined && { timezone: dto.timezone }),
-        ...(dto.language !== undefined && { language: dto.language }),
-        ...((dto.description !== undefined || dto.businessDescription !== undefined) && {
-          description: dto.description ?? dto.businessDescription,
-        }),
-        ...(dto.businessType !== undefined && { businessType: dto.businessType.trim() }),
-        ...(dto.website !== undefined && { website: dto.website.trim() || null }),
-        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl?.trim() || null }),
-        ...(dto.financialYear !== undefined && { financialYear: dto.financialYear }),
-        ...(dto.taxPercentage !== undefined && { taxPercentage: dto.taxPercentage }),
-        ...(dto.allowNegativeStock !== undefined && {
-          allowNegativeStock: dto.allowNegativeStock,
-        }),
-        ...(dto.currency && { currency: dto.currency }),
-        ...(dto.costingMethod && { costingMethod: dto.costingMethod }),
-      },
+          ...((dto.name || dto.businessName) && { name: dto.name || dto.businessName }),
+          ...(dto.phone !== undefined && { phone: dto.phone }),
+          ...(dto.phone2 !== undefined && { phone2: dto.phone2 }),
+          ...(dto.legalName !== undefined && { legalName: dto.legalName }),
+          ...(dto.registrationNumber !== undefined && {
+            registrationNumber: dto.registrationNumber,
+          }),
+          ...(dto.email !== undefined && { email: dto.email }),
+          ...(dto.address !== undefined && { address: dto.address }),
+          ...(dto.city !== undefined && { city: dto.city }),
+          ...(dto.region !== undefined && { region: dto.region }),
+          ...(dto.country !== undefined && { country: dto.country }),
+          ...(dto.taxId !== undefined && { taxId: dto.taxId }),
+          ...(dto.timezone !== undefined && { timezone: dto.timezone }),
+          ...(dto.language !== undefined && { language: dto.language }),
+          ...((dto.description !== undefined || dto.businessDescription !== undefined) && {
+            description: dto.description ?? dto.businessDescription,
+          }),
+          ...(dto.businessType !== undefined && { businessType: dto.businessType.trim() }),
+          ...(dto.website !== undefined && { website: dto.website.trim() || null }),
+          ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl?.trim() || null }),
+          ...(dto.financialYear !== undefined && { financialYear: dto.financialYear }),
+          ...(dto.taxPercentage !== undefined && { taxPercentage: dto.taxPercentage }),
+          ...(dto.allowNegativeStock !== undefined && {
+            allowNegativeStock: dto.allowNegativeStock,
+          }),
+          ...(dto.currency && { currency: dto.currency }),
+          ...(dto.costingMethod && { costingMethod: dto.costingMethod }),
+        },
       });
       await tx.auditLog.create({
         data: {
@@ -892,7 +1371,12 @@ export class BusinessService {
       });
       if (dto.taxPercentage !== undefined && salesDefaultRatesBefore.length) {
         await tx.taxRate.updateMany({
-          where: { businessId, isActive: true, isDefault: true, appliesTo: { in: ['SALES', 'BOTH'] } },
+          where: {
+            businessId,
+            isActive: true,
+            isDefault: true,
+            appliesTo: { in: ['SALES', 'BOTH'] },
+          },
           data: { rate: dto.taxPercentage },
         });
         for (const beforeRate of salesDefaultRatesBefore) {
@@ -991,7 +1475,9 @@ export class BusinessService {
       select: { id: true },
     });
     if (!manager) {
-      throw new BadRequestException('Choose an active team member from this business as the location manager.');
+      throw new BadRequestException(
+        'Choose an active team member from this business as the location manager.',
+      );
     }
 
     const location = await this.prisma.location.create({
@@ -1023,10 +1509,18 @@ export class BusinessService {
     };
   }
 
-  async getLocations(businessId: string, userId: string, includeInactive = false): Promise<LocationResponseDto[]> {
+  async getLocations(
+    businessId: string,
+    userId: string,
+    includeInactive = false,
+  ): Promise<LocationResponseDto[]> {
     const allowedLocationIds = await accessibleLocationIds(this.prisma, businessId, userId);
     const locations = await this.prisma.location.findMany({
-      where: { businessId, ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}), ...(includeInactive ? {} : { isActive: true }) },
+      where: {
+        businessId,
+        ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}),
+        ...(includeInactive ? {} : { isActive: true }),
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -1048,7 +1542,11 @@ export class BusinessService {
   async getLocationOptions(businessId: string, userId: string) {
     const allowedLocationIds = await accessibleLocationIds(this.prisma, businessId, userId);
     return this.prisma.location.findMany({
-      where: { businessId, isActive: true, ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}) },
+      where: {
+        businessId,
+        isActive: true,
+        ...(allowedLocationIds ? { id: { in: allowedLocationIds } } : {}),
+      },
       orderBy: [{ name: 'asc' }, { code: 'asc' }],
       select: { id: true, name: true, code: true, type: true, isActive: true },
     });
@@ -1094,7 +1592,9 @@ export class BusinessService {
         select: { id: true },
       });
       if (!manager) {
-        throw new BadRequestException('Choose an active team member from this business as the location manager.');
+        throw new BadRequestException(
+          'Choose an active team member from this business as the location manager.',
+        );
       }
     }
 
@@ -1227,7 +1727,10 @@ export class BusinessService {
     };
   }
 
-  async getPaymentMethods(businessId: string, includeInactive = false): Promise<PaymentMethodResponseDto[]> {
+  async getPaymentMethods(
+    businessId: string,
+    includeInactive = false,
+  ): Promise<PaymentMethodResponseDto[]> {
     const methods = await this.prisma.paymentMethod.findMany({
       where: { businessId, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: { createdAt: 'desc' },
@@ -1253,7 +1756,10 @@ export class BusinessService {
     id: string,
     dto: UpdatePaymentMethodDto,
   ): Promise<PaymentMethodResponseDto> {
-    const user = await this.prisma.user.findFirst({ where: { id: userId, businessId }, select: { id: true } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, businessId },
+      select: { id: true },
+    });
     if (!user) throw new ForbiddenException('Not authorized');
     const existing = await this.prisma.paymentMethod.findFirst({ where: { id, businessId } });
     if (!existing) throw new NotFoundException('Payment method not found');
@@ -1392,7 +1898,10 @@ export class BusinessService {
     };
   }
 
-  async getExpenseCategories(businessId: string, includeInactive = false): Promise<ExpenseCategoryResponseDto[]> {
+  async getExpenseCategories(
+    businessId: string,
+    includeInactive = false,
+  ): Promise<ExpenseCategoryResponseDto[]> {
     const categories = await this.prisma.expenseCategory.findMany({
       where: { businessId, ...(includeInactive ? {} : { isActive: true }) },
       orderBy: { createdAt: 'desc' },

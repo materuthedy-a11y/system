@@ -41,20 +41,30 @@ describe('PaymentsService financial report consistency', () => {
       accountingPeriod: { findFirst: jest.fn().mockResolvedValue(null) },
     };
     const inventory = {
-      getStockValuationReport: jest.fn().mockResolvedValue({ totalValue: 0, costingMethod: 'WEIGHTED_AVERAGE' }),
+      getStockValuationReport: jest
+        .fn()
+        .mockResolvedValue({ totalValue: 0, costingMethod: 'WEIGHTED_AVERAGE' }),
     };
     const service = new PaymentsService(prisma as any, inventory as any, {} as any);
 
     const cashFlow = await service.getCashFlowReport('business-a', {
-      dateFrom: '2026-11-01', dateTo: '2026-11-15', groupBy: 'DAILY',
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-15',
+      groupBy: 'DAILY',
     } as any);
-    const summary = await service.getFinancialSummary('business-a', { dateAs: '2026-11-15' } as any);
-    const operationalBalance = await service.getTrialBalanceReport('business-a', { dateAs: '2026-11-15' } as any);
+    const summary = await service.getFinancialSummary('business-a', {
+      dateAs: '2026-11-15',
+    } as any);
+    const operationalBalance = await service.getTrialBalanceReport('business-a', {
+      dateAs: '2026-11-15',
+    } as any);
 
     expect(cashFlow.totalInflows).toBe(100);
     expect(cashFlow.totalOutflows).toBe(25);
     expect(cashFlow.closingBalance).toBe(75);
     expect(summary.cashOnHand).toBe(cashFlow.closingBalance);
-    expect(operationalBalance.items.find((item) => item.accountName.startsWith('Cash'))?.debit).toBe(cashFlow.closingBalance);
+    expect(
+      operationalBalance.items.find((item) => item.accountName.startsWith('Cash'))?.debit,
+    ).toBe(cashFlow.closingBalance);
   });
 });

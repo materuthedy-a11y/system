@@ -61,34 +61,72 @@ export class CustomerService {
         const status = dto.status || (dto.isActive ? 'ACTIVE' : 'SUSPENDED');
         const created = await tx.customer.create({
           data: {
-            id: uuid(), businessId, name: dto.name.trim(), customerCode,
-            customerType: dto.customerType, description: dto.description?.trim() || null,
-            email: dto.email.trim().toLowerCase(), phone: dto.phone.trim(),
-            secondaryPhone: dto.secondaryPhone?.trim() || null, taxId: dto.taxId?.trim() || null,
-            creditLimit: dto.creditLimit, paymentTerms: dto.paymentTerms,
-            openingBalance: dto.openingBalance, isActive: status === 'ACTIVE', status,
-            ...(dto.contacts?.length ? { contacts: { create: dto.contacts.map((contact, index) => ({
-              firstName: contact.firstName.trim(), lastName: contact.lastName.trim(),
-              email: contact.email.trim().toLowerCase(), phone: contact.phone.trim(),
-              position: contact.position?.trim() || null, isPrimary: index === 0,
-            })) } } : {}),
-            ...(dto.address ? { address: { create: {
-              street: dto.address.street.trim(), city: dto.address.city.trim(),
-              region: dto.address.region.trim(), postalCode: dto.address.postalCode.trim(),
-              country: dto.address.country?.trim() || null,
-            } } } : {}),
+            id: uuid(),
+            businessId,
+            name: dto.name.trim(),
+            customerCode,
+            customerType: dto.customerType,
+            description: dto.description?.trim() || null,
+            email: dto.email.trim().toLowerCase(),
+            phone: dto.phone.trim(),
+            secondaryPhone: dto.secondaryPhone?.trim() || null,
+            taxId: dto.taxId?.trim() || null,
+            creditLimit: dto.creditLimit,
+            paymentTerms: dto.paymentTerms,
+            openingBalance: dto.openingBalance,
+            isActive: status === 'ACTIVE',
+            status,
+            ...(dto.contacts?.length
+              ? {
+                  contacts: {
+                    create: dto.contacts.map((contact, index) => ({
+                      firstName: contact.firstName.trim(),
+                      lastName: contact.lastName.trim(),
+                      email: contact.email.trim().toLowerCase(),
+                      phone: contact.phone.trim(),
+                      position: contact.position?.trim() || null,
+                      isPrimary: index === 0,
+                    })),
+                  },
+                }
+              : {}),
+            ...(dto.address
+              ? {
+                  address: {
+                    create: {
+                      street: dto.address.street.trim(),
+                      city: dto.address.city.trim(),
+                      region: dto.address.region.trim(),
+                      postalCode: dto.address.postalCode.trim(),
+                      country: dto.address.country?.trim() || null,
+                    },
+                  },
+                }
+              : {}),
           },
           select: { id: true },
         });
         if (photo) {
           await tx.customerPhoto.create({
-            data: { id: uuid(), businessId, customerId: created.id, data: photo, contentType: 'image/webp' },
+            data: {
+              id: uuid(),
+              businessId,
+              customerId: created.id,
+              data: photo,
+              contentType: 'image/webp',
+            },
           });
         }
-        await tx.auditLog.create({ data: {
-          businessId, userId, action: 'CREATE', entityType: 'CUSTOMER', entityId: created.id,
-          description: `Created customer ${customerCode}`,
-        } });
+        await tx.auditLog.create({
+          data: {
+            businessId,
+            userId,
+            action: 'CREATE',
+            entityType: 'CUSTOMER',
+            entityId: created.id,
+            description: `Created customer ${customerCode}`,
+          },
+        });
         return created;
       });
     } catch (error) {
@@ -190,7 +228,10 @@ export class CustomerService {
     }
 
     // Query customers
-    const needsMemoryFilterOrSort = filter.status === 'OVERDUE' || filter.sortBy === 'outstanding' || filter.sortBy === 'lastSale';
+    const needsMemoryFilterOrSort =
+      filter.status === 'OVERDUE' ||
+      filter.sortBy === 'outstanding' ||
+      filter.sortBy === 'lastSale';
     const [customers, total] = await Promise.all([
       this.prisma.customer.findMany({
         where,
@@ -247,7 +288,9 @@ export class CustomerService {
 
     if (filter.sortBy === 'lastSale') {
       const direction = filter.sortOrder === 'asc' ? 1 : -1;
-      results.sort((a, b) => direction * ((a.lastSaleDate?.getTime() || 0) - (b.lastSaleDate?.getTime() || 0)));
+      results.sort(
+        (a, b) => direction * ((a.lastSaleDate?.getTime() || 0) - (b.lastSaleDate?.getTime() || 0)),
+      );
     }
 
     const resultTotal = needsMemoryFilterOrSort ? results.length : total;
@@ -291,7 +334,9 @@ export class CustomerService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      const status = dto.status ?? (dto.isActive === undefined ? undefined : dto.isActive ? 'ACTIVE' : 'SUSPENDED');
+      const status =
+        dto.status ??
+        (dto.isActive === undefined ? undefined : dto.isActive ? 'ACTIVE' : 'SUSPENDED');
       await tx.customer.update({
         where: { id: customerId },
         data: {
@@ -300,7 +345,9 @@ export class CustomerService {
           ...(dto.description !== undefined && { description: dto.description?.trim() || null }),
           ...(dto.email !== undefined && { email: dto.email.trim().toLowerCase() }),
           ...(dto.phone !== undefined && { phone: dto.phone.trim() }),
-          ...(dto.secondaryPhone !== undefined && { secondaryPhone: dto.secondaryPhone?.trim() || null }),
+          ...(dto.secondaryPhone !== undefined && {
+            secondaryPhone: dto.secondaryPhone?.trim() || null,
+          }),
           ...(dto.taxId !== undefined && { taxId: dto.taxId?.trim() || null }),
           ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
           ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
@@ -311,23 +358,34 @@ export class CustomerService {
 
       if (dto.contacts !== undefined) {
         await tx.customerContact.deleteMany({ where: { customerId } });
-        if (dto.contacts.length) await tx.customerContact.createMany({ data: dto.contacts.map((contact, index) => ({
-          id: uuid(), customerId, firstName: contact.firstName?.trim() || '',
-          lastName: contact.lastName?.trim() || '', email: contact.email?.trim().toLowerCase() || '',
-          phone: contact.phone?.trim() || '', position: contact.position?.trim() || null,
-          isPrimary: index === 0,
-        })) });
+        if (dto.contacts.length)
+          await tx.customerContact.createMany({
+            data: dto.contacts.map((contact, index) => ({
+              id: uuid(),
+              customerId,
+              firstName: contact.firstName?.trim() || '',
+              lastName: contact.lastName?.trim() || '',
+              email: contact.email?.trim().toLowerCase() || '',
+              phone: contact.phone?.trim() || '',
+              position: contact.position?.trim() || null,
+              isPrimary: index === 0,
+            })),
+          });
       }
 
       if (dto.address === null) await tx.customerAddress.deleteMany({ where: { customerId } });
       else if (dto.address) {
         const addressData = {
-          street: dto.address.street?.trim() || '', city: dto.address.city?.trim() || '',
-          region: dto.address.region?.trim() || '', postalCode: dto.address.postalCode?.trim() || '',
+          street: dto.address.street?.trim() || '',
+          city: dto.address.city?.trim() || '',
+          region: dto.address.region?.trim() || '',
+          postalCode: dto.address.postalCode?.trim() || '',
           country: dto.address.country?.trim() || null,
         };
         await tx.customerAddress.upsert({
-          where: { customerId }, create: { id: uuid(), customerId, ...addressData }, update: addressData,
+          where: { customerId },
+          create: { id: uuid(), customerId, ...addressData },
+          update: addressData,
         });
       }
       if (dto.photo === null) {
@@ -339,10 +397,16 @@ export class CustomerService {
           update: { id: uuid(), data: photo, contentType: 'image/webp' },
         });
       }
-      await tx.auditLog.create({ data: {
-        businessId, userId, action: 'UPDATE', entityType: 'CUSTOMER', entityId: customerId,
-        description: `Updated customer ${customer.customerCode}`,
-      } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          action: 'UPDATE',
+          entityType: 'CUSTOMER',
+          entityId: customerId,
+          description: `Updated customer ${customer.customerCode}`,
+        },
+      });
     });
 
     this.logger.log(`[CUSTOMERS] Customer updated: ${customerId}`);
@@ -382,11 +446,15 @@ export class CustomerService {
       const [invoiceCount, paymentCount, returnCount] = await Promise.all([
         tx.salesInvoice.count({ where: { customerId, businessId } }),
         tx.payment.count({ where: { customerId, businessId } }),
-        tx.salesReturn.count({ where: { businessId, OR: [{ customerId }, { invoice: { customerId } }] } }),
+        tx.salesReturn.count({
+          where: { businessId, OR: [{ customerId }, { invoice: { customerId } }] },
+        }),
       ]);
 
       if (invoiceCount || paymentCount || returnCount) {
-        throw new BadRequestException('Cannot delete a customer with sales, payments or returns. Change the customer status instead.');
+        throw new BadRequestException(
+          'Cannot delete a customer with sales, payments or returns. Change the customer status instead.',
+        );
       }
 
       await tx.customerContact.deleteMany({ where: { customerId } });
@@ -537,12 +605,15 @@ export class CustomerService {
 
   async getCustomerActivities(businessId: string, customerId: string, limit = 30) {
     const customer = await this.prisma.customer.findFirst({
-      where: { id: customerId, businessId }, select: { id: true },
+      where: { id: customerId, businessId },
+      select: { id: true },
     });
     if (!customer) throw new NotFoundException('Customer not found');
     const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
     return this.prisma.customerActivity.findMany({
-      where: { businessId, customerId }, orderBy: { createdAt: 'desc' }, take: safeLimit,
+      where: { businessId, customerId },
+      orderBy: { createdAt: 'desc' },
+      take: safeLimit,
       include: { user: { select: { id: true, firstName: true, lastName: true } } },
     });
   }
@@ -554,20 +625,34 @@ export class CustomerService {
     dto: { type: string; description: string; reference?: string },
   ) {
     const customer = await this.prisma.customer.findFirst({
-      where: { id: customerId, businessId }, select: { id: true },
+      where: { id: customerId, businessId },
+      select: { id: true },
     });
     if (!customer) throw new NotFoundException('Customer not found');
     const description = dto.description.trim();
     if (!description) throw new BadRequestException('Interaction details are required.');
     return this.prisma.$transaction(async (tx) => {
-      const activity = await tx.customerActivity.create({ data: {
-        id: uuid(), businessId, customerId, userId, type: dto.type,
-        description, reference: dto.reference?.trim() || null,
-      } });
-      await tx.auditLog.create({ data: {
-        businessId, userId, action: 'CREATE', entityType: 'CUSTOMER_ACTIVITY', entityId: activity.id,
-        description: `Added ${dto.type.toLowerCase()} activity to customer ${customerId}`,
-      } });
+      const activity = await tx.customerActivity.create({
+        data: {
+          id: uuid(),
+          businessId,
+          customerId,
+          userId,
+          type: dto.type,
+          description,
+          reference: dto.reference?.trim() || null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          action: 'CREATE',
+          entityType: 'CUSTOMER_ACTIVITY',
+          entityId: activity.id,
+          description: `Added ${dto.type.toLowerCase()} activity to customer ${customerId}`,
+        },
+      });
       return activity;
     });
   }
@@ -630,7 +715,11 @@ export class CustomerService {
         _sum: { totalAmount: true },
       }),
       this.prisma.salesInvoice.aggregate({
-        where: { businessId, customerId, status: { in: ['ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE'] } },
+        where: {
+          businessId,
+          customerId,
+          status: { in: ['ISSUED', 'PARTIALLY_PAID', 'PAID', 'OVERDUE'] },
+        },
         _max: { issuedDate: true },
       }),
     ]);
@@ -649,7 +738,12 @@ export class CustomerService {
     customer: any,
     contacts: any[],
     address: any,
-    financials?: { totalSales: number; totalPaid: number; totalReturned: number; lastSaleDate?: Date },
+    financials?: {
+      totalSales: number;
+      totalPaid: number;
+      totalReturned: number;
+      lastSaleDate?: Date;
+    },
   ): CustomerResponseDto {
     const totalSales = financials?.totalSales || 0;
     const totalPaid = financials?.totalPaid || 0;
@@ -719,7 +813,9 @@ export class CustomerService {
       data.toString('ascii', 8, 12) !== 'WEBP' ||
       !['VP8 ', 'VP8L', 'VP8X'].includes(data.toString('ascii', 12, 16))
     ) {
-      throw new BadRequestException('Customer photo is invalid or exceeds 128 KB after compression');
+      throw new BadRequestException(
+        'Customer photo is invalid or exceeds 128 KB after compression',
+      );
     }
     return data;
   }

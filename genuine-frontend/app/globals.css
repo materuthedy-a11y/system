@@ -53,6 +53,32 @@ html:not(.dark) [class*="text-[#A24C0F"] {
 }
 
 button, input, select { font: inherit; }
+/* Form values should read as entered data, not like faint helper text. Keep
+   this consistent across pages and themes; placeholders remain lighter. */
+html:not(.dark) input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html:not(.dark) select,
+html:not(.dark) textarea {
+  color: #252a25 !important;
+  font-weight: 500 !important;
+}
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark select,
+html.dark textarea {
+  color: #e1e5de !important;
+  font-weight: 500 !important;
+}
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #73766f !important;
+  font-weight: 400 !important;
+  opacity: 1;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #aab2a6 !important;
+  font-weight: 400 !important;
+  opacity: 1;
+}
 button:not(:disabled) {
   cursor: pointer;
   transition-property: color, background-color, border-color, box-shadow, filter, transform;
@@ -245,7 +271,7 @@ html.dark[data-photo-theme="true"] [class*="rounded-2xl"]:not([role="dialog"]):n
   [class*="dark:bg-[#1b"], [class*="dark:bg-[#20"]
 ) {
   background-color: rgb(24 37 40 / var(--photo-glass-opacity, 0.68)) !important;
-  border-color: rgb(226 242 235 / 15%) !important;
+  border-color: rgb(226 242 235 / 24%) !important;
   box-shadow: 0 12px 36px rgb(1 8 10 / 18%), inset 0 1px rgb(255 255 255 / 5%);
   -webkit-backdrop-filter: blur(18px) saturate(125%);
   backdrop-filter: blur(18px) saturate(125%);
@@ -282,6 +308,14 @@ html.dark [class~="bg-white"] {
 
 html.dark [class~="bg-white/90"] {
   background-color: rgb(26 36 39 / 96%) !important;
+}
+
+/* Give neutral white card surfaces one shared cream treatment in light mode.
+   Only rounded card containers are affected; buttons, fields, semantic mint/
+   rose states, and all dark/photo themes keep their own colors. */
+html:not(.dark) [class~="bg-white"]:is([class~="rounded-2xl"], [class~="rounded-xl"], [class~="rounded-lg"]):not(button):not(input):not(select):not(textarea):not([class*="bg-red-"]):not([class*="bg-rose-"]):not([class*="bg-amber-"]):not([class*="bg-yellow-"]):not([class*="bg-orange-"]):not([class*="bg-green-"]):not([class*="bg-emerald-"]):not([class*="bg-lime-"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="bg-sky-"]):not([class*="bg-blue-"]):not([class*="bg-indigo-"]):not([class*="bg-violet-"]):not([class*="bg-purple-"]):not([class*="bg-fuchsia-"]):not([class*="bg-pink-"]) {
+  background-color: #fbf7eb !important;
+  border-color: #dfbd55;
 }
 
 html.dark [class*="bg-[#f"],
@@ -780,3 +814,66 @@ a.ui-nav-link > svg {
 a.ui-nav-link:hover > svg {
   transform: translateX(2px);
 }
+
+/* Calm mint action for adding inventory lines in light, dark, and photo-glass themes. */
+.ui-add-line-button {
+  border-color: #b8dfca;
+  background-color: #e9f6ef;
+  color: #086844;
+}
+.ui-add-line-button:hover:not(:disabled) {
+  border-color: #91c9aa;
+  background-color: #d9efe2;
+}
+.ui-add-line-button:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 3px;
+}
+.ui-add-line-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+html.dark .ui-add-line-button {
+  border-color: rgb(110 231 183 / 0.28);
+  background-color: rgb(16 185 129 / 0.13);
+  color: #a7f3d0;
+}
+html.dark .ui-add-line-button:hover:not(:disabled) {
+  border-color: rgb(110 231 183 / 0.48);
+  background-color: rgb(16 185 129 / 0.22);
+}
+html.dark[data-photo-theme="true"] .ui-add-line-button {
+  border-color: rgb(110 231 183 / 0.32);
+  background-color: rgb(16 74 58 / 0.68);
+  color: #c6f6df;
+  backdrop-filter: blur(10px);
+}
+html.dark[data-photo-theme="true"] .ui-add-line-button:hover:not(:disabled) {
+  background-color: rgb(16 94 70 / 0.82);
+}
+
+/* Make card edges easier to distinguish in every appearance mode. Neutral
+   light cards use a clearer Mizania gold; dark cards use a visible quiet edge.
+   Cards carrying a semantic hue keep that hue, with stronger contrast. */
+html:not(.dark) [class*="rounded-"]:is([class~="border"], [class*="border-"]):not(button):not(input):not(select):not(textarea):not([class*="bg-red-"]):not([class*="bg-rose-"]):not([class*="bg-amber-"]):not([class*="bg-yellow-"]):not([class*="bg-orange-"]):not([class*="bg-green-"]):not([class*="bg-emerald-"]):not([class*="bg-lime-"]):not([class*="bg-teal-"]):not([class*="bg-cyan-"]):not([class*="bg-sky-"]):not([class*="bg-blue-"]):not([class*="bg-indigo-"]):not([class*="bg-violet-"]):not([class*="bg-purple-"]):not([class*="bg-fuchsia-"]):not([class*="bg-pink-"]) {
+  border-color: #dfbd55 !important;
+}
+html.dark [class*="rounded-"]:is([class~="border"], [class*="border-"]):not(button):not(input):not(select):not(textarea) {
+  border-color: #536057 !important;
+}
+
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #dc2626 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #ea580c !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #c58b0b !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #059669 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #0891b2 !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #2563eb !important; }
+html:not(.dark) [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #9333ea !important; }
+
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-red-"], [class*="border-rose-"], [class*="bg-red-"], [class*="bg-rose-"]) { border-color: #fca5a5 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-orange-"], [class*="bg-orange-"]) { border-color: #fdba74 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-amber-"], [class*="border-yellow-"], [class*="bg-amber-"], [class*="bg-yellow-"]) { border-color: #fcd34d !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-green-"], [class*="border-emerald-"], [class*="border-lime-"], [class*="bg-green-"], [class*="bg-emerald-"], [class*="bg-lime-"]) { border-color: #6ee7b7 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #67e8f9 !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #93c5fd !important; }
+html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #c4b5fd !important; }

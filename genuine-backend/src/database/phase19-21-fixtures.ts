@@ -27,7 +27,9 @@ async function request<T>(path: string, token: string, method = 'GET', body?: un
   });
   const json = (await response.json()) as { data?: T; message?: string };
   if (!response.ok) {
-    throw new Error(`${method} ${path} failed (${response.status}): ${json.message ?? 'API error'}`);
+    throw new Error(
+      `${method} ${path} failed (${response.status}): ${json.message ?? 'API error'}`,
+    );
   }
   return json.data as T;
 }
@@ -51,7 +53,9 @@ async function main() {
     prisma.unit.findFirst({ where: { name: 'Bottle', isActive: true } }),
     prisma.product.findFirst({ where: { businessId: business.id, sku: 'BEV-001' } }),
     prisma.customer.findFirst({ where: { businessId: business.id, customerCode: 'CUST-00001' } }),
-    prisma.paymentMethod.findFirst({ where: { businessId: business.id, name: 'Cash', isActive: true } }),
+    prisma.paymentMethod.findFirst({
+      where: { businessId: business.id, name: 'Cash', isActive: true },
+    }),
   ]);
   if (!category || !supplier || !location || !bottle || !baseProduct || !customer || !cash) {
     throw new Error('A seeded reference record is missing; no phase fixtures were created.');
@@ -91,7 +95,14 @@ async function main() {
   for (const [key, permissionCategory, action] of tenantPermissions) {
     const permission = await prisma.permission.upsert({
       where: { businessId_key: { businessId: tenantB.id, key } },
-      create: { businessId: tenantB.id, key, name: key.toUpperCase(), category: permissionCategory, action, isSystem: true },
+      create: {
+        businessId: tenantB.id,
+        key,
+        name: key.toUpperCase(),
+        category: permissionCategory,
+        action,
+        isSystem: true,
+      },
       update: {},
       select: { id: true },
     });
@@ -145,7 +156,13 @@ async function main() {
   });
   const tenantLocation = await prisma.location.upsert({
     where: { businessId_code: { businessId: tenantB.id, code: 'PH19-B-MAIN' } },
-    create: { businessId: tenantB.id, name: 'PH19 Tenant B Warehouse', code: 'PH19-B-MAIN', type: 'WAREHOUSE', managerId: tenantBUser.id },
+    create: {
+      businessId: tenantB.id,
+      name: 'PH19 Tenant B Warehouse',
+      code: 'PH19-B-MAIN',
+      type: 'WAREHOUSE',
+      managerId: tenantBUser.id,
+    },
     update: {},
   });
   const tenantProduct = await prisma.product.upsert({
@@ -197,9 +214,16 @@ async function main() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: tenantBEmail, password: 'PH19test!2026' }),
     });
-    const tenantLoginJson = (await tenantLoginResponse.json()) as { data?: { accessToken?: string; user?: { businessId?: string } }; message?: string };
+    const tenantLoginJson = (await tenantLoginResponse.json()) as {
+      data?: { accessToken?: string; user?: { businessId?: string } };
+      message?: string;
+    };
     const tenantToken = tenantLoginJson.data?.accessToken;
-    if (!tenantLoginResponse.ok || !tenantToken || tenantLoginJson.data?.user?.businessId !== tenantB.id) {
+    if (
+      !tenantLoginResponse.ok ||
+      !tenantToken ||
+      tenantLoginJson.data?.user?.businessId !== tenantB.id
+    ) {
       throw new Error('Could not authenticate the tenant B fixture user.');
     }
     await request('/sales/invoices', tenantToken, 'POST', {
@@ -223,7 +247,16 @@ async function main() {
           .findMany({
             where: {
               businessId: business.id,
-              key: { in: ['customers.view', 'products.view', 'sales.view', 'sales.create', 'sales.edit', 'payments.create'] },
+              key: {
+                in: [
+                  'customers.view',
+                  'products.view',
+                  'sales.view',
+                  'sales.create',
+                  'sales.edit',
+                  'payments.create',
+                ],
+              },
             },
             select: { id: true },
           })
@@ -268,17 +301,41 @@ async function main() {
   const editLocation = await prisma.location.findUnique({
     where: { businessId_code: { businessId: business.id, code: 'PH20-EDIT-01' } },
   });
-  if (!branchLocation || !editLocation) throw new Error('Could not create the phase test locations.');
+  if (!branchLocation || !editLocation)
+    throw new Error('Could not create the phase test locations.');
 
   const customers = [
-    { customerCode: 'PH21-CUST-A', name: 'PH21 Filter Customer Alpha', customerType: 'RETAIL', paymentTerms: 'NET-30', creditLimit: 5000000, isActive: true },
-    { customerCode: 'PH21-CUST-B', name: 'PH21 Filter Customer Beta', customerType: 'WHOLESALE', paymentTerms: 'COD', creditLimit: 0, isActive: true },
-    { customerCode: 'PH21-CUST-X', name: 'PH21 Inactive Customer', customerType: 'RETAIL', paymentTerms: 'COD', creditLimit: 0, isActive: false },
+    {
+      customerCode: 'PH21-CUST-A',
+      name: 'PH21 Filter Customer Alpha',
+      customerType: 'RETAIL',
+      paymentTerms: 'NET-30',
+      creditLimit: 5000000,
+      isActive: true,
+    },
+    {
+      customerCode: 'PH21-CUST-B',
+      name: 'PH21 Filter Customer Beta',
+      customerType: 'WHOLESALE',
+      paymentTerms: 'COD',
+      creditLimit: 0,
+      isActive: true,
+    },
+    {
+      customerCode: 'PH21-CUST-X',
+      name: 'PH21 Inactive Customer',
+      customerType: 'RETAIL',
+      paymentTerms: 'COD',
+      creditLimit: 0,
+      isActive: false,
+    },
   ];
   for (let index = 0; index < customers.length; index += 1) {
     const value = customers[index];
     await prisma.customer.upsert({
-      where: { businessId_customerCode: { businessId: business.id, customerCode: value.customerCode } },
+      where: {
+        businessId_customerCode: { businessId: business.id, customerCode: value.customerCode },
+      },
       create: {
         businessId: business.id,
         ...value,
@@ -290,11 +347,46 @@ async function main() {
   }
 
   const productSpecs = [
-    { sku: 'PH19-BEV-001', name: 'PH19 Premium Soda 330ml', buyingPrice: 900, sellingPrice: 1300, status: 'ACTIVE', quantity: 80 },
-    { sku: 'PH19-BEV-002', name: 'PH19 Tonic Water 500ml', buyingPrice: 1200, sellingPrice: 1800, status: 'ACTIVE', quantity: 60 },
-    { sku: 'PH19-BEV-003', name: 'PH19 Sparkling Water 750ml', buyingPrice: 1600, sellingPrice: 2400, status: 'ACTIVE', quantity: 45 },
-    { sku: 'PH19-INACTIVE-001', name: 'PH19 Inactive Sample Product', buyingPrice: 1000, sellingPrice: 1500, status: 'INACTIVE', quantity: 0 },
-    { sku: 'PH21-STOCK-001', name: 'PH21 Stock and Returns Test Product', buyingPrice: 2000, sellingPrice: 3000, status: 'ACTIVE', quantity: 50 },
+    {
+      sku: 'PH19-BEV-001',
+      name: 'PH19 Premium Soda 330ml',
+      buyingPrice: 900,
+      sellingPrice: 1300,
+      status: 'ACTIVE',
+      quantity: 80,
+    },
+    {
+      sku: 'PH19-BEV-002',
+      name: 'PH19 Tonic Water 500ml',
+      buyingPrice: 1200,
+      sellingPrice: 1800,
+      status: 'ACTIVE',
+      quantity: 60,
+    },
+    {
+      sku: 'PH19-BEV-003',
+      name: 'PH19 Sparkling Water 750ml',
+      buyingPrice: 1600,
+      sellingPrice: 2400,
+      status: 'ACTIVE',
+      quantity: 45,
+    },
+    {
+      sku: 'PH19-INACTIVE-001',
+      name: 'PH19 Inactive Sample Product',
+      buyingPrice: 1000,
+      sellingPrice: 1500,
+      status: 'INACTIVE',
+      quantity: 0,
+    },
+    {
+      sku: 'PH21-STOCK-001',
+      name: 'PH21 Stock and Returns Test Product',
+      buyingPrice: 2000,
+      sellingPrice: 3000,
+      status: 'ACTIVE',
+      quantity: 50,
+    },
   ];
   for (const spec of productSpecs) {
     const product = await prisma.product.upsert({
@@ -334,7 +426,10 @@ async function main() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: 'admin@genuineliquor.co.tz', password: 'admin123' }),
   });
-  const loginJson = (await loginResponse.json()) as { data?: { accessToken?: string; user?: { businessId?: string } }; message?: string };
+  const loginJson = (await loginResponse.json()) as {
+    data?: { accessToken?: string; user?: { businessId?: string } };
+    message?: string;
+  };
   const token = loginJson.data?.accessToken;
   if (!loginResponse.ok || !token || loginJson.data?.user?.businessId !== business.id) {
     throw new Error('Cannot authenticate the seeded owner against the target business.');
@@ -348,9 +443,13 @@ async function main() {
     prisma.customer.findFirst({ where: { businessId: business.id, customerCode: 'PH21-CUST-B' } }),
     prisma.user.findUnique({ where: { email: qaEmail }, select: { id: true } }),
   ]);
-  if (!fixtureProduct || !alpha || !beta || !qaUser) throw new Error('Could not load the phase test lookups.');
+  if (!fixtureProduct || !alpha || !beta || !qaUser)
+    throw new Error('Could not load the phase test lookups.');
 
-  const invoiceRefs = Array.from({ length: 22 }, (_, index) => `PH21-FILTER:DRAFT-${String(index + 1).padStart(2, '0')}`);
+  const invoiceRefs = Array.from(
+    { length: 22 },
+    (_, index) => `PH21-FILTER:DRAFT-${String(index + 1).padStart(2, '0')}`,
+  );
   const invoiceRefsWithLifecycle = [
     ...invoiceRefs,
     'PH21-WORKFLOW:ISSUED',
@@ -362,7 +461,9 @@ async function main() {
   ];
   const refsToCreate = invoiceRefsWithLifecycle;
   const day = 24 * 60 * 60 * 1000;
-  const invoiceDates = invoiceRefs.map((_, index) => new Date(Date.UTC(2026, 9, 1 + index % 31, 12)).toISOString());
+  const invoiceDates = invoiceRefs.map((_, index) =>
+    new Date(Date.UTC(2026, 9, 1 + (index % 31), 12)).toISOString(),
+  );
   const referenceInvoices: Array<{ reference: string; id: string; status: string }> = [];
 
   for (let index = 0; index < refsToCreate.length; index += 1) {
@@ -372,12 +473,15 @@ async function main() {
       select: { id: true, status: true },
     });
     if (!invoice) {
-      const workflow = reference.startsWith('PH21-WORKFLOW:');
       const kind = reference.split(':')[1];
-      const invoiceDate = kind === 'OVERDUE'
-        ? new Date(Date.UTC(2026, 8, 20, 12)).toISOString()
-        : invoiceDates[index % invoiceDates.length];
-      const dueDate = kind === 'OVERDUE' ? new Date(Date.UTC(2026, 9, 20, 12)).toISOString() : new Date(Date.UTC(2026, 10, 30, 12)).toISOString();
+      const invoiceDate =
+        kind === 'OVERDUE'
+          ? new Date(Date.UTC(2026, 8, 20, 12)).toISOString()
+          : invoiceDates[index % invoiceDates.length];
+      const dueDate =
+        kind === 'OVERDUE'
+          ? new Date(Date.UTC(2026, 9, 20, 12)).toISOString()
+          : new Date(Date.UTC(2026, 10, 30, 12)).toISOString();
       const quantity = kind === 'RETURN' ? 2 : 1;
       invoice = await request<{ id: string; status: string }>('/sales/invoices', token, 'POST', {
         customerId: alpha.id,
@@ -401,20 +505,32 @@ async function main() {
         paymentTerms: index % 2 === 0 ? 'NET-30' : 'COD',
       });
     }
-    if (kind === 'ISSUED' || kind === 'OVERDUE' || kind === 'PARTIAL' || kind === 'PAID' || kind === 'RETURN') {
+    if (
+      kind === 'ISSUED' ||
+      kind === 'OVERDUE' ||
+      kind === 'PARTIAL' ||
+      kind === 'PAID' ||
+      kind === 'RETURN'
+    ) {
       if (invoice.status === 'DRAFT') {
         invoice = await request(`/sales/invoices/${invoice.id}/issue`, token, 'POST');
       }
     }
     if (kind === 'CANCELLED' && invoice.status === 'DRAFT') {
-      invoice = await request(`/sales/invoices/${invoice.id}/cancel`, token, 'POST', { reason: 'Synthetic Phase 21 fixture cancellation.' });
+      invoice = await request(`/sales/invoices/${invoice.id}/cancel`, token, 'POST', {
+        reason: 'Synthetic Phase 21 fixture cancellation.',
+      });
     }
     referenceInvoices.push({ reference, id: invoice.id, status: invoice.status });
   }
 
-  const paymentMethods = await request<Array<{ id: string; name: string }>>('/payments/methods', token);
+  const paymentMethods = await request<Array<{ id: string; name: string }>>(
+    '/payments/methods',
+    token,
+  );
   const paymentMethod = paymentMethods.find((method) => method.name === 'Cash');
-  if (!paymentMethod) throw new Error('Active Cash payment method is unavailable in the Sales API.');
+  if (!paymentMethod)
+    throw new Error('Active Cash payment method is unavailable in the Sales API.');
 
   for (const kind of ['PARTIAL', 'PAID']) {
     const invoiceRef = `PH21-WORKFLOW:${kind}`;
@@ -423,7 +539,8 @@ async function main() {
       select: { id: true, totalAmount: true, totalPaid: true, status: true },
     });
     if (!invoice) throw new Error(`Missing ${invoiceRef} invoice.`);
-    const desired = kind === 'PARTIAL' ? Math.floor((invoice.totalAmount / 2) * 100) / 100 : invoice.totalAmount;
+    const desired =
+      kind === 'PARTIAL' ? Math.floor((invoice.totalAmount / 2) * 100) / 100 : invoice.totalAmount;
     const amount = Math.round((desired - invoice.totalPaid) * 100) / 100;
     if (amount > 0) {
       await request(`/sales/invoices/${invoice.id}/payments`, token, 'POST', {
@@ -449,7 +566,9 @@ async function main() {
     salesReturn = await request('/sales/returns', token, 'POST', {
       salesInvoiceId: returnInvoice.id,
       returnNumber: 'PH21-RETURN-001',
-      items: [{ salesInvoiceItemId: returnInvoice.items[0].id, quantity: 1, reason: 'CUSTOMER_REQUEST' }],
+      items: [
+        { salesInvoiceItemId: returnInvoice.items[0].id, quantity: 1, reason: 'CUSTOMER_REQUEST' },
+      ],
       authorizeNow: true,
       notes: 'Synthetic Phase 21 return fixture.',
     });
@@ -458,7 +577,11 @@ async function main() {
     salesReturn = await request(`/sales/returns/${salesReturn.id}/receive`, token, 'POST');
   }
 
-  async function prepareReturnFixture(reference: string, invoiceReference: string, authorize: boolean) {
+  async function prepareReturnFixture(
+    reference: string,
+    invoiceReference: string,
+    authorize: boolean,
+  ) {
     const invoice = await prisma.salesInvoice.findFirst({
       where: { businessId: business.id, referenceNumber: invoiceReference },
       include: { items: { orderBy: { lineNo: 'asc' }, take: 1 } },
@@ -472,7 +595,9 @@ async function main() {
       prepared = await request('/sales/returns', token, 'POST', {
         salesInvoiceId: invoice.id,
         returnNumber: reference,
-        items: [{ salesInvoiceItemId: invoice.items[0].id, quantity: 1, reason: 'CUSTOMER_REQUEST' }],
+        items: [
+          { salesInvoiceItemId: invoice.items[0].id, quantity: 1, reason: 'CUSTOMER_REQUEST' },
+        ],
         notes: `Synthetic ${reference} fixture for checklist step 5.5.`,
       });
     }
@@ -510,7 +635,9 @@ async function main() {
         locationId: location.id,
         orderDate: new Date().toISOString(),
         expectedDeliveryDate: new Date(Date.now() + 7 * day).toISOString(),
-        items: [{ productId: purchaseProduct.id, quantity, unitPrice: purchaseProduct.buyingPrice }],
+        items: [
+          { productId: purchaseProduct.id, quantity, unitPrice: purchaseProduct.buyingPrice },
+        ],
         notes: `${reference} synthetic development purchase fixture.`,
         referenceNumber: reference,
       });
@@ -525,15 +652,25 @@ async function main() {
 
   const purchaseOrderFixtures: Array<{ reference: string; id: string; status: string }> = [];
   const draftOrder = await purchaseOrder('PH20-SEED-DRAFT-001', 2);
-  purchaseOrderFixtures.push({ reference: 'PH20-SEED-DRAFT-001', id: draftOrder.id, status: draftOrder.status });
+  purchaseOrderFixtures.push({
+    reference: 'PH20-SEED-DRAFT-001',
+    id: draftOrder.id,
+    status: draftOrder.status,
+  });
 
   const orderedOrder = await purchaseOrder('PH20-SEED-ORDERED-001', 2);
-  if (orderedOrder.status === 'DRAFT') await request(`/purchases/orders/${orderedOrder.id}/approve`, token, 'POST');
-  purchaseOrderFixtures.push({ reference: 'PH20-SEED-ORDERED-001', id: orderedOrder.id, status: orderedOrder.status });
+  if (orderedOrder.status === 'DRAFT')
+    await request(`/purchases/orders/${orderedOrder.id}/approve`, token, 'POST');
+  purchaseOrderFixtures.push({
+    reference: 'PH20-SEED-ORDERED-001',
+    id: orderedOrder.id,
+    status: orderedOrder.status,
+  });
 
   async function receiveOrder(reference: string, quantity: number, partial: boolean) {
     const order = await purchaseOrder(reference, quantity);
-    if (order.status === 'DRAFT') await request(`/purchases/orders/${order.id}/approve`, token, 'POST');
+    if (order.status === 'DRAFT')
+      await request(`/purchases/orders/${order.id}/approve`, token, 'POST');
     let grn = await prisma.goodsReceivedNote.findFirst({
       where: { businessId: business.id, purchaseOrderId: order.id },
       select: { id: true, status: true },
@@ -543,30 +680,41 @@ async function main() {
         purchaseOrderId: order.id,
         receivedDate: new Date().toISOString(),
         notes: `${reference} synthetic goods-received fixture.`,
-        items: [{
-          purchaseOrderItemId: order.items[0].id,
-          receivedQuantity: partial ? 1 : quantity,
-          acceptedQuantity: partial ? 1 : quantity,
-          rejectedQuantity: 0,
-          damageQuantity: 0,
-        }],
+        items: [
+          {
+            purchaseOrderItemId: order.items[0].id,
+            receivedQuantity: partial ? 1 : quantity,
+            acceptedQuantity: partial ? 1 : quantity,
+            rejectedQuantity: 0,
+            damageQuantity: 0,
+          },
+        ],
       });
     }
     if (grn.status === 'RECEIVED') await request(`/purchases/grn/${grn.id}/accept`, token, 'POST');
-    const finalOrder = await prisma.purchaseOrder.findUnique({ where: { id: order.id }, select: { id: true, status: true } });
+    const finalOrder = await prisma.purchaseOrder.findUnique({
+      where: { id: order.id },
+      select: { id: true, status: true },
+    });
     if (!finalOrder) throw new Error(`Could not reload ${reference}.`);
     purchaseOrderFixtures.push({ reference, id: finalOrder.id, status: finalOrder.status });
     return { order: finalOrder, orderItemId: order.items[0].id };
   }
 
-  const partialOrder = await receiveOrder('PH20-SEED-PARTIAL-001', 3, true);
+  await receiveOrder('PH20-SEED-PARTIAL-001', 3, true);
   const fullOrder = await receiveOrder('PH20-SEED-RECEIVED-001', 2, false);
 
   const cancelledOrder = await purchaseOrder('PH20-SEED-CANCELLED-001', 2);
   if (cancelledOrder.status === 'DRAFT') {
-    await request(`/purchases/orders/${cancelledOrder.id}/cancel`, token, 'POST', { reason: 'Synthetic Phase 20 cancellation fixture.' });
+    await request(`/purchases/orders/${cancelledOrder.id}/cancel`, token, 'POST', {
+      reason: 'Synthetic Phase 20 cancellation fixture.',
+    });
   }
-  purchaseOrderFixtures.push({ reference: 'PH20-SEED-CANCELLED-001', id: cancelledOrder.id, status: cancelledOrder.status });
+  purchaseOrderFixtures.push({
+    reference: 'PH20-SEED-CANCELLED-001',
+    id: cancelledOrder.id,
+    status: cancelledOrder.status,
+  });
 
   const existingPurchaseReturn = await prisma.purchaseReturn.findFirst({
     where: { businessId: business.id, returnNumber: 'PH20-SEED-RETURN-001' },
@@ -582,7 +730,11 @@ async function main() {
     });
   }
   if (purchaseReturn.status === 'DRAFT') {
-    purchaseReturn = await request(`/purchases/returns/${purchaseReturn.id}/approve`, token, 'POST');
+    purchaseReturn = await request(
+      `/purchases/returns/${purchaseReturn.id}/approve`,
+      token,
+      'POST',
+    );
   }
 
   const paidBefore = await prisma.payment.findFirst({
@@ -590,7 +742,10 @@ async function main() {
     select: { id: true },
   });
   if (!paidBefore) {
-    const orderValue = await prisma.purchaseOrder.findUnique({ where: { id: orderedOrder.id }, select: { totalAmount: true } });
+    const orderValue = await prisma.purchaseOrder.findUnique({
+      where: { id: orderedOrder.id },
+      select: { totalAmount: true },
+    });
     if (!orderValue) throw new Error('PH20 ordered fixture disappeared before payment setup.');
     await request(`/purchases/orders/${orderedOrder.id}/payments`, token, 'POST', {
       paymentNumber: 'PH20-SEED-PAY-001',
@@ -604,7 +759,14 @@ async function main() {
   const [finalInvoices, finalPurchaseOrders, finalPurchaseReturns] = await Promise.all([
     prisma.salesInvoice.findMany({
       where: { businessId: business.id, referenceNumber: { startsWith: 'PH21-WORKFLOW:' } },
-      select: { id: true, referenceNumber: true, invoiceNumber: true, status: true, totalPaid: true, balance: true },
+      select: {
+        id: true,
+        referenceNumber: true,
+        invoiceNumber: true,
+        status: true,
+        totalPaid: true,
+        balance: true,
+      },
       orderBy: { invoiceNumber: 'asc' },
     }),
     prisma.purchaseOrder.findMany({
@@ -618,14 +780,34 @@ async function main() {
     }),
   ]);
   const counts = {
-    phase19Products: await prisma.product.count({ where: { businessId: business.id, sku: { startsWith: 'PH19-' } } }),
-    phase21Products: await prisma.product.count({ where: { businessId: business.id, sku: { startsWith: 'PH21-' } } }),
-    phase21Customers: await prisma.customer.count({ where: { businessId: business.id, customerCode: { startsWith: 'PH21-' } } }),
-    phase21Invoices: await prisma.salesInvoice.count({ where: { businessId: business.id, referenceNumber: { startsWith: 'PH21-' } } }),
-    phase21Returns: await prisma.salesReturn.count({ where: { businessId: business.id, returnNumber: { startsWith: 'PH21-' } } }),
-    purchaseOrders: await prisma.purchaseOrder.count({ where: { businessId: business.id, poNumber: { startsWith: 'PH20-SEED-' } } }),
-    purchaseReturns: await prisma.purchaseReturn.count({ where: { businessId: business.id, returnNumber: { startsWith: 'PH20-SEED-' } } }),
-    salesStockMovements: await prisma.inventoryMovement.count({ where: { businessId: business.id, referenceType: 'SalesInvoice', notes: { contains: 'INV-202611-' } } }),
+    phase19Products: await prisma.product.count({
+      where: { businessId: business.id, sku: { startsWith: 'PH19-' } },
+    }),
+    phase21Products: await prisma.product.count({
+      where: { businessId: business.id, sku: { startsWith: 'PH21-' } },
+    }),
+    phase21Customers: await prisma.customer.count({
+      where: { businessId: business.id, customerCode: { startsWith: 'PH21-' } },
+    }),
+    phase21Invoices: await prisma.salesInvoice.count({
+      where: { businessId: business.id, referenceNumber: { startsWith: 'PH21-' } },
+    }),
+    phase21Returns: await prisma.salesReturn.count({
+      where: { businessId: business.id, returnNumber: { startsWith: 'PH21-' } },
+    }),
+    purchaseOrders: await prisma.purchaseOrder.count({
+      where: { businessId: business.id, poNumber: { startsWith: 'PH20-SEED-' } },
+    }),
+    purchaseReturns: await prisma.purchaseReturn.count({
+      where: { businessId: business.id, returnNumber: { startsWith: 'PH20-SEED-' } },
+    }),
+    salesStockMovements: await prisma.inventoryMovement.count({
+      where: {
+        businessId: business.id,
+        referenceType: 'SalesInvoice',
+        notes: { contains: 'INV-202611-' },
+      },
+    }),
     purchaseStockMovements: await prisma.inventoryMovement.count({
       where: {
         businessId: business.id,
@@ -634,18 +816,24 @@ async function main() {
       },
     }),
   };
-  console.log(JSON.stringify({
-    business: business.name,
-    testUser: qaEmail,
-    testUserPassword: 'PH21test!2026',
-    counts,
-    workflowInvoices: finalInvoices,
-    purchaseOrders: finalPurchaseOrders,
-    purchaseReturns: finalPurchaseReturns,
-    salesReturn,
-    rejectDraftFixture,
-    rejectAuthorizedFixture,
-  }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        business: business.name,
+        testUser: qaEmail,
+        testUserPassword: 'PH21test!2026',
+        counts,
+        workflowInvoices: finalInvoices,
+        purchaseOrders: finalPurchaseOrders,
+        purchaseReturns: finalPurchaseReturns,
+        salesReturn,
+        rejectDraftFixture,
+        rejectAuthorizedFixture,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main()

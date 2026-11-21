@@ -35,6 +35,19 @@ const decimalPlaces = (value: number) => {
   const [coefficient, exponent = '0'] = value.toString().toLowerCase().split('e');
   return Math.max(0, (coefficient.split('.')[1]?.length ?? 0) - Number(exponent));
 };
+function addCalendarDays(date: string, days?: number | null) {
+  if (!date || !Number.isInteger(days) || !days || days < 1) return '';
+  const [year, month, day] = date.split('-').map(Number);
+  if (!year || !month || !day) return '';
+  const result = new Date(Date.UTC(year, month - 1, day + days));
+  return result.toISOString().slice(0, 10);
+}
+function localDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 type ReceiptLine = {
   purchaseOrderItemId: string;
   receivedQuantity: string;
@@ -77,7 +90,7 @@ export default function PurchaseOrderDetailPage() {
   const [methods, setMethods] = useState<PaymentMethodOption[]>([]);
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [paymentsUnavailable, setPaymentsUnavailable] = useState(false);
-  const [receivedDate, setReceivedDate] = useState('');
+  const [receivedDate, setReceivedDate] = useState(() => localDateInputValue());
   const [vehicleRegistration, setVehicleRegistration] = useState('');
   const [driverName, setDriverName] = useState('');
   const [waybillNumber, setWaybillNumber] = useState('');
@@ -149,6 +162,8 @@ export default function PurchaseOrderDetailPage() {
       setReturns(ret);
       setPayments(recordedPayments);
       setPaymentsUnavailable(paymentHistoryUnavailable);
+      const receiptDate = localDateInputValue();
+      setReceivedDate(receiptDate);
       setReceipt(
         order.items
           .filter((i) => i.outstandingQty > 0)
@@ -159,7 +174,7 @@ export default function PurchaseOrderDetailPage() {
             rejectedQuantity: '0',
             damageQuantity: '0',
             batchNumber: '',
-            expiryDate: '',
+            expiryDate: i.requiresExpiry ? addCalendarDays(receiptDate, i.expiryDays) : '',
           }))
       );
     } catch (e) {
@@ -709,7 +724,7 @@ export default function PurchaseOrderDetailPage() {
           </div>
           {permissions.includes('purchases.approve') &&
             grns.some((g) => g.status === 'RECEIVED') && (
-              <div className="space-y-2 rounded-xl bg-[#f5f6f2] p-3">
+              <div className="space-y-2 rounded-xl border border-[#cbd8cb] bg-[#e8f0e9] p-3 dark:border-[#3b5947] dark:bg-[#19251e]">
                 <p className="text-sm font-semibold">Pending quality acceptance</p>
                 {grns
                   .filter((g) => g.status === 'RECEIVED')
@@ -728,7 +743,7 @@ export default function PurchaseOrderDetailPage() {
                               'Receipt accepted; stock has been updated.'
                             )
                           }
-                          className="rounded-lg bg-[#e7f4ed] px-3 py-2 text-xs font-bold text-[#16734a] disabled:opacity-50"
+                          className="min-h-9 rounded-lg border border-[#91c9a7] bg-[#ccebd7] px-3 py-2 text-xs font-bold text-[#0b5d35] transition hover:bg-[#b9e3c9] disabled:opacity-50 dark:border-[#3c8b5a] dark:bg-[#1d4730] dark:text-[#baf0cc] dark:hover:bg-[#25583a]"
                         >
                           Accept
                         </button>
@@ -739,7 +754,7 @@ export default function PurchaseOrderDetailPage() {
                             setRejectReasonError('');
                             setRejectTarget({ kind: 'grn', id: g.id, number: g.grnNumber });
                           }}
-                          className="rounded-lg bg-[#fff0ed] px-3 py-2 text-xs font-bold text-[#a63832] disabled:opacity-50"
+                          className="min-h-9 rounded-lg border border-[#dfa49d] bg-[#f9d4cf] px-3 py-2 text-xs font-bold text-[#8e2b24] transition hover:bg-[#f4c1b9] disabled:opacity-50 dark:border-[#8c4944] dark:bg-[#4c2424] dark:text-[#ffd1cc] dark:hover:bg-[#602b2b]"
                         >
                           Reject
                         </button>
@@ -768,7 +783,16 @@ export default function PurchaseOrderDetailPage() {
                   <input
                     type="date"
                     value={receivedDate}
-                    onChange={(event) => setReceivedDate(event.target.value)}
+                    onChange={(event) => {
+                      const nextDate = event.target.value;
+                      setReceivedDate(nextDate);
+                      setReceipt((rows) => rows.map((row) => {
+                        const item = po.items.find((candidate) => candidate.id === row.purchaseOrderItemId);
+                        return item?.requiresExpiry && item.expiryDays
+                          ? { ...row, expiryDate: addCalendarDays(nextDate, item.expiryDays) }
+                          : row;
+                      }));
+                    }}
                     className={`${input} mt-1`}
                   />
                 </label>
@@ -816,6 +840,10 @@ export default function PurchaseOrderDetailPage() {
               </div>
               {receipt.map((line, index) => {
                 const item = po.items.find((i) => i.id === line.purchaseOrderItemId)!;
+                const suggestedExpiryDate = addCalendarDays(receivedDate, item.expiryDays);
+                const suggestedExpiryLabel = suggestedExpiryDate
+                  ? suggestedExpiryDate.split('-').reverse().join('/')
+                  : '';
                 const emptyReceipt =
                   receiptError === 'Enter a received quantity for at least one item.';
                 return (
@@ -910,9 +938,25 @@ export default function PurchaseOrderDetailPage() {
                             maxLength={120}
                           />
                         </label>
-                        <label className="text-[11px] text-[#73766f]">
-                          Expiry date
+                        <div className="min-w-0 text-[11px] text-[#73766f]">
+                          <div className="flex flex-wrap items-center justify-between gap-1">
+                            <label htmlFor={`receipt-${line.purchaseOrderItemId}-expiry`}>
+                              Expiry date{item.expiryDays ? ` · ${item.expiryDays}-day shelf life` : ''}
+                            </label>
+                            {suggestedExpiryLabel ? (
+                              <button
+                                type="button"
+                                onClick={() => setReceipt((rows) => rows.map((row, rowIndex) =>
+                                  rowIndex === index ? { ...row, expiryDate: suggestedExpiryDate } : row
+                                ))}
+                                className="rounded-md px-1.5 py-1 font-semibold text-emerald-800 underline underline-offset-2 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                              >
+                                Use suggested: {suggestedExpiryLabel}
+                              </button>
+                            ) : null}
+                          </div>
                           <input
+                            id={`receipt-${line.purchaseOrderItemId}-expiry`}
                             ref={(element) => {
                               receiptInputRefs.current[`${line.purchaseOrderItemId}:expiryDate`] =
                                 element;
@@ -939,7 +983,14 @@ export default function PurchaseOrderDetailPage() {
                             }
                             className={`${input} mt-1 ${receiptErrorTarget?.itemId === line.purchaseOrderItemId && receiptErrorTarget.field === 'expiryDate' ? 'border-[#b64238] focus:border-[#b64238] focus:ring-[#b64238]/25' : ''}`}
                           />
-                        </label>
+                          {item.expiryDays ? (
+                            <span className="mt-1 block text-[10px] leading-4 text-[#73766f]">
+                              {suggestedExpiryLabel
+                                ? `Suggested: ${suggestedExpiryLabel}. Confirm the printed batch date and change it if it differs.`
+                                : 'Choose the expiry date printed on this batch.'}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     )}
                   </div>

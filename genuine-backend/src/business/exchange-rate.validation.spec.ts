@@ -23,7 +23,10 @@ async function validateCreateRate(payload: Record<string, unknown>) {
   });
 }
 
-async function validateDto(payload: Record<string, unknown>, metatype: new (...args: never[]) => unknown) {
+async function validateDto(
+  payload: Record<string, unknown>,
+  metatype: new (...args: never[]) => unknown,
+) {
   return createValidationPipe().transform(payload, { type: 'body', metatype });
 }
 
@@ -56,11 +59,13 @@ describe('Exchange rate API validation', () => {
       {} as LoggerService,
     );
 
-    await expect(service.createExchangeRate('business-1', 'user-1', {
-      ...validRate,
-      currencyCode: 'TZS',
-      rateToBase: 1,
-    })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.createExchangeRate('business-1', 'user-1', {
+        ...validRate,
+        currencyCode: 'TZS',
+        rateToBase: 1,
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.businessExchangeRate.create).not.toHaveBeenCalled();
@@ -80,9 +85,11 @@ describe('Exchange rate API validation', () => {
 
     await service.listExchangeRates('business-a');
 
-    expect(prisma.businessExchangeRate.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { businessId: 'business-a', baseCurrency: 'TZS' },
-    }));
+    expect(prisma.businessExchangeRate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: 'business-a', baseCurrency: 'TZS' },
+      }),
+    );
   });
 
   it('does not convert using another business rate when the requested workspace has no rate', async () => {
@@ -96,21 +103,29 @@ describe('Exchange rate API validation', () => {
       {} as LoggerService,
     );
 
-    await expect(service.convertCurrency('business-a', {
-      currencyCode: 'USD',
-      amount: 100,
-      asOf: '2026-11-14',
-      direction: 'TO_BASE',
-    })).rejects.toMatchObject({
+    await expect(
+      service.convertCurrency('business-a', {
+        currencyCode: 'USD',
+        amount: 100,
+        asOf: '2026-11-14',
+        direction: 'TO_BASE',
+      }),
+    ).rejects.toMatchObject({
       response: {
         statusCode: 404,
         message: 'No USD exchange rate is configured for 2026-11-14',
       },
     });
 
-    expect(prisma.businessExchangeRate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ businessId: 'business-a', baseCurrency: 'TZS', currencyCode: 'USD' }),
-    }));
+    expect(prisma.businessExchangeRate.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          businessId: 'business-a',
+          baseCurrency: 'TZS',
+          currencyCode: 'USD',
+        }),
+      }),
+    );
   });
 
   it.each([
@@ -120,7 +135,9 @@ describe('Exchange rate API validation', () => {
   ])('does not accept a transaction currency on %s', async (_recordType, dtoType) => {
     await expect(validateDto({ currencyCode: 'USD' }, dtoType)).rejects.toMatchObject({
       response: expect.objectContaining({
-        message: expect.arrayContaining([expect.stringContaining('property currencyCode should not exist')]),
+        message: expect.arrayContaining([
+          expect.stringContaining('property currencyCode should not exist'),
+        ]),
       }),
     });
   });

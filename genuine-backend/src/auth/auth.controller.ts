@@ -205,6 +205,14 @@ export class AuthController {
     return this.authService.revokeSession(user.id, sessionId);
   }
 
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete own account (anonymized; business owners must close/transfer first)' })
+  async deleteAccount(@CurrentUser() user: any) {
+    return this.authService.deleteAccount(user.id);
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

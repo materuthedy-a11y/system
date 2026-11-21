@@ -28,6 +28,9 @@ import {
 } from '@/lib/api/purchases';
 import { notify } from '@/components/ui/AppToaster';
 import { formatBusinessDate } from '@/lib/format/businessDate';
+import { Input } from '@/components/ui/forms/input';
+import { Select } from '@/components/ui/forms/select';
+import { Textarea } from '@/components/ui/forms/textarea';
 
 const input =
   'min-h-10 w-full rounded-xl border border-[#dfe2da] bg-white px-3 text-sm outline-none focus:border-[#c24e00] focus:ring-2 focus:ring-[#ffad66]/40';
@@ -780,7 +783,7 @@ export default function PurchaseOrderDetailPage() {
               <div className="grid gap-3 rounded-xl border border-[#eceee8] bg-[#fafbf8] p-3 sm:grid-cols-2">
                 <label className="text-xs font-semibold">
                   Received date
-                  <input
+                  <Input
                     type="date"
                     value={receivedDate}
                     onChange={(event) => {
@@ -798,7 +801,7 @@ export default function PurchaseOrderDetailPage() {
                 </label>
                 <label className="text-xs font-semibold">
                   Vehicle registration
-                  <input
+                  <Input
                     maxLength={50}
                     value={vehicleRegistration}
                     onChange={(event) => setVehicleRegistration(event.target.value)}
@@ -808,7 +811,7 @@ export default function PurchaseOrderDetailPage() {
                 </label>
                 <label className="text-xs font-semibold">
                   Driver name
-                  <input
+                  <Input
                     maxLength={160}
                     value={driverName}
                     onChange={(event) => setDriverName(event.target.value)}
@@ -818,7 +821,7 @@ export default function PurchaseOrderDetailPage() {
                 </label>
                 <label className="text-xs font-semibold">
                   Waybill number
-                  <input
+                  <Input
                     maxLength={120}
                     value={waybillNumber}
                     onChange={(event) => setWaybillNumber(event.target.value)}
@@ -828,7 +831,7 @@ export default function PurchaseOrderDetailPage() {
                 </label>
                 <label className="text-xs font-semibold sm:col-span-2">
                   Receiving notes
-                  <textarea
+                  <Textarea
                     maxLength={500}
                     rows={2}
                     value={grnNotes}
@@ -878,7 +881,7 @@ export default function PurchaseOrderDetailPage() {
                         return (
                           <label key={field} className="text-[11px] text-[#73766f]">
                             {['Received', 'Accepted', 'Rejected', 'Damaged'][i]}
-                            <input
+                            <Input
                               ref={(element) => {
                                 receiptInputRefs.current[`${line.purchaseOrderItemId}:${field}`] =
                                   element;
@@ -910,7 +913,7 @@ export default function PurchaseOrderDetailPage() {
                       <div className="grid grid-cols-2 gap-2">
                         <label className="text-[11px] text-[#73766f]">
                           Batch number
-                          <input
+                          <Input
                             ref={(element) => {
                               receiptInputRefs.current[`${line.purchaseOrderItemId}:batchNumber`] =
                                 element;
@@ -955,7 +958,7 @@ export default function PurchaseOrderDetailPage() {
                               </button>
                             ) : null}
                           </div>
-                          <input
+                          <Input
                             id={`receipt-${line.purchaseOrderItemId}-expiry`}
                             ref={(element) => {
                               receiptInputRefs.current[`${line.purchaseOrderItemId}:expiryDate`] =
@@ -1060,7 +1063,7 @@ export default function PurchaseOrderDetailPage() {
                     <div className="grid gap-3 rounded-xl border border-[#eceee8] bg-[#fafbf8] p-3 sm:grid-cols-2">
                       <label className="text-xs font-semibold">
                         Received date
-                        <input
+                        <Input
                           aria-label={`${g.grnNumber} received date`}
                           type="date"
                           value={grnEditMetadata.receivedDate}
@@ -1075,7 +1078,7 @@ export default function PurchaseOrderDetailPage() {
                       </label>
                       <label className="text-xs font-semibold">
                         Vehicle registration
-                        <input
+                        <Input
                           aria-label={`${g.grnNumber} vehicle registration`}
                           maxLength={50}
                           value={grnEditMetadata.vehicleRegistration}
@@ -1091,7 +1094,7 @@ export default function PurchaseOrderDetailPage() {
                       </label>
                       <label className="text-xs font-semibold">
                         Driver name
-                        <input
+                        <Input
                           aria-label={`${g.grnNumber} driver name`}
                           maxLength={160}
                           value={grnEditMetadata.driverName}
@@ -1107,7 +1110,7 @@ export default function PurchaseOrderDetailPage() {
                       </label>
                       <label className="text-xs font-semibold">
                         Waybill number
-                        <input
+                        <Input
                           aria-label={`${g.grnNumber} waybill number`}
                           maxLength={120}
                           value={grnEditMetadata.waybillNumber}
@@ -1123,7 +1126,7 @@ export default function PurchaseOrderDetailPage() {
                       </label>
                       <label className="text-xs font-semibold sm:col-span-2">
                         Receiving notes
-                        <textarea
+                        <Textarea
                           aria-label={`${g.grnNumber} receiving notes`}
                           maxLength={500}
                           rows={2}
@@ -1139,7 +1142,7 @@ export default function PurchaseOrderDetailPage() {
                     <div className="space-y-3">
                       <label className="block max-w-sm text-xs font-semibold">
                         Add another PO item
-                        <select
+                        <Select
                           aria-label={`${g.grnNumber} add PO item`}
                           value=""
                           onChange={(event) => addGrnEditItem(event.target.value)}
@@ -1156,7 +1159,7 @@ export default function PurchaseOrderDetailPage() {
                                 {poItem.productName} Â· {poItem.productSku}
                               </option>
                             ))}
-                        </select>
+                        </Select>
                       </label>
                       {grnEditLines.map((line, index) => {
                         const item = po.items.find(
@@ -1192,7 +1195,7 @@ export default function PurchaseOrderDetailPage() {
                               ).map((field, i) => (
                                 <label key={field} className="text-[11px] text-[#73766f]">
                                   {['Received', 'Accepted', 'Rejected', 'Damaged'][i]}
-                                  <input
+                                  <Input
                                     aria-label={`${g.grnNumber} ${['received', 'accepted', 'rejected', 'damaged'][i]} quantity`}
                                     aria-invalid={
                                       (invalidLine && grnEditErrorTarget?.field === field) ||
@@ -1234,7 +1237,7 @@ export default function PurchaseOrderDetailPage() {
                                 <div className="grid grid-cols-2 gap-2">
                                   <label className="text-[11px] text-[#73766f]">
                                     Batch number
-                                    <input
+                                    <Input
                                       aria-label={`${g.grnNumber} batch number`}
                                       aria-invalid={
                                         (invalidLine &&
@@ -1269,7 +1272,7 @@ export default function PurchaseOrderDetailPage() {
                                   </label>
                                   <label className="text-[11px] text-[#73766f]">
                                     Expiry date
-                                    <input
+                                    <Input
                                       aria-label={`${g.grnNumber} expiry date`}
                                       aria-invalid={
                                         (invalidLine &&
@@ -1350,7 +1353,7 @@ export default function PurchaseOrderDetailPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-semibold">
                     Amount
-                    <input
+                    <Input
                       ref={paymentAmountRef}
                       type="number"
                       min="0.01"
@@ -1371,7 +1374,7 @@ export default function PurchaseOrderDetailPage() {
                   </label>
                   <label className="text-xs font-semibold">
                     Payment method
-                    <select
+                    <Select
                       ref={paymentMethodRef}
                       value={methodId}
                       aria-invalid={paymentErrorTarget === 'method'}
@@ -1390,7 +1393,7 @@ export default function PurchaseOrderDetailPage() {
                           {m.name}
                         </option>
                       ))}
-                      </select>
+                      </Select>
                       {paymentErrorTarget === 'method' && <span id="supplier-payment-error" role="alert" className="mt-1 block text-xs font-medium text-[#a63832]">{paymentError}</span>}
                   </label>
                 </div>
@@ -1481,7 +1484,7 @@ export default function PurchaseOrderDetailPage() {
               <>
                 <label className="text-xs font-semibold">
                   Received item
-                  <select
+                  <Select
                     value={returnItem}
                     onChange={(e) => setReturnItem(e.target.value)}
                     className={`${input} mt-1`}
@@ -1494,12 +1497,12 @@ export default function PurchaseOrderDetailPage() {
                           {i.productName} Â· max {Math.max(0, i.grnAcceptedQty - i.returnedQty)}
                         </option>
                       ))}
-                  </select>
+                  </Select>
                 </label>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-xs font-semibold">
                     Quantity
-                    <input
+                    <Input
                       type="number"
                       min="0.01"
                       step="0.01"
@@ -1516,7 +1519,7 @@ export default function PurchaseOrderDetailPage() {
                   </label>
                   <label className="text-xs font-semibold">
                     Reason
-                    <select
+                    <Select
                       value={returnReason}
                       onChange={(e) => setReturnReason(e.target.value as typeof returnReason)}
                       className={`${input} mt-1`}
@@ -1524,7 +1527,7 @@ export default function PurchaseOrderDetailPage() {
                       {returnReasons.map((r) => (
                         <option key={r}>{r}</option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                 </div>
                 <button
@@ -1685,7 +1688,7 @@ export default function PurchaseOrderDetailPage() {
             >
               Cancellation reason
             </label>
-            <textarea
+            <Textarea
               id="cancel-order-reason"
               autoFocus
               maxLength={500}
@@ -1760,7 +1763,7 @@ export default function PurchaseOrderDetailPage() {
             <label htmlFor="reject-record-reason" className="mt-4 block text-sm font-medium text-[#32352e] dark:text-[#dce1d7]">
               Rejection reason
             </label>
-            <textarea
+            <Textarea
               id="reject-record-reason"
               autoFocus
               maxLength={500}

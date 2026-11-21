@@ -55,4 +55,6 @@ export const settingsAPI = {
   async createRole(input:{name:string;description?:string;permissions:string[]}) { return unwrap<ManagedRole>(await apiClient.post('/business/roles',input)); },
   async updateRole(id:string,input:Partial<Pick<ManagedRole,'name'|'description'|'permissions'>>) { return unwrap<ManagedRole>(await apiClient.patch(`/business/roles/${encodeURIComponent(id)}`,input)); },
   async deleteRole(id:string) { return unwrap<{message:string}>(await apiClient.delete(`/business/roles/${encodeURIComponent(id)}`)); },
+  async closeBusiness(password: string) { return unwrap<{scheduledDeletionAt:string}>(await apiClient.delete('/business/me', { data: { password } })); },
+  async transferOwnership(newOwnerId: string) { return unwrap<{transferredTo:string}>(await apiClient.post('/business/transfer-ownership', { newOwnerId })); },
 };

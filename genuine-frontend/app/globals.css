@@ -877,25 +877,267 @@ html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):i
 html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-teal-"], [class*="border-cyan-"], [class*="border-sky-"], [class*="bg-teal-"], [class*="bg-cyan-"], [class*="bg-sky-"]) { border-color: #416a70 !important; }
 html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-blue-"], [class*="border-indigo-"], [class*="bg-blue-"], [class*="bg-indigo-"]) { border-color: #455f80 !important; }
 html.dark [class*="rounded-"]:not(button):not(input):not(select):not(textarea):is([class*="border-violet-"], [class*="border-purple-"], [class*="border-fuchsia-"], [class*="border-pink-"], [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-fuchsia-"], [class*="bg-pink-"]) { border-color: #625078 !important; }
-/* Enforce readable foreground text while typing and for browser-saved credentials. */
-.auth-field-input,
-.auth-field-input:focus,
-.auth-field-input:active {
+/* ------------------------------------------------------------------
+   M0 — Centralized form-control design tokens & shared primitives.
+   Additive only: nothing above this block is removed or overridden.
+   Field styling for the new ui/forms components lives here so pages
+   stop repeating per-file Tailwind class strings.
+------------------------------------------------------------------- */
+:root {
+  --field-bg: #ffffff;
+  --field-bg-disabled: #f3f4f1;
+  --field-text: #252a25;
+  --field-placeholder: #73766f;
+  --field-border: #dfe2da;
+  --field-border-hover: #c6cabf;
+  --field-border-focus: #b99a55;
+  --field-ring: rgb(185 154 85 / 0.35);
+  --field-error-border: #dc2626;
+  --field-error-text: #991b1b;
+  --field-label: #30332e;
+  --field-helper: #73766f;
+  --field-accent: #c24e00;
+  --field-radius: 0.75rem;
+  --field-font-size: 0.875rem;
+}
+html.dark {
+  --field-bg: #1a2427;
+  --field-bg-disabled: #141a1c;
+  --field-text: #e1e5de;
+  --field-placeholder: #8c9588;
+  --field-border: #3d4941;
+  --field-border-hover: #4a5750;
+  --field-border-focus: #d8b454;
+  --field-ring: rgb(216 180 84 / 0.3);
+  --field-error-border: #f87171;
+  --field-error-text: #fca5a5;
+  --field-label: #d3d8d0;
+  --field-helper: #aab2a6;
+  --field-accent: #ffad66;
+}
+/* Photo theme intentionally inherits the dark field tokens: glass
+   surfaces are dark-tinted, so dark field values stay correct. */
+
+@layer components {
+  .ui-form-field { display: grid; gap: 0.375rem; }
+  .ui-field-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--field-label);
+  }
+  .ui-field-required { color: var(--field-error-text); margin-left: 0.125rem; }
+  .ui-field-helper { font-size: 0.75rem; color: var(--field-helper); }
+  .ui-field-error { font-size: 0.75rem; font-weight: 500; color: var(--field-error-text); }
+
+  .ui-field {
+    display: block;
+    width: 100%;
+    border-radius: var(--field-radius);
+    border: 1px solid var(--field-border);
+    background-color: var(--field-bg);
+    color: var(--field-text);
+    font-size: var(--field-font-size);
+    font-weight: 500;
+    font-family: inherit;
+    line-height: 1.5;
+    padding: 0 1rem;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
+  .ui-field--sm { min-height: 2.25rem; font-size: 0.8125rem; }
+  .ui-field--md { min-height: 3rem; }
+  .ui-field--lg { min-height: 3.25rem; font-size: 1rem; }
+  textarea.ui-field { padding-top: 0.625rem; padding-bottom: 0.625rem; resize: vertical; }
+  .ui-field::placeholder { color: var(--field-placeholder); opacity: 1; font-weight: 400; }
+  .ui-field:hover:not(:disabled):not(:focus-visible) { border-color: var(--field-border-hover); }
+  .ui-field:focus-visible {
+    outline: none;
+    border-color: var(--field-border-focus);
+    box-shadow: 0 0 0 3px var(--field-ring);
+  }
+  .ui-field:disabled {
+    background-color: var(--field-bg-disabled);
+    color: var(--field-placeholder);
+    cursor: not-allowed;
+  }
+  .ui-field--invalid { border-color: var(--field-error-border); }
+  .ui-field--invalid:focus-visible { box-shadow: 0 0 0 3px rgb(220 38 38 / 0.18); }
+
+  /* Auth variant: always-dark glass control for auth surfaces only. */
+  .ui-field--auth {
+    background-color: rgb(0 0 0 / 0.5);
+    border-color: rgb(255 255 255 / 0.1);
+    color: #f8fafc;
+    -webkit-text-fill-color: #f8fafc;
+    caret-color: #f8fafc;
+  }
+  .ui-field--auth::placeholder { color: #777b73; -webkit-text-fill-color: #777b73; opacity: 1; }
+  .ui-field--auth:hover:not(:disabled):not(:focus-visible) { border-color: rgb(255 255 255 / 0.2); }
+  .ui-field--auth:focus-visible {
+    border-color: rgb(255 194 83 / 0.7);
+    box-shadow: 0 0 0 3px rgb(255 173 102 / 0.15);
+  }
+  .ui-field--auth:disabled { background-color: rgb(0 0 0 / 0.3); }
+  .ui-field--auth:-webkit-autofill,
+  .ui-field--auth:-webkit-autofill:hover,
+  .ui-field--auth:-webkit-autofill:focus {
+    -webkit-text-fill-color: #f8fafc !important;
+    -webkit-box-shadow: 0 0 0 1000px rgb(12 17 16 / 94%) inset;
+    caret-color: #f8fafc;
+    transition: background-color 9999s ease-out;
+  }
+  .ui-field--ghost {
+    background-color: transparent;
+    border-color: transparent;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  .ui-field--ghost:hover:not(:disabled):not(:focus-visible) { border-color: transparent; background-color: rgb(127 127 127 / 0.06); }
+  .ui-field--ghost:focus-visible { border-color: var(--field-border-focus); background-color: var(--field-bg); }
+
+  /* Select: native element + decorative chevron overlay. */
+  .ui-select-wrap { position: relative; display: block; width: 100%; }
+  /* Applied by Select when consumer classes include w-auto: lets the wrapper
+     shrink to the control so the chevron stays attached to its right edge. */
+  .ui-select-wrap--fit { width: fit-content; max-width: 100%; }
+  select.ui-select {
+    appearance: none;
+    -webkit-appearance: none;
+    /* Chevron clearance must beat consumer padding utilities or select
+       text slides under the icon. Scoped to .ui-select only. */
+    padding-right: 2.25rem !important;
+    cursor: pointer;
+  }
+  select.ui-select:disabled { cursor: not-allowed; }
+  .ui-select-chevron {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1rem;
+    height: 1rem;
+    color: var(--field-helper);
+    pointer-events: none;
+  }
+  .ui-field--auth + .ui-select-chevron,
+  .ui-select-wrap:has(.ui-field--auth) .ui-select-chevron { color: rgb(255 255 255 / 0.6); }
+  html:not(.dark) .ui-select-wrap:has(.ui-field--auth) .ui-select-chevron { color: rgb(32 32 32 / 0.55); }
+  /* Option dropdowns follow the control's color-scheme (set on html). */
+
+  /* Checkbox & radio use the accent token; native semantics preserved. */
+  .ui-checkbox {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 0.25rem;
+    accent-color: var(--field-accent);
+    cursor: pointer;
+  }
+  .ui-checkbox:disabled { cursor: not-allowed; opacity: 0.6; }
+  .ui-checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--field-label);
+    cursor: pointer;
+  }
+  .ui-checkbox-label--disabled { cursor: not-allowed; opacity: 0.6; }
+
+  .ui-radio-group { display: grid; gap: 0.5rem; }
+  .ui-radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--field-label);
+    cursor: pointer;
+  }
+  .ui-radio-label--disabled { cursor: not-allowed; opacity: 0.6; }
+  .ui-radio {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--field-accent);
+    cursor: pointer;
+  }
+  .ui-radio:disabled { cursor: not-allowed; }
+
+  /* Generalized autofill rescue for all shared fields (was auth-only). */
+  .ui-field:-webkit-autofill,
+  .ui-field:-webkit-autofill:hover,
+  .ui-field:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--field-text);
+    -webkit-box-shadow: 0 0 0 1000px var(--field-bg) inset;
+    caret-color: var(--field-text);
+    transition: background-color 9999s ease-out;
+  }
+  .ui-field--auth:-webkit-autofill {
+    -webkit-text-fill-color: #f8fafc;
+    -webkit-box-shadow: 0 0 0 1000px rgb(12 17 16 / 94%) inset;
+    caret-color: #f8fafc;
+  }
+
+  /* Mobile: prevent iOS focus zoom (needs >=16px effective font). */
+  @media (max-width: 639.98px) {
+    .ui-field--md,
+    .ui-field--sm { font-size: 1rem; }
+  }
+}
+
+/* Auth-variant fields are theme-aware: LIGHT mode uses white surfaces with
+   dark text; DARK/GLASS modes keep the dark-glass treatment. These rules MUST
+   stay unlayered: the global input color rules above are unlayered !important
+   declarations at specificity (0,4,2), so the auth selectors mirror their
+   :not() structure to reach (0,5,2) and win. Do not move into @layer. */
+html:not(.dark) input.ui-field--auth:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html:not(.dark) select.ui-field--auth,
+html:not(.dark) textarea.ui-field--auth {
+  background-color: #ffffff !important;
+  border-color: rgb(255 255 255 / 0.4) !important;
+  color: #202020 !important;
+  -webkit-text-fill-color: #202020 !important;
+  caret-color: #202020 !important;
+}
+html:not(.dark) .ui-field--auth::placeholder {
+  color: #73766f !important;
+  -webkit-text-fill-color: #73766f !important;
+  opacity: 1;
+}
+html:not(.dark) .ui-field--auth:disabled {
+  background-color: rgb(255 255 255 / 0.6) !important;
+  color: #73766f !important;
+  -webkit-text-fill-color: #73766f !important;
+}
+html:not(.dark) .ui-field--auth:-webkit-autofill,
+html:not(.dark) .ui-field--auth:-webkit-autofill:hover,
+html:not(.dark) .ui-field--auth:-webkit-autofill:focus {
+  -webkit-text-fill-color: #202020 !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: #202020;
+}
+
+html.dark input.ui-field--auth:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+html.dark select.ui-field--auth,
+html.dark textarea.ui-field--auth {
+  background-color: rgb(0 0 0 / 0.5) !important;
+  border-color: rgb(255 255 255 / 0.1) !important;
   color: #f8fafc !important;
   -webkit-text-fill-color: #f8fafc !important;
   caret-color: #f8fafc !important;
 }
-.auth-field-input::placeholder {
+html.dark .ui-field--auth::placeholder {
   color: #777b73 !important;
   -webkit-text-fill-color: #777b73 !important;
   opacity: 1;
 }
-.auth-field-input:-webkit-autofill,
-.auth-field-input:-webkit-autofill:hover,
-.auth-field-input:-webkit-autofill:focus {
+html.dark .ui-field--auth:disabled {
+  background-color: rgb(0 0 0 / 0.3) !important;
+  color: #aab2a6 !important;
+  -webkit-text-fill-color: #aab2a6 !important;
+}
+html.dark .ui-field--auth:-webkit-autofill,
+html.dark .ui-field--auth:-webkit-autofill:hover,
+html.dark .ui-field--auth:-webkit-autofill:focus {
   -webkit-text-fill-color: #f8fafc !important;
   -webkit-box-shadow: 0 0 0 1000px rgb(12 17 16 / 94%) inset;
   caret-color: #f8fafc;
-  transition: background-color 9999s ease-out;
 }
 

@@ -6,6 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 import { v4 as uuid } from 'uuid';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
@@ -509,6 +510,124 @@ export class BusinessService {
         throw new ConflictException('A role with this name already exists');
       throw error;
     }
+  }
+
+  async closeBusiness(businessId: string, actorId: string, password: string) {
+    const actor = await this.prisma.user.findUnique({ where: { id: actorId } });
+    if (!actor || actor.businessId !== businessId || !actor.isActive)
+      throw new NotFoundException('User not found');
+    if (!(await this.isBusinessOwner(businessId, actorId)))
+      throw new ForbiddenException('Only an Owner can close the business');
+    if (!(await bcrypt.compare(password, actor.passwordHash)))
+      throw new BadRequestException('Password is incorrect');
+
+    const scheduledAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.business.update({
+        where: { id: businessId },
+        data: {
+          isActive: false,
+          deletedAt: new Date(),
+          deletionScheduledAt: scheduledAt,
+          deletedById: actorId,
+        },
+      });
+      await tx.userSession.deleteMany({ where: { user: { businessId } } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: actorId,
+          entityType: 'Business',
+          entityId: businessId,
+          action: 'DELETE',
+          description: 'Business closure requested; scheduled for purge after retention',
+          afterData: JSON.stringify({ deletionScheduledAt: scheduledAt.toISOString() }),
+        },
+      });
+    });
+    return { scheduledDeletionAt: scheduledAt };
+  }
+
+  async transferOwnership(businessId: string, actorId: string, newOwnerId: string) {
+    if (!(await this.isBusinessOwner(businessId, actorId)))
+      throw new ForbiddenException('Only an Owner can transfer ownership');
+    if (newOwnerId === actorId) throw new BadRequestException('Choose a different user');
+
+    const target = await this.prisma.user.findFirst({
+      where: { id: newOwnerId, businessId, isActive: true },
+    });
+    if (!target) throw new NotFoundException('Active user not found in this business');
+
+    const ownerRole = await this.prisma.role.findFirst({
+      where: { businessId, name: 'Owner', isSystem: true },
+    });
+    if (!ownerRole) throw new NotFoundException('Owner role not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userRole.deleteMany({ where: { roleId: ownerRole.id } });
+      await tx.userRole.create({ data: { userId: target.id, roleId: ownerRole.id } });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId: actorId,
+          entityType: 'User',
+          entityId: target.id,
+          action: 'UPDATE',
+          description: 'Ownership transferred to another user',
+          afterData: JSON.stringify({ newOwnerId: target.id, previousOwnerId: actorId }),
+        },
+      });
+    });
+    return { transferredTo: target.id };
+  }
+
+  @Cron('15 3 * * *')
+  async purgeExpiredBusinesses() {
+    const expired = await this.prisma.business.findMany({
+      where: { deletedAt: { not: null }, deletionScheduledAt: { lte: new Date() } },
+      select: { id: true, users: { select: { id: true } } },
+    });
+    for (const business of expired) {
+      await this.prisma.$transaction(async (tx) => {
+        for (const user of business.users) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              email: `deleted-${user.id}@deleted.local`,
+              passwordHash: '!',
+              firstName: 'Deleted',
+              lastName: 'User',
+              phone: null,
+              avatar: null,
+              verificationToken: null,
+              passwordResetTokenHash: null,
+              passwordResetExpiresAt: null,
+              anonymizedAt: new Date(),
+              isActive: false,
+            },
+          });
+          await tx.userSession.deleteMany({ where: { userId: user.id } });
+        }
+        await tx.business.update({
+          where: { id: business.id },
+          data: {
+            name: `deleted-${business.id}`,
+            legalName: null,
+            registrationNumber: null,
+            email: null,
+            phone: null,
+            phone2: null,
+            website: null,
+            logoUrl: null,
+            taxId: null,
+            address: null,
+            description: null,
+            isActive: false,
+          },
+        });
+      });
+    }
+    return { purged: expired.length };
   }
 
   private async isBusinessOwner(businessId: string, userId: string): Promise<boolean> {

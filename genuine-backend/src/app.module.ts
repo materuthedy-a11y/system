@@ -1,5 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
 // Database
@@ -46,6 +47,7 @@ import { AppController } from './app.controller';
       envFilePath: ['.env', '.env.production'],
       validate: (config) => validateEnv(config),
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     CommonModule,
     AuthModule,

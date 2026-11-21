@@ -17,6 +17,10 @@ import {
 import { notify } from '@/components/ui/AppToaster';
 import { useAuthStore } from '@/store/authStore';
 import { ProductImagePicker } from '@/components/products/ProductImages';
+import { Checkbox } from '@/components/ui/forms/checkbox';
+import { Input } from '@/components/ui/forms/input';
+import { Select } from '@/components/ui/forms/select';
+import { Textarea } from '@/components/ui/forms/textarea';
 
 type UnitLine = { unitId: string; conversionFactor: string; isDefault: boolean };
 type FormState = {
@@ -509,9 +513,9 @@ export function ProductForm({
           <label className={labelClass}>
             SKU
             {productId ? (
-              <input className={fieldClass} value={form.sku} disabled />
+              <Input className={fieldClass} value={form.sku} disabled />
             ) : (
-              <input
+              <Input
                 className={fieldClass}
                 value={form.sku}
                 onChange={(e) => change('sku', e.target.value)}
@@ -523,7 +527,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Product name
-            <input
+            <Input
               className={fieldClass}
               value={form.name}
               onChange={(e) => change('name', e.target.value)}
@@ -533,7 +537,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Category
-            <select
+            <Select
               className={fieldClass}
               value={form.categoryId}
               onChange={(e) => change('categoryId', e.target.value)}
@@ -545,11 +549,11 @@ export function ProductForm({
                   {category.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className={labelClass}>
             Barcode <span className="font-normal text-[#858880]">(optional)</span>
-            <input
+            <Input
               className={fieldClass}
               value={form.barcode}
               onChange={(e) => change('barcode', e.target.value)}
@@ -558,7 +562,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Brand <span className="font-normal text-[#858880]">(shared catalog)</span>
-            <select
+            <Select
               className={fieldClass}
               value={form.brandId}
               onChange={(e) => change('brandId', e.target.value)}
@@ -569,12 +573,12 @@ export function ProductForm({
                   {brand.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {canViewSuppliers ? (
             <label className={labelClass}>
               Supplier <span className="font-normal text-[#858880]">(optional)</span>
-              <select
+              <Select
                 className={fieldClass}
                 value={form.supplierId}
                 onChange={(e) => change('supplierId', e.target.value)}
@@ -585,12 +589,12 @@ export function ProductForm({
                     {supplier.name} · {supplier.supplierCode}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ) : null}
           <label className={`${labelClass} sm:col-span-2`}>
             Description <span className="font-normal text-[#858880]">(optional)</span>
-            <textarea
+            <Textarea
               className={`${fieldClass} min-h-24 py-3`}
               value={form.description}
               onChange={(e) => change('description', e.target.value)}
@@ -611,7 +615,7 @@ export function ProductForm({
         <div className="mt-5 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={labelClass}>
             Buying price
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.buyingPrice}
@@ -623,7 +627,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Selling price
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.sellingPrice}
@@ -635,7 +639,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Wholesale price <span className="font-normal text-[#858880]">(optional)</span>
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.wholesalePrice}
@@ -646,7 +650,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Minimum stock
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.minimumStock}
@@ -658,7 +662,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Reorder level
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.reorderLevel}
@@ -674,7 +678,7 @@ export function ProductForm({
           {productId ? (
             <label className={labelClass}>
               Status
-              <select
+              <Select
                 className={fieldClass}
                 value={form.status}
                 onChange={(e) => change('status', e.target.value as Product['status'])}
@@ -682,7 +686,7 @@ export function ProductForm({
                 <option value="ACTIVE">Active</option>
                 <option value="INACTIVE">Inactive</option>
                 <option value="DISCONTINUED">Discontinued</option>
-              </select>
+              </Select>
             </label>
           ) : null}
         </div>
@@ -714,7 +718,7 @@ export function ProductForm({
             >
               <label className={labelClass}>
                 Unit
-                <select
+                <Select
                   className={fieldClass}
                   value={line.unitId}
                   disabled={line.isDefault}
@@ -734,11 +738,11 @@ export function ProductForm({
                         {unit.name} ({unit.symbol})
                       </option>
                     ))}
-                </select>
+                </Select>
               </label>
               <label className={labelClass}>
                 Base units per unit
-                <input
+                <Input
                   className={fieldClass}
                   type="number"
                   min="0.0001"
@@ -769,7 +773,7 @@ export function ProductForm({
         </div>
         <label className="mt-4 block max-w-md text-sm font-semibold text-[#454a41]">
           Base unit
-          <select
+          <Select
             className={fieldClass}
             value={form.defaultUnitId}
             onChange={(e) => chooseDefaultUnit(e.target.value)}
@@ -780,7 +784,7 @@ export function ProductForm({
                 {unit.name} ({unit.symbol})
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         {defaultUnit ? (
           <p className="mt-2 text-xs text-[#73766f]">
@@ -794,7 +798,7 @@ export function ProductForm({
         <div className="mt-5 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className={labelClass}>
             Manufacturer
-            <input
+            <Input
               className={fieldClass}
               value={form.manufacturer}
               onChange={(e) => change('manufacturer', e.target.value)}
@@ -803,7 +807,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Weight
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.weight}
@@ -814,7 +818,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Color
-            <input
+            <Input
               className={fieldClass}
               value={form.color}
               onChange={(e) => change('color', e.target.value)}
@@ -823,7 +827,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Size
-            <input
+            <Input
               className={fieldClass}
               value={form.size}
               onChange={(e) => change('size', e.target.value)}
@@ -832,7 +836,7 @@ export function ProductForm({
           </label>
           <label className={labelClass}>
             Default shelf life (days)
-            <input
+            <Input
               type="number"
               className={fieldClass}
               value={form.expiryDays}
@@ -861,8 +865,7 @@ export function ProductForm({
             <span className="mt-1 block text-[11px] font-normal leading-4 text-[#73766f] dark:text-[#afb5ac]">Optional shelf-life guidance. New receipts can suggest received date + these days; verify the printed batch date.</span>
           </label>
           <label className="flex min-h-11 items-center gap-3 rounded-xl border border-[#e0e5d8] px-3.5 text-sm font-semibold text-[#454a41]">
-            <input
-              type="checkbox"
+            <Checkbox
               className="h-4 w-4 accent-[#c24e00]"
               checked={form.requiresExpiry}
               onChange={(e) => change('requiresExpiry', e.target.checked)}

@@ -234,6 +234,9 @@ export const authAPI = {
   async logout() {
     return unwrap<{ message: string }>(await apiClient.post('/auth/logout', {}));
   },
+  async deleteAccount() {
+    return unwrap<{ message: string }>(await apiClient.delete('/auth/me'));
+  },
   async listSessions() {
     return unwrap<ActiveAuthSession[]>(await apiClient.get('/auth/sessions'));
   },

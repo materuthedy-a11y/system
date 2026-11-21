@@ -1,9 +1,18 @@
 import type { Metadata } from 'next';
+import localFont from 'next/font/local';
 import './globals.css';
 import { AppToaster } from '@/components/ui/AppToaster';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { PWAExperience } from '@/components/pwa/PWAExperience';
 import { PwaThemeColor } from '@/components/pwa/PwaThemeColor';
+
+// Self-hosted Inter (SIL Open Font License) — variable woff2, latin subset.
+// Bundled in-repo so builds never require a runtime font fetch.
+const inter = localFont({
+  src: './fonts/InterVariable.woff2',
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Mizania Business Suite',
@@ -44,7 +53,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <meta name="referrer" content="no-referrer" />
         <meta name="theme-color" content="#f0f2ee" />

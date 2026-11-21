@@ -8,3 +8,4 @@ export * from './business-settings.dto';
 export * from './exchange-rate.dto';
 export * from './user-management.dto';
 export * from './setup-response.dto';
+export * from './lifecycle.dto';

@@ -2,6 +2,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { notify } from '@/components/ui/AppToaster';
 import { AuthLeftPanel } from '@/components/auth/AuthLeftPanel';
+import { FormField } from '@/components/ui/forms/field';
+import { Input } from '@/components/ui/forms/input';
 
 export function reportAuthError(message: string, setError: (message: string) => void) {
   setError(message);
@@ -100,25 +102,28 @@ export function AuthField({
   maxLength?: number;
 }) {
   return (
-    <div>
-      <label htmlFor={id} className="mb-2 block text-sm font-semibold text-white">{label}</label>
-      <div className="relative">
-        <input
-          id={id}
-          name={id}
-          type={type}
-          autoComplete={autoComplete}
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          disabled={disabled}
-          required={required}
-          maxLength={maxLength}
-          className={`auth-field-input h-12 w-full rounded-xl border border-white/10 bg-black/50 px-4 text-sm font-medium text-white shadow-inner shadow-black/25 transition placeholder:text-white/80 hover:border-white/20 focus:border-[#ffc253]/70 focus:outline-none focus:ring-2 focus:ring-[#ffad66]/15 disabled:cursor-not-allowed disabled:bg-black/30 ${suffix ? 'pr-12' : ''}`}
-        />
-        {suffix}
-      </div>
-    </div>
+    <FormField label={label} htmlFor={id} className="gap-2" labelClassName="text-white">
+      {(control) => (
+        <div className="relative">
+          <Input
+            {...control}
+            id={id}
+            name={id}
+            type={type}
+            autoComplete={autoComplete}
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
+            required={required}
+            maxLength={maxLength}
+            variant="auth"
+            className={`h-12 shadow-inner shadow-black/25 ${suffix ? 'pr-12' : ''}`}
+          />
+          {suffix}
+        </div>
+      )}
+    </FormField>
   );
 }
 

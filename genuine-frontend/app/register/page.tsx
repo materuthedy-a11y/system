@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { AuthField, AuthFrame, FormError, reportAuthError, SubmitButton } from '@/components/auth/AuthFrame';
+import { FormField } from '@/components/ui/forms/field';
+import { Select } from '@/components/ui/forms/select';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { useAuthStore } from '@/store/authStore';
 
@@ -90,16 +92,26 @@ export default function RegisterPage() {
         </div>
         <AuthField label="Work email" id="email" type="email" autoComplete="email" placeholder="you@company.com" value={email} onChange={setEmail} disabled={isSubmitting} />
         <AuthField label="Business name" id="businessName" autoComplete="organization" placeholder="Your business" value={businessName} onChange={setBusinessName} disabled={isSubmitting} />
-        <div>
-          <label htmlFor="businessType" className="mb-2 block text-sm font-semibold text-white">Business type</label>
-          <select id="businessType" name="businessType" value={businessType} onChange={(event) => setBusinessType(event.target.value)} disabled={isSubmitting} className="auth-field-input h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-sm font-medium text-white focus:border-[#ffc253]/70 focus:outline-none focus:ring-2 focus:ring-[#ffad66]/15 disabled:opacity-60">
-            <option value="">Select business type</option>
-            <option value="Distribution">Distribution</option>
-            <option value="Retail">Retail</option>
-            <option value="Wholesale">Wholesale</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
+        <FormField label="Business type" htmlFor="businessType" className="gap-2" labelClassName="text-white">
+          {(control) => (
+            <Select
+              {...control}
+              id="businessType"
+              name="businessType"
+              value={businessType}
+              onChange={(event) => setBusinessType(event.target.value)}
+              disabled={isSubmitting}
+              variant="auth"
+              className="h-12 bg-black/30 shadow-inner shadow-black/25"
+            >
+              <option value="">Select business type</option>
+              <option value="Distribution">Distribution</option>
+              <option value="Retail">Retail</option>
+              <option value="Wholesale">Wholesale</option>
+              <option value="Other">Other</option>
+            </Select>
+          )}
+        </FormField>
         <AuthField label="Password" id="password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" placeholder="Create a strong password" value={password} onChange={setPassword} disabled={isSubmitting} maxLength={128} suffix={<button type="button" onClick={() => setShowPassword((shown) => !shown)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#777b73] hover:text-[#20231f]">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button>} />
         <div className="grid gap-1.5 rounded-xl border border-white/15 bg-black/20 px-3.5 py-3 text-xs backdrop-blur-sm sm:grid-cols-2">
           {passwordRules.map((rule, index) => <p key={rule.label} className={matchedRules[index] ? 'font-medium text-emerald-400' : 'font-medium text-red-400'}><span className="mr-1.5">{matchedRules[index] ? '✓' : '○'}</span>{rule.label}</p>)}

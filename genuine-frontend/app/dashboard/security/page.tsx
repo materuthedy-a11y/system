@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, KeyRound, Loader2, Monitor, RefreshCw, ShieldCheck, Smartphone, X } from 'lucide-react';
-import { AuthField, FormError, SubmitButton } from '@/components/auth/AuthFrame';
+import { FormError, SubmitButton } from '@/components/auth/AuthFrame';
+import { FormField } from '@/components/ui/forms/field';
+import { Input } from '@/components/ui/forms/input';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { authAPI, getApiError, type ActiveAuthSession } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
@@ -92,9 +94,21 @@ export default function SecurityPage() {
         <p className="mt-2 text-sm leading-6 text-[#73766f]">Changing your password signs out all active sessions. You will need to sign in again with the new password.</p>
         <form onSubmit={handleSubmit} className="mt-7 space-y-5" noValidate>
           <FormError message={error} />
-          <AuthField label="Current password" id="currentPassword" type={showPasswords ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter current password" value={currentPassword} onChange={setCurrentPassword} disabled={isSubmitting} />
-          <AuthField label="New password" id="newPassword" type={showPasswords ? 'text' : 'password'} autoComplete="new-password" placeholder="8+ chars, upper/lowercase, number, symbol" value={newPassword} onChange={setNewPassword} disabled={isSubmitting} maxLength={128} />
-          <AuthField label="Confirm new password" id="confirmPassword" type={showPasswords ? 'text' : 'password'} autoComplete="new-password" placeholder="Type the new password again" value={confirmation} onChange={setConfirmation} disabled={isSubmitting} maxLength={128} />
+          <FormField label="Current password" htmlFor="currentPassword" className="gap-2">
+            {(control) => (
+              <Input {...control} id="currentPassword" name="currentPassword" type={showPasswords ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter current password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} disabled={isSubmitting} required className="h-12" />
+            )}
+          </FormField>
+          <FormField label="New password" htmlFor="newPassword" className="gap-2">
+            {(control) => (
+              <Input {...control} id="newPassword" name="newPassword" type={showPasswords ? 'text' : 'password'} autoComplete="new-password" placeholder="8+ chars, upper/lowercase, number, symbol" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} disabled={isSubmitting} required maxLength={128} className="h-12" />
+            )}
+          </FormField>
+          <FormField label="Confirm new password" htmlFor="confirmPassword" className="gap-2">
+            {(control) => (
+              <Input {...control} id="confirmPassword" name="confirmPassword" type={showPasswords ? 'text' : 'password'} autoComplete="new-password" placeholder="Type the new password again" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} disabled={isSubmitting} required maxLength={128} className="h-12" />
+            )}
+          </FormField>
           <button type="button" onClick={() => setShowPasswords((shown) => !shown)} className="inline-flex items-center gap-2 text-xs font-semibold text-[#73766f] hover:text-[#20211f]">{showPasswords ? <EyeOff size={15} /> : <Eye size={15} />}{showPasswords ? 'Hide passwords' : 'Show passwords'}</button>
           <SubmitButton loading={isSubmitting}>Update password <span aria-hidden="true">→</span></SubmitButton>
         </form>

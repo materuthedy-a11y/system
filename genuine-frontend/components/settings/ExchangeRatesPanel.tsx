@@ -6,6 +6,8 @@ import { getApiError } from '@/lib/api';
 import { BusinessExchangeRate, ExchangeRateConversion, settingsAPI } from '@/lib/api/settings';
 import { getBusinessTimezone } from '@/lib/format/businessDate';
 import { notify } from '@/components/ui/AppToaster';
+import { Input } from '@/components/ui/forms/input';
+import { Select } from '@/components/ui/forms/select';
 
 const field = 'mt-1 min-h-10 w-full rounded-xl border border-[#d8ddd4] bg-white px-3 py-2 text-sm text-[#20231f] outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-400/40 dark:border-white/10 dark:bg-[#171916] dark:text-white';
 const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-[#2d2200] transition hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60';
@@ -95,10 +97,10 @@ export default function ExchangeRatesPanel({ canEdit, currentBaseCurrency }: { c
     <section className="rounded-2xl border border-[#e6e9e1] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#1d201d]">
       <div className="mb-4"><h3 className="font-bold">Add a market rate</h3><p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/60">Enter the rate you use: one foreign currency unit equals this many {baseCurrency}. Rates are manually maintained, effective-dated and audited; the system does not invent a fixed market rate.</p></div>
       <form onSubmit={saveRate} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.7fr_1fr_1fr_1.4fr_auto] xl:items-end">
-        <label className="text-xs font-semibold">Foreign currency code<input required disabled={!canEdit||saving} maxLength={3} pattern="[A-Za-z]{3}" className={field} value={currencyCode} onChange={(event)=>setCurrencyCode(event.target.value.toUpperCase())} placeholder="USD"/></label>
-        <label className="text-xs font-semibold">1 currency unit = {baseCurrency}<input required disabled={!canEdit||saving} type="number" min="0.00000001" max="1000000000" step="0.00000001" className={field} value={rateToBase} onChange={(event)=>setRateToBase(event.target.value)} placeholder="Enter current rate"/></label>
-        <label className="text-xs font-semibold">Effective from<input required disabled={!canEdit||saving} type="date" className={field} value={effectiveFrom} onChange={(event)=>setEffectiveFrom(event.target.value)}/></label>
-        <label className="text-xs font-semibold">Source / note (optional)<input disabled={!canEdit||saving} maxLength={500} className={field} value={note} onChange={(event)=>setNote(event.target.value)} placeholder="Bank quote, date or reference"/></label>
+        <label className="text-xs font-semibold">Foreign currency code<Input required disabled={!canEdit||saving} maxLength={3} pattern="[A-Za-z]{3}" className={field} value={currencyCode} onChange={(event)=>setCurrencyCode(event.target.value.toUpperCase())} placeholder="USD"/></label>
+        <label className="text-xs font-semibold">1 currency unit = {baseCurrency}<Input required disabled={!canEdit||saving} type="number" min="0.00000001" max="1000000000" step="0.00000001" className={field} value={rateToBase} onChange={(event)=>setRateToBase(event.target.value)} placeholder="Enter current rate"/></label>
+        <label className="text-xs font-semibold">Effective from<Input required disabled={!canEdit||saving} type="date" className={field} value={effectiveFrom} onChange={(event)=>setEffectiveFrom(event.target.value)}/></label>
+        <label className="text-xs font-semibold">Source / note (optional)<Input disabled={!canEdit||saving} maxLength={500} className={field} value={note} onChange={(event)=>setNote(event.target.value)} placeholder="Bank quote, date or reference"/></label>
         <button className={button} disabled={!canEdit||saving}>{saving?<Loader2 size={15} className="animate-spin"/>:<Plus size={15}/>}Save rate</button>
       </form>
       {!canEdit ? <p className="mt-3 text-xs text-amber-800 dark:text-amber-200">You can view and use rates; adding rates requires `settings.edit`.</p> : null}
@@ -107,10 +109,10 @@ export default function ExchangeRatesPanel({ canEdit, currentBaseCurrency }: { c
     <section className="rounded-2xl border border-[#e6e9e1] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#1d201d]">
       <div className="mb-4"><h3 className="font-bold">Currency converter</h3><p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/60">Converts using the latest saved rate effective on the selected date. Use the result when entering a base-currency amount; existing records are never changed.</p></div>
       <form onSubmit={convert} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[0.8fr_1fr_1fr_1fr_1.2fr_auto] xl:items-end">
-        <label className="text-xs font-semibold">Currency<select required className={field} value={currencyCode} onChange={(event)=>{setCurrencyCode(event.target.value);setConversion(null);}}><option value={baseCurrency}>{baseCurrency}</option>{codes.map((code)=><option key={code} value={code}>{code}</option>)}</select></label>
-        <label className="text-xs font-semibold">Amount<input required type="number" min="0" step="0.01" className={field} value={amount} onChange={(event)=>setAmount(event.target.value)}/></label>
-        <label className="text-xs font-semibold">Direction<select className={field} value={direction} onChange={(event)=>{setDirection(event.target.value as 'TO_BASE'|'FROM_BASE');setConversion(null);}}><option value="TO_BASE">Foreign currency → {baseCurrency}</option><option value="FROM_BASE">{baseCurrency} → foreign currency</option></select></label>
-        <label className="text-xs font-semibold">Rate date<input type="date" required className={field} value={asOf} onChange={(event)=>{setAsOf(event.target.value);setConversion(null);}}/></label>
+        <label className="text-xs font-semibold">Currency<Select required className={field} value={currencyCode} onChange={(event)=>{setCurrencyCode(event.target.value);setConversion(null);}}><option value={baseCurrency}>{baseCurrency}</option>{codes.map((code)=><option key={code} value={code}>{code}</option>)}</Select></label>
+        <label className="text-xs font-semibold">Amount<Input required type="number" min="0" step="0.01" className={field} value={amount} onChange={(event)=>setAmount(event.target.value)}/></label>
+        <label className="text-xs font-semibold">Direction<Select className={field} value={direction} onChange={(event)=>{setDirection(event.target.value as 'TO_BASE'|'FROM_BASE');setConversion(null);}}><option value="TO_BASE">Foreign currency → {baseCurrency}</option><option value="FROM_BASE">{baseCurrency} → foreign currency</option></Select></label>
+        <label className="text-xs font-semibold">Rate date<Input type="date" required className={field} value={asOf} onChange={(event)=>{setAsOf(event.target.value);setConversion(null);}}/></label>
         <div className="text-xs text-[#687064] dark:text-white/60">{codes.length ? `${codes.length} foreign currency rate(s) available` : 'Add a rate above to enable conversion.'}</div>
         <button className={button} disabled={loading}><ArrowLeftRight size={15}/>Convert</button>
       </form>

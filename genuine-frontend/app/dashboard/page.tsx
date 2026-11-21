@@ -13,6 +13,7 @@ import { getApiError } from '@/lib/api';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, ProfitMarginSphere, RecentActivity, RevenueExpenseChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
 import { notify } from '@/components/ui/AppToaster';
+import { Select } from '@/components/ui/forms/select';
 
 type PeriodKey = 'week' | 'month' | 'quarter' | 'year';
 const EMPTY_PERMISSIONS: string[] = [];
@@ -320,9 +321,9 @@ export default function DashboardPage() {
         <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#c24e00]">Mizania · {definitionsLanguage === 'sw' ? 'muhtasari wa biashara' : 'business pulse'}</p><h1 className="mt-1.5 flex flex-wrap items-center gap-x-2.5 text-2xl font-semibold tracking-tight text-[#20231f] sm:text-3xl">{greeting ? <greeting.Icon aria-hidden="true" size={25} className="shrink-0 text-amber-600 dark:text-amber-300" /> : null}<span>{greeting?.text || (definitionsLanguage === 'sw' ? 'Karibu' : 'Welcome')}{firstName ? `, ${firstName}` : ''}</span></h1><p className="mt-2 text-sm font-medium text-[#626b51]">{user?.businessName || 'Your business'} · {dateRangeLabel(filter)}</p><p className="mt-1 text-xs text-[#747a68]">{definitionsLanguage === 'sw' ? 'Takwimu za biashara nzima. Location ya shughuli mpya:' : 'Business-wide totals across locations. Active location for new activity:'} <span className="font-semibold text-[#315c45]">{activeLocation?.name || (definitionsLanguage === 'sw' ? 'Chagua location' : 'Choose a location')}</span>.</p></div>
         <div className="flex flex-wrap items-center gap-2.5">
           <label htmlFor="dashboard-period" className="sr-only">Dashboard date range</label>
-          <select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">
+          <Select id="dashboard-period" value={period} onChange={(event) => setPeriod(event.target.value as PeriodKey)} disabled={isRefreshing} className="h-10 rounded-xl border border-[#e1e4dc] bg-white px-3 text-sm font-medium text-[#42463f] outline-none transition focus:border-[#315c45] focus:ring-2 focus:ring-[#315c45]/10 disabled:opacity-60">
             {periods.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
+          </Select>
           <button type="button" onClick={() => { manualRefreshPending.current = true; setIsRefreshing(true); setAsOfTime(Date.now()); setRefreshVersion((version) => version + 1); }} disabled={isRefreshing} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#20211f] px-3.5 text-sm font-semibold text-white transition hover:bg-[#245543] disabled:cursor-not-allowed disabled:opacity-60" aria-label="Refresh dashboard">
             <RefreshCw size={15} className={isRefreshing ? 'animate-spin' : ''} /> <span className="hidden sm:inline">{isRefreshing ? 'Updating' : 'Refresh'}</span>
           </button>

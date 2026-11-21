@@ -30,6 +30,9 @@ import {
 import { notify } from '@/components/ui/AppToaster';
 import { ProductPhoto } from '@/components/products/ProductImages';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Checkbox } from '@/components/ui/forms/checkbox';
+import { Input } from '@/components/ui/forms/input';
+import { Select } from '@/components/ui/forms/select';
 
 const emptyPermissions: string[] = [];
 const statusLabels: Record<ProductStatus, string> = {
@@ -322,7 +325,7 @@ export default function ProductsPage() {
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8c9185]"
               size={17}
             />
-            <input
+            <Input
               value={searchDraft}
               onChange={(e) => setSearchDraft(e.target.value)}
               placeholder="Search name, SKU or barcode"
@@ -331,7 +334,7 @@ export default function ProductsPage() {
           </label>
           <label className="min-w-0">
             <span className="sr-only">Filter by brand</span>
-            <select
+            <Select
               aria-label="Filter by brand"
               value={brandId}
               onChange={(e) => {
@@ -346,11 +349,11 @@ export default function ProductsPage() {
                   {brand.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="min-w-0">
             <span className="sr-only">Filter by supplier</span>
-            <select
+            <Select
               aria-label="Filter by supplier"
               value={supplierId}
               onChange={(e) => {
@@ -365,11 +368,11 @@ export default function ProductsPage() {
                   {supplier.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             <span className="sr-only">Filter by category</span>
-            <select
+            <Select
               value={categoryId}
               onChange={(e) => {
                 setCategoryId(e.target.value);
@@ -383,11 +386,11 @@ export default function ProductsPage() {
                   {category.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="min-w-0">
             <span className="sr-only">Minimum selling price</span>
-            <input
+            <Input
               aria-label="Minimum selling price"
               type="number"
               min="0"
@@ -406,7 +409,7 @@ export default function ProductsPage() {
           </label>
           <label className="min-w-0">
             <span className="sr-only">Maximum selling price</span>
-            <input
+            <Input
               aria-label="Maximum selling price"
               type="number"
               min="0"
@@ -425,7 +428,7 @@ export default function ProductsPage() {
           </label>
           <label className="min-w-0">
             <span className="sr-only">Filter by stock status</span>
-            <select
+            <Select
               aria-label="Filter by stock status"
               value={stockStatus}
               onChange={(e) => {
@@ -439,11 +442,11 @@ export default function ProductsPage() {
               <option value="LOW_STOCK">Low stock</option>
               <option value="NORMAL">Normal stock</option>
               <option value="OVERSTOCKED">Overstocked</option>
-            </select>
+            </Select>
           </label>
           <label>
             <span className="sr-only">Filter by status</span>
-            <select
+            <Select
               value={status}
               onChange={(e) => {
                 setStatus(e.target.value);
@@ -455,11 +458,11 @@ export default function ProductsPage() {
               <option value="ACTIVE">Active</option>
               <option value="INACTIVE">Inactive</option>
               <option value="DISCONTINUED">Discontinued</option>
-            </select>
+            </Select>
           </label>
           <label>
             <span className="sr-only">Sort products</span>
-            <select
+            <Select
               value={`${sort}:${sortOrder}`}
               onChange={(e) => {
                 const [nextSort, nextOrder] = e.target.value.split(':') as [
@@ -477,7 +480,7 @@ export default function ProductsPage() {
               <option value="name:desc">Name Z–A</option>
               <option value="price:asc">Selling price low–high</option>
               <option value="price:desc">Selling price high–low</option>
-            </select>
+            </Select>
           </label>
           <button
             type="button"
@@ -570,9 +573,8 @@ export default function ProductsPage() {
                 <thead className="bg-[#f8f9f6] text-[11px] uppercase tracking-[0.12em] text-[#73766f]">
                   <tr>
                     <th className="w-10 px-4 py-3">
-                      <input
+                      <Checkbox
                         aria-label="Select all products on this page"
-                        type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
                         className="h-4 w-4 accent-[#c24e00]"
@@ -591,9 +593,8 @@ export default function ProductsPage() {
                   {products.map((product) => (
                     <tr key={product.id} className="hover:bg-[#fbfcf9]">
                       <td className="px-4 py-3">
-                        <input
+                        <Checkbox
                           aria-label={`Select ${product.name}`}
-                          type="checkbox"
                           checked={selected.includes(product.id)}
                           onChange={() =>
                             setSelected((current) =>
@@ -711,9 +712,8 @@ export default function ProductsPage() {
                       className="h-16 w-16 shrink-0 rounded-xl"
                     />
                     {canEdit ? (
-                      <input
+                      <Checkbox
                         aria-label={`Select ${product.name}`}
-                        type="checkbox"
                         checked={selected.includes(product.id)}
                         onChange={() =>
                           setSelected((current) =>

@@ -32,6 +32,9 @@ model Business {
   financialYear         String                 @default("CALENDAR")
   isSetupComplete       Boolean                @default(false)
   isActive              Boolean                @default(true)
+  deletedAt             DateTime?
+  deletionScheduledAt   DateTime?
+  deletedById           String?
   logoUrl               String?
   phone                 String?
   taxPercentage         Float                  @default(18.0)
@@ -99,6 +102,7 @@ model User {
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   lastLogin              DateTime?
+  anonymizedAt           DateTime?
   createdAuditLogs       AuditLog[]              @relation("AuditCreatedBy")
   customerActivities     CustomerActivity[]
   assignedLocations      Location[]              @relation("LocationManager")

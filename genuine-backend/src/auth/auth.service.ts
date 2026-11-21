@@ -3,6 +3,7 @@ import {
   BadRequestException,
   UnauthorizedException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -1223,5 +1224,52 @@ export class AuthService {
       // Keep account existence private and do not return or log the reset token.
       this.logger.error('[AUTH] Unable to queue password reset email');
     }
+  }
+
+  async deleteAccount(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { userRoles: { include: { role: true } } },
+    });
+    if (!user || !user.isActive) throw new NotFoundException('User not found');
+
+    const isOwner = user.userRoles.some(
+      (ur) => ur.role.name === 'Owner' && ur.role.isSystem && ur.role.businessId === user.businessId,
+    );
+    if (isOwner) {
+      const otherActiveOwners = await this.prisma.user.count({
+        where: {
+          businessId: user.businessId,
+          isActive: true,
+          id: { not: user.id },
+          userRoles: { some: { role: { name: 'Owner', isSystem: true } } },
+        },
+      });
+      if (otherActiveOwners === 0)
+        throw new BadRequestException(
+          'Business owners must close the business or transfer ownership before deleting their account',
+        );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.userSession.deleteMany({ where: { userId } });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          email: `deleted-${userId}@deleted.local`,
+          passwordHash: '!',
+          firstName: 'Deleted',
+          lastName: 'User',
+          phone: null,
+          avatar: null,
+          verificationToken: null,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          anonymizedAt: new Date(),
+          isActive: false,
+        },
+      });
+    });
+    return { message: 'Account deleted' };
   }
 }

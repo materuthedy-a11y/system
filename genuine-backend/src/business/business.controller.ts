@@ -40,6 +40,8 @@ import {
   UpdateRoleDto,
   CreateExchangeRateDto,
   ConvertCurrencyDto,
+  CloseBusinessDto,
+  TransferOwnershipDto,
 } from './dto';
 
 @ApiTags('Business Setup')
@@ -118,6 +120,28 @@ export class BusinessController {
     @Body() dto: UpdateBusinessSettingsDto,
   ) {
     return this.businessService.updateBusinessSettings(businessId, userId, dto);
+  }
+
+  @Delete('me')
+  @RequirePermission('settings.edit')
+  @ApiOperation({ summary: 'Close the business (owner only, soft-delete with retention)' })
+  closeBusiness(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: CloseBusinessDto,
+  ) {
+    return this.businessService.closeBusiness(businessId, userId, dto.password);
+  }
+
+  @Post('transfer-ownership')
+  @RequirePermission('settings.edit')
+  @ApiOperation({ summary: 'Transfer the Owner role to another active user (owner only)' })
+  transferOwnership(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: TransferOwnershipDto,
+  ) {
+    return this.businessService.transferOwnership(businessId, userId, dto.newOwnerId);
   }
 
   @Get('users')

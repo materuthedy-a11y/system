@@ -91,11 +91,33 @@ export interface SupplierFilters {
 
 export interface SupplierPage { data: Supplier[]; total: number; page: number; limit: number; }
 
+export interface BulkImportResult<TDetail> {
+  total: number;
+  successful: number;
+  failed: number;
+  details: TDetail[];
+}
+
+export interface SupplierImportDetail {
+  name: string;
+  code?: string;
+  success: boolean;
+  supplierId?: string;
+  error?: string;
+}
+
 const root = '/suppliers-customers/suppliers';
 
 export const suppliersAPI = {
   async list(filters: SupplierFilters = {}) {
     return unwrap<SupplierPage>(await apiClient.get(root, { params: filters }));
+  },
+  async exportCsv(filters: SupplierFilters = {}) {
+    const response = await apiClient.get(`${root}/export`, { params: filters, responseType: 'blob' });
+    return response.data as Blob;
+  },
+  async bulkImport(suppliers: SupplierInput[]) {
+    return unwrap<BulkImportResult<SupplierImportDetail>>(await apiClient.post(`${root}/bulk/import`, { suppliers }));
   },
   async get(id: string) {
     return unwrap<Supplier>(await apiClient.get(`${root}/${encodeURIComponent(id)}`));

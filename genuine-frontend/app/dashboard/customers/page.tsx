@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDownUp, ChevronLeft, ChevronRight, Loader2, Plus, UsersRound } from 'lucide-react';
+import { ArrowDownUp, ChevronLeft, ChevronRight, Download, FileUp, Loader2, Plus, UsersRound } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { useAuthStore } from '@/store/authStore';
 import { getApiError } from '@/lib/api';
 import { customersAPI, type Customer, type CustomerFilters, type CustomerStatus, type CustomerType } from '@/lib/api/customers';
 import { CustomerAvatar } from '@/components/customers/CustomerPhoto';
+import { ImportCustomersModal } from '@/components/customers/ImportCustomersModal';
 import { formatBusinessDate } from '@/lib/format/businessDate';
 import { money } from '@/components/sales/SalesPrimitives';
 import { Input } from '@/components/ui/forms/input';
@@ -34,6 +35,8 @@ export default function CustomersPage() {
   const [sortBy, setSortBy] = useState<CustomerFilters['sortBy']>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [error, setError] = useState('');
   const request = useRef(0);
   const limit = 20;
@@ -54,10 +57,22 @@ export default function CustomersPage() {
   }, [canView, search, status, customerType, sortBy, sortOrder, page]);
   useEffect(() => { void load(); }, [load]);
 
+  const exportCsv = async () => {
+    setExporting(true); setError('');
+    try {
+      const blob = await customersAPI.exportCsv({ search, status: (status || undefined) as CustomerFilters['status'], customerType: (customerType || undefined) as CustomerType | undefined, sortBy, sortOrder });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (cause) { setError(getApiError(cause, 'Could not export customers.')); }
+    finally { setExporting(false); }
+  };
+
   if (!canView) return <div className="mx-auto w-full max-w-7xl p-4 sm:p-6"><section className="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-950 dark:border-blue-900 dark:bg-[#14171d] dark:text-blue-100"><h1 className="text-lg font-bold">Customer access required</h1><p className="mt-1">Your account does not have permission to view customers in this workspace.</p></section></div>;
 
   return <div className="mx-auto w-full max-w-7xl p-4 sm:p-6">
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Operations</p><h1 className="mt-1 text-2xl font-semibold text-[#20231f] dark:text-white">Customers</h1><p className="mt-1 text-sm text-[#667064] dark:text-white/60">Customer records, credit position and account history.</p></div>{canCreate ? <Link href="/dashboard/customers/new" className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#ff7600] px-4 text-sm font-semibold text-white transition hover:bg-[#e96d00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff7600]"><Plus size={16} />New customer</Link> : null}</div>
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">Operations</p><h1 className="mt-1 text-2xl font-semibold text-[#20231f] dark:text-white">Customers</h1><p className="mt-1 text-sm text-[#667064] dark:text-white/60">Customer records, credit position and account history.</p></div><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void exportCsv()} disabled={exporting || loading} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#d8ddd3] bg-white px-4 text-sm font-semibold text-[#394439] hover:bg-[#f5f8f2] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-white/15 dark:bg-[#111411] dark:text-white/80">{exporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}Export CSV</button>{canCreate ? <button type="button" onClick={() => setImportOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[#d8ddd3] bg-white px-4 text-sm font-semibold text-[#394439] hover:bg-[#f5f8f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-white/15 dark:bg-[#111411] dark:text-white/80"><FileUp size={15} />Import CSV</button> : null}{canCreate ? <Link href="/dashboard/customers/new" className="inline-flex min-h-10 items-center gap-2 rounded-md bg-[#ff7600] px-4 text-sm font-semibold text-white transition hover:bg-[#e96d00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff7600]"><Plus size={16} />New customer</Link> : null}</div></div>
     <section className="mb-4 grid gap-3 sm:grid-cols-3"><Metric title="Customers shown" value={rows.length} format={(value) => Math.round(value).toLocaleString()} tone="mint"/><Metric title="Active accounts" value={rows.filter((row) => row.status === 'ACTIVE').length} format={(value) => Math.round(value).toLocaleString()} tone="blue"/><Metric title="Outstanding on this page" value={rows.reduce((sum, row) => sum + row.outstandingBalance, 0)} format={(value) => `TZS ${money(value)}`} tone="gold"/></section>
     <section aria-label="Customer filters" className="ui-filter-surface mb-4 rounded-xl border border-[#dce8df] bg-emerald-50/65 p-4 dark:border-white/10 dark:bg-[#151a16]"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,1.5fr)_1fr_1fr_1fr_auto]">
       <label className="text-xs font-semibold text-[#4a554a] dark:text-white/70">Search<Input value={searchDraft} onChange={(e) => setSearchDraft(e.target.value)} placeholder="Name, code, email or phone" className={`${input} mt-1.5`} /></label>
@@ -76,6 +91,7 @@ export default function CustomersPage() {
       </tbody></table></div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#e8ece5] px-4 py-3 text-xs dark:border-white/10"><span className="text-[#687368] dark:text-white/55">{total ? `${(page - 1) * limit + 1}–${Math.min(page * limit, total)} of ${total}` : '0 customers'}</span><div className="flex items-center gap-2"><button disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)} className="inline-flex min-h-9 items-center gap-1 rounded-md border border-[#d8dfd5] px-2.5 font-semibold disabled:opacity-40 dark:border-white/15"><ChevronLeft size={15}/>Previous</button><span>Page {page} of {pages}</span><button disabled={page >= pages || loading} onClick={() => setPage((value) => value + 1)} className="inline-flex min-h-9 items-center gap-1 rounded-md border border-[#d8dfd5] px-2.5 font-semibold disabled:opacity-40 dark:border-white/15">Next<ChevronRight size={15}/></button></div></div>
     </section>
+    <ImportCustomersModal open={importOpen} onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); void load(); }} />
   </div>;
 }
 

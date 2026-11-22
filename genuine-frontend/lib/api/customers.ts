@@ -117,6 +117,21 @@ export interface CustomerPage {
   limit: number;
 }
 
+export interface BulkImportResult<TDetail> {
+  total: number;
+  successful: number;
+  failed: number;
+  details: TDetail[];
+}
+
+export interface CustomerImportDetail {
+  name: string;
+  code?: string;
+  success: boolean;
+  customerId?: string;
+  error?: string;
+}
+
 function query<T extends object>(filters: T) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
@@ -130,6 +145,13 @@ const root = '/suppliers-customers/customers';
 export const customersAPI = {
   async list(filters: CustomerFilters = {}) {
     return unwrap<CustomerPage>(await apiClient.get(`${root}?${query(filters)}`));
+  },
+  async exportCsv(filters: CustomerFilters = {}) {
+    const response = await apiClient.get(`${root}/export`, { params: filters, responseType: 'blob' });
+    return response.data as Blob;
+  },
+  async bulkImport(customers: CustomerInput[]) {
+    return unwrap<BulkImportResult<CustomerImportDetail>>(await apiClient.post(`${root}/bulk/import`, { customers }));
   },
   async get(id: string) {
     return unwrap<Customer>(await apiClient.get(`${root}/${encodeURIComponent(id)}`));

@@ -14,7 +14,9 @@ import {
   SupplierResponseDto,
   SupplierFilterDto,
   SupplierStatementDto,
+  BulkImportSuppliersDto,
 } from './dto';
+import { toCsv } from './csv.util';
 
 const ACTIVE_PAYMENT_STATUSES = ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'];
 const SUPPLIER_PO_STATUSES = { notIn: ['DRAFT', 'CANCELLED'] };
@@ -166,28 +168,7 @@ export class SupplierService {
     const skip = (page - 1) * limit;
 
     // Build filter conditions
-    const where: Prisma.SupplierWhereInput = {
-      businessId,
-      ...(filter.paymentTerms && { paymentTerms: filter.paymentTerms }),
-      ...(filter.search && {
-        OR: [
-          { name: { contains: filter.search, mode: 'insensitive' } },
-          { supplierCode: { contains: filter.search, mode: 'insensitive' } },
-          { email: { contains: filter.search, mode: 'insensitive' } },
-          { phone: { contains: filter.search, mode: 'insensitive' } },
-        ],
-      }),
-    };
-
-    // Filter by status (active/inactive/overdue)
-    if (filter.status) {
-      if (filter.status === 'ACTIVE') {
-        where.isActive = true;
-      } else if (filter.status === 'INACTIVE') {
-        where.isActive = false;
-      }
-      // OVERDUE will be filtered in memory after fetching
-    }
+    const where = this._supplierWhere(businessId, filter);
 
     // Build sort
     let orderBy: Prisma.SupplierOrderByWithRelationInput = { createdAt: 'desc' };
@@ -292,6 +273,142 @@ export class SupplierService {
       total,
       page,
       limit,
+    };
+  }
+
+  /**
+   * EXPORT SUPPLIERS AS CSV
+   * Applies the same filters as the list endpoint, capped at 10,000 rows.
+   */
+  async exportSuppliers(businessId: string, filter: SupplierFilterDto) {
+    const where = this._supplierWhere(businessId, filter);
+    const total = await this.prisma.supplier.count({ where });
+    if (total > 10000) {
+      throw new BadRequestException('Supplier export exceeds 10,000 rows; narrow the filters');
+    }
+
+    const suppliers = await this.prisma.supplier.findMany({
+      where,
+      include: { contacts: true, address: true },
+    });
+
+    let results = await Promise.all(
+      suppliers.map(async (supplier) => {
+        const [totalPurchased, totalPaid, totalReturned, lastPurchaseDate] = await Promise.all([
+          this._calculateSupplierPurchases(businessId, supplier.id),
+          this._calculateSupplierPayments(businessId, supplier.id),
+          this._calculateSupplierReturns(businessId, supplier.id),
+          this._getLastPurchaseDate(businessId, supplier.id),
+        ]);
+        return this._formatSupplierResponse(supplier, supplier.contacts || [], supplier.address, {
+          totalPurchased,
+          totalPaid,
+          totalReturned,
+          lastPurchaseDate,
+        });
+      }),
+    );
+
+    if (filter.status === 'OVERDUE') {
+      results = results.filter((s) => s.outstandingBalance > 0);
+    }
+
+    const direction = filter.sortOrder === 'asc' ? 1 : -1;
+    const sortBy = filter.sortBy || 'createdAt';
+    results.sort((a, b) => {
+      if (sortBy === 'name') return direction * a.name.localeCompare(b.name);
+      if (sortBy === 'outstanding')
+        return direction * (a.outstandingBalance - b.outstandingBalance);
+      if (sortBy === 'lastPurchase') {
+        const left = a.lastPurchaseDate ? new Date(a.lastPurchaseDate).getTime() : 0;
+        const right = b.lastPurchaseDate ? new Date(b.lastPurchaseDate).getTime() : 0;
+        return direction * (left - right);
+      }
+      return direction * (a.createdAt.getTime() - b.createdAt.getTime());
+    });
+
+    const headers = [
+      'name',
+      'supplierCode',
+      'email',
+      'phone',
+      'secondaryPhone',
+      'bankName',
+      'bankAccountNumber',
+      'bankSwiftCode',
+      'taxId',
+      'creditLimit',
+      'paymentTerms',
+      'openingBalance',
+      'isActive',
+      'description',
+      'street',
+      'city',
+      'region',
+      'postalCode',
+      'country',
+      'totalPurchased',
+      'totalPaid',
+      'totalReturned',
+      'outstandingBalance',
+      'lastPurchaseDate',
+      'createdAt',
+    ];
+    const content = toCsv(
+      headers,
+      results.map((row) => ({
+        ...row,
+        street: row.address?.street,
+        city: row.address?.city,
+        region: row.address?.region,
+        postalCode: row.address?.postalCode,
+        country: row.address?.country,
+      })),
+    );
+
+    return {
+      fileName: `suppliers-${new Date().toISOString().slice(0, 10)}.csv`,
+      contentType: 'text/csv; charset=utf-8',
+      content,
+    };
+  }
+
+  /**
+   * BULK IMPORT SUPPLIERS
+   * Creates each row independently so one bad row does not fail the batch.
+   */
+  async bulkImportSuppliers(businessId: string, userId: string, dto: BulkImportSuppliersDto) {
+    this.logger.log(`[SUPPLIERS] Bulk importing ${dto.suppliers.length} suppliers`);
+
+    const results = [];
+    for (const supplierDto of dto.suppliers) {
+      try {
+        const created = await this.createSupplier(businessId, userId, supplierDto);
+        results.push({
+          name: supplierDto.name,
+          code: created.supplierCode,
+          success: true,
+          supplierId: created.id,
+        });
+      } catch (error) {
+        results.push({
+          name: supplierDto.name,
+          success: false,
+          error: error instanceof Error ? error.message : 'Import failed',
+        });
+      }
+    }
+
+    const successful = results.filter((r) => r.success).length;
+    this.logger.log(
+      `[SUPPLIERS] Bulk import completed: ${successful}/${results.length} successful`,
+    );
+
+    return {
+      total: results.length,
+      successful,
+      failed: results.length - successful,
+      details: results,
     };
   }
 
@@ -604,6 +721,30 @@ export class SupplierService {
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
+
+  private _supplierWhere(businessId: string, filter: SupplierFilterDto): Prisma.SupplierWhereInput {
+    const where: Prisma.SupplierWhereInput = {
+      businessId,
+      ...(filter.paymentTerms && { paymentTerms: filter.paymentTerms }),
+      ...(filter.search && {
+        OR: [
+          { name: { contains: filter.search, mode: 'insensitive' } },
+          { supplierCode: { contains: filter.search, mode: 'insensitive' } },
+          { email: { contains: filter.search, mode: 'insensitive' } },
+          { phone: { contains: filter.search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    // Filter by status (active/inactive); OVERDUE is filtered in memory.
+    if (filter.status === 'ACTIVE') {
+      where.isActive = true;
+    } else if (filter.status === 'INACTIVE') {
+      where.isActive = false;
+    }
+
+    return where;
+  }
 
   /**
    * Generate supplier code

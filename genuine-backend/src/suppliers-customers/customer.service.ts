@@ -14,7 +14,9 @@ import {
   CustomerResponseDto,
   CustomerFilterDto,
   CustomerStatementDto,
+  BulkImportCustomersDto,
 } from './dto';
+import { toCsv } from './csv.util';
 
 @Injectable()
 export class CustomerService {
@@ -181,31 +183,7 @@ export class CustomerService {
     const skip = (page - 1) * limit;
 
     // Build filter conditions
-    const where: Prisma.CustomerWhereInput = {
-      businessId,
-      ...(filter.customerType && { customerType: filter.customerType }),
-      ...(filter.paymentTerms && { paymentTerms: filter.paymentTerms }),
-      ...(filter.search && {
-        OR: [
-          { name: { contains: filter.search, mode: 'insensitive' } },
-          { customerCode: { contains: filter.search, mode: 'insensitive' } },
-          { email: { contains: filter.search, mode: 'insensitive' } },
-          { phone: { contains: filter.search, mode: 'insensitive' } },
-        ],
-      }),
-    };
-
-    // Filter by status
-    if (filter.status) {
-      if (filter.status === 'ACTIVE') {
-        where.status = 'ACTIVE';
-      } else if (filter.status === 'INACTIVE' || filter.status === 'SUSPENDED') {
-        where.status = 'SUSPENDED';
-      } else if (filter.status === 'BLACKLISTED' || filter.status === 'ARCHIVED') {
-        where.status = filter.status;
-      }
-      // OVERDUE will be filtered in memory
-    }
+    const where = this._customerWhere(businessId, filter);
 
     // Build sort
     let orderBy: Prisma.CustomerOrderByWithRelationInput = { createdAt: 'desc' };
@@ -301,6 +279,132 @@ export class CustomerService {
       total: resultTotal,
       page,
       limit,
+    };
+  }
+
+  /**
+   * EXPORT CUSTOMERS AS CSV
+   * Applies the same filters as the list endpoint, capped at 10,000 rows.
+   */
+  async exportCustomers(businessId: string, filter: CustomerFilterDto) {
+    const where = this._customerWhere(businessId, filter);
+    const total = await this.prisma.customer.count({ where });
+    if (total > 10000) {
+      throw new BadRequestException('Customer export exceeds 10,000 rows; narrow the filters');
+    }
+
+    const customers = await this.prisma.customer.findMany({
+      where,
+      include: { contacts: true, address: true, photo: { select: { id: true } } },
+    });
+
+    let results = await Promise.all(
+      customers.map(async (customer) => {
+        const financials = await this._calculateCustomerFinancials(businessId, customer.id);
+        return this._formatCustomerResponse(
+          customer,
+          customer.contacts || [],
+          customer.address,
+          financials,
+        );
+      }),
+    );
+
+    if (filter.status === 'OVERDUE') {
+      results = results.filter((c) => c.outstandingBalance > 0);
+    }
+
+    const direction = filter.sortOrder === 'asc' ? 1 : -1;
+    const sortBy = filter.sortBy || 'createdAt';
+    results.sort((a, b) => {
+      if (sortBy === 'name') return direction * a.name.localeCompare(b.name);
+      if (sortBy === 'outstanding')
+        return direction * (a.outstandingBalance - b.outstandingBalance);
+      if (sortBy === 'lastSale')
+        return direction * ((a.lastSaleDate?.getTime() || 0) - (b.lastSaleDate?.getTime() || 0));
+      return direction * (a.createdAt.getTime() - b.createdAt.getTime());
+    });
+
+    const headers = [
+      'name',
+      'customerCode',
+      'customerType',
+      'email',
+      'phone',
+      'secondaryPhone',
+      'taxId',
+      'creditLimit',
+      'paymentTerms',
+      'openingBalance',
+      'status',
+      'description',
+      'street',
+      'city',
+      'region',
+      'postalCode',
+      'country',
+      'totalSales',
+      'totalPaid',
+      'totalReturned',
+      'outstandingBalance',
+      'lastSaleDate',
+      'createdAt',
+    ];
+    const content = toCsv(
+      headers,
+      results.map((row) => ({
+        ...row,
+        street: row.address?.street,
+        city: row.address?.city,
+        region: row.address?.region,
+        postalCode: row.address?.postalCode,
+        country: row.address?.country,
+      })),
+    );
+
+    return {
+      fileName: `customers-${new Date().toISOString().slice(0, 10)}.csv`,
+      contentType: 'text/csv; charset=utf-8',
+      content,
+    };
+  }
+
+  /**
+   * BULK IMPORT CUSTOMERS
+   * Creates each row independently so one bad row does not fail the batch.
+   */
+  async bulkImportCustomers(businessId: string, userId: string, dto: BulkImportCustomersDto) {
+    this.logger.log(`[CUSTOMERS] Bulk importing ${dto.customers.length} customers`);
+
+    const results = [];
+    for (const customerDto of dto.customers) {
+      try {
+        const created = await this.createCustomer(businessId, userId, customerDto);
+        results.push({
+          name: customerDto.name,
+          code: created.customerCode,
+          success: true,
+          customerId: created.id,
+        });
+      } catch (error) {
+        results.push({
+          name: customerDto.name,
+          success: false,
+          error: error instanceof Error ? error.message : 'Import failed',
+        });
+      }
+    }
+
+    const successful = results.filter((r) => r.success).length;
+    this.logger.log(
+      `[CUSTOMERS] Bulk import completed: ${successful}/${results.length} successful`,
+    );
+
+    return {
+      total: results.length,
+      successful,
+      failed: results.length - successful,
+      details: results,
     };
   }
 
@@ -660,6 +764,36 @@ export class CustomerService {
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
+
+  private _customerWhere(businessId: string, filter: CustomerFilterDto): Prisma.CustomerWhereInput {
+    const where: Prisma.CustomerWhereInput = {
+      businessId,
+      ...(filter.customerType && { customerType: filter.customerType }),
+      ...(filter.paymentTerms && { paymentTerms: filter.paymentTerms }),
+      ...(filter.search && {
+        OR: [
+          { name: { contains: filter.search, mode: 'insensitive' } },
+          { customerCode: { contains: filter.search, mode: 'insensitive' } },
+          { email: { contains: filter.search, mode: 'insensitive' } },
+          { phone: { contains: filter.search, mode: 'insensitive' } },
+        ],
+      }),
+    };
+
+    // Filter by status
+    if (filter.status) {
+      if (filter.status === 'ACTIVE') {
+        where.status = 'ACTIVE';
+      } else if (filter.status === 'INACTIVE' || filter.status === 'SUSPENDED') {
+        where.status = 'SUSPENDED';
+      } else if (filter.status === 'BLACKLISTED' || filter.status === 'ARCHIVED') {
+        where.status = filter.status;
+      }
+      // OVERDUE is filtered in memory after financials are calculated.
+    }
+
+    return where;
+  }
 
   private statementDate(value: string, exclusiveEnd: boolean): Date {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value))

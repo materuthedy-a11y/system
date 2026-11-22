@@ -31,6 +31,8 @@ import {
   CustomerResponseDto,
   CustomerFilterDto,
   CreateCustomerActivityDto,
+  BulkImportCustomersDto,
+  BulkImportSuppliersDto,
 } from './dto';
 
 @ApiTags('Suppliers & Customers')
@@ -62,6 +64,43 @@ export class SupplierCustomerController {
     @Body() dto: CreateSupplierDto,
   ): Promise<SupplierResponseDto> {
     return this.supplierService.createSupplier(businessId, userId, dto);
+  }
+
+  /**
+   * GET /suppliers-customers/suppliers/export
+   * Export suppliers as CSV (declared before :id routes)
+   */
+  @Get('suppliers/export')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('suppliers.view')
+  @ApiOperation({ summary: 'Export suppliers as CSV' })
+  async exportSuppliers(
+    @Business() businessId: string,
+    @Query() filter: SupplierFilterDto,
+    @Res() response: Response,
+  ) {
+    const result = await this.supplierService.exportSuppliers(businessId, filter);
+    response.setHeader('Content-Type', result.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+    response.setHeader('Cache-Control', 'no-store');
+    return response.status(HttpStatus.OK).send(result.content);
+  }
+
+  /**
+   * POST /suppliers-customers/suppliers/bulk/import
+   * Bulk import suppliers
+   */
+  @Post('suppliers/bulk/import')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('suppliers.create')
+  @ApiOperation({ summary: 'Bulk import suppliers' })
+  @ApiResponse({ status: 201 })
+  async bulkImportSuppliers(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: BulkImportSuppliersDto,
+  ) {
+    return this.supplierService.bulkImportSuppliers(businessId, userId, dto);
   }
 
   /**
@@ -164,6 +203,43 @@ export class SupplierCustomerController {
     @Body() dto: CreateCustomerDto,
   ): Promise<CustomerResponseDto> {
     return this.customerService.createCustomer(businessId, userId, dto);
+  }
+
+  /**
+   * GET /suppliers-customers/customers/export
+   * Export customers as CSV (declared before :id routes)
+   */
+  @Get('customers/export')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('customers.view')
+  @ApiOperation({ summary: 'Export customers as CSV' })
+  async exportCustomers(
+    @Business() businessId: string,
+    @Query() filter: CustomerFilterDto,
+    @Res() response: Response,
+  ) {
+    const result = await this.customerService.exportCustomers(businessId, filter);
+    response.setHeader('Content-Type', result.contentType);
+    response.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+    response.setHeader('Cache-Control', 'no-store');
+    return response.status(HttpStatus.OK).send(result.content);
+  }
+
+  /**
+   * POST /suppliers-customers/customers/bulk/import
+   * Bulk import customers
+   */
+  @Post('customers/bulk/import')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('customers.create')
+  @ApiOperation({ summary: 'Bulk import customers' })
+  @ApiResponse({ status: 201 })
+  async bulkImportCustomers(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Body() dto: BulkImportCustomersDto,
+  ) {
+    return this.customerService.bulkImportCustomers(businessId, userId, dto);
   }
 
   /**

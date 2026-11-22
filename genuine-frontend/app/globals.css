@@ -1191,3 +1191,18 @@ html.dark .ui-field--auth:-webkit-autofill:focus {
   transform-origin: left center;
   animation: mizania-bar-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* Print: show only the invoice receipt, hide the app shell */
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area {
+    position: fixed;
+    inset: 0;
+    display: block !important;
+    width: 100%;
+    margin: 0 auto;
+    padding: 4mm 2mm;
+  }
+  @page { size: 80mm auto; margin: 3mm; }
+}

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { Printer } from 'lucide-react';
 import { getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
 import { salesAPI } from '@/lib/api/sales';
@@ -11,6 +12,7 @@ import { useSalesStore } from '@/store/salesStore';
 import { SalesHeading, SalesNotice, StatusBadge, calendarDateLabel, money, useSalesPermissions } from '@/components/sales/SalesPrimitives';
 import { useAuthStore } from '@/store/authStore';
 import { useBusinessProfileStore } from '@/store/businessProfileStore';
+import { InvoicePrintReceipt } from '@/components/sales/InvoicePrintReceipt';
 import { Input } from '@/components/ui/forms/input';
 import { Select } from '@/components/ui/forms/select';
 
@@ -94,7 +96,9 @@ export default function SalesInvoiceDetailPage() {
         {['ISSUED', 'PARTIALLY_PAID', 'OVERDUE'].includes(invoice.status) && permissions.canPay && invoice.balance > 0 ? <button disabled={busy} onClick={() => setShowPayment((value) => !value)} className="min-h-10 rounded-lg bg-[#40580b] px-4 text-sm font-semibold text-white disabled:opacity-50">Record payment</button> : null}
         {!['CANCELLED', 'DRAFT'].includes(invoice.status) && permissions.canCreate ? <Link href={`/dashboard/sales/returns/new?salesInvoiceId=${encodeURIComponent(id)}`} className="inline-flex min-h-10 items-center rounded-lg border border-[#dfe2d9] px-4 text-sm font-semibold">Create return</Link> : null}
         {['DRAFT', 'ISSUED', 'OVERDUE'].includes(invoice.status) && invoice.totalPaid <= 0 && permissions.canCancel ? <button disabled={busy} onClick={() => { setShowCancel((value) => !value); setActionError(''); }} className="min-h-10 rounded-lg border border-rose-200 px-4 text-sm font-semibold text-rose-700 disabled:opacity-50">Cancel invoice</button> : null}
+        {!['DRAFT', 'CANCELLED'].includes(invoice.status) ? <button type="button" onClick={() => window.print()} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#dfe2d9] px-4 text-sm font-semibold"><Printer size={15} />Print receipt</button> : null}
       </div>
+      <InvoicePrintReceipt invoice={invoice} businessName={businessBrand?.name} businessLogoUrl={businessBrand?.logoUrl} />
       {showPayment ? <form onSubmit={pay} className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-[#dce8a2] bg-[#fbfdf3] p-4 sm:grid-cols-2"><h2 className="sm:col-span-2 font-semibold">Record customer payment</h2>{methodError ? <p className="sm:col-span-2 text-sm text-rose-700">{methodError}</p> : null}<label className="text-xs font-semibold">Amount (up to {money(invoice.balance, invoice.currency)})<Input required type="number" min="0.01" max={invoice.balance} step="0.01" className={`${input} mt-1`} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label><label className="text-xs font-semibold">Payment method<Select required className={`${input} mt-1`} value={paymentMethodId} onChange={(e) => setPaymentMethodId(e.target.value)}><option value="">Choose method</option>{methods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.isDefault ? ' · Default' : ''}</option>)}</Select></label><label className="text-xs font-semibold">Reference {methods.find((method) => method.id === paymentMethodId)?.requiresReference ? '(required)' : '(optional)'}<Input required={!!methods.find((method) => method.id === paymentMethodId)?.requiresReference} className={`${input} mt-1`} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} /></label><label className="text-xs font-semibold">Notes (optional)<Input className={`${input} mt-1`} value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} /></label><div className="flex gap-2 sm:col-span-2"><button disabled={busy || !methods.length} className="min-h-10 rounded-lg bg-[#20211f] px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Recording…' : 'Submit payment'}</button><button type="button" onClick={() => setShowPayment(false)} className="min-h-10 rounded-lg border border-[#dfe2d9] px-4 text-sm">Close</button></div></form> : null}
       {showCancel ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="presentation">
         <form role="dialog" aria-modal="true" aria-labelledby="cancel-invoice-title" onSubmit={cancel} className="w-full max-w-md rounded-2xl border border-[#efd4cf] bg-white p-5 shadow-2xl dark:border-[#533530] dark:bg-[#20231f]">

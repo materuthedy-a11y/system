@@ -71,18 +71,19 @@ export function ImportProductsModal({ open, onClose, onDone }: { open: boolean; 
           skipped.push(`${sku || name || '?'} (missing name/sku/category/unit)`);
           continue;
         }
+        const g = (k: string) => r[k] ?? r[k.toLowerCase()] ?? '';
         products.push({
           sku, name,
-          barcode: (r.barcode ?? '').trim() || undefined,
-          description: (r.description ?? '').trim() || undefined,
+          barcode: g('barcode').trim() || undefined,
+          description: g('description').trim() || undefined,
           categoryId,
-          buyingPrice: num(r.buyingPrice),
-          sellingPrice: num(r.sellingPrice, num(r.buyingPrice)),
-          wholesalePrice: r.wholesalePrice?.trim() ? num(r.wholesalePrice) : undefined,
+          buyingPrice: num(g('buyingPrice')),
+          sellingPrice: num(g('sellingPrice'), num(g('buyingPrice'))),
+          wholesalePrice: g('wholesalePrice').trim() ? num(g('wholesalePrice')) : undefined,
           defaultUnitId: unitId,
           productUnits: [{ unitId, conversionFactor: 1, isDefault: true }],
-          minimumStock: num(r.minimumstock ?? r.minimum_stock),
-          reorderLevel: num(r.reorderlevel ?? r.reorder_level),
+          minimumStock: Math.trunc(num(r.minimumstock ?? r.minimum_stock)),
+          reorderLevel: Math.trunc(num(r.reorderlevel ?? r.reorder_level)),
           requiresExpiry: false,
         });
       }

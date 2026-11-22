@@ -3,7 +3,7 @@ export function csvCell(raw: unknown): string {
   if (raw === null || raw === undefined) value = '';
   else if (raw instanceof Date) value = raw.toISOString();
   else value = String(raw);
-  if (/^[=+@\-\t\r]/.test(value)) value = `'${value}`;
+  if (typeof raw !== 'number' && /^[=+@\-\t\r]/.test(value)) value = `'${value}`;
   return `"${value.replace(/"/g, '""')}"`;
 }
 

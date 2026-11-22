@@ -1,18 +1,13 @@
-import { IsArray, ValidateNested } from 'class-validator';
-import { Type } from 'class-transformer';
-import { CreateCustomerDto } from './create-customer.dto';
-import { CreateSupplierDto } from './create-supplier.dto';
+import { IsArray } from 'class-validator';
 
+// Rows are validated one-by-one inside the service so a single invalid row
+// fails only itself instead of rejecting the whole batch at the pipe level.
 export class BulkImportCustomersDto {
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateCustomerDto)
-  customers: CreateCustomerDto[];
+  customers: Record<string, unknown>[];
 }
 
 export class BulkImportSuppliersDto {
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => CreateSupplierDto)
-  suppliers: CreateSupplierDto[];
+  suppliers: Record<string, unknown>[];
 }

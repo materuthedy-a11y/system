@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { v4 as uuid } from 'uuid';
+import { plainToInstance } from 'class-transformer';
+import { validate, ValidationError } from 'class-validator';
 import { PrismaService } from '../database/prisma.service';
 import { LoggerService } from '../common/logger/logger.service';
 import {
@@ -377,7 +379,25 @@ export class CustomerService {
     this.logger.log(`[CUSTOMERS] Bulk importing ${dto.customers.length} customers`);
 
     const results = [];
-    for (const customerDto of dto.customers) {
+    for (const raw of dto.customers) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        results.push({ name: '', success: false, error: 'Row is not an object' });
+        continue;
+      }
+      const name = typeof raw.name === 'string' ? raw.name : '';
+      const customerDto = plainToInstance(CreateCustomerDto, raw);
+      const validationErrors = await validate(customerDto, {
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+      if (validationErrors.length) {
+        results.push({
+          name,
+          success: false,
+          error: this._firstValidationError(validationErrors),
+        });
+        continue;
+      }
       try {
         const created = await this.createCustomer(businessId, userId, customerDto);
         results.push({
@@ -764,6 +784,18 @@ export class CustomerService {
   // ============================================================
   // PRIVATE HELPERS
   // ============================================================
+
+  private _firstValidationError(errors: ValidationError[]): string {
+    for (const error of errors) {
+      const constraints = error.constraints ? Object.values(error.constraints) : [];
+      if (constraints.length) return `${error.property}: ${constraints[0]}`;
+      if (error.children?.length) {
+        const nested = this._firstValidationError(error.children);
+        if (nested) return nested;
+      }
+    }
+    return 'Invalid row';
+  }
 
   private _customerWhere(businessId: string, filter: CustomerFilterDto): Prisma.CustomerWhereInput {
     const where: Prisma.CustomerWhereInput = {

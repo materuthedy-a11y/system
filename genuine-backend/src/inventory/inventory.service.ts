@@ -416,6 +416,108 @@ export class InventoryService {
     }
   }
 
+  private async resolveInventoryExpiry(
+    tx: Tx,
+    businessId: string,
+    productId: string,
+    locationId: string,
+    rawBatchNumber: string | undefined,
+    rawExpiryDate: string | undefined,
+    requiresExpiry: boolean,
+    addingStock: boolean,
+  ): Promise<Date | null> {
+    const batchNumber = rawBatchNumber?.trim() || null;
+    const suppliedExpiry = rawExpiryDate
+      ? new Date(`${rawExpiryDate.slice(0, 10)}T00:00:00.000Z`)
+      : null;
+    if (rawExpiryDate && (!suppliedExpiry || !Number.isFinite(suppliedExpiry.getTime()))) {
+      throw new BadRequestException('Enter a valid batch expiry date');
+    }
+    if (requiresExpiry && !batchNumber) {
+      throw new BadRequestException('Batch number is required for this product');
+    }
+    if (!batchNumber) return suppliedExpiry;
+    const existing = await tx.inventoryMovement.findFirst({
+      where: {
+        businessId,
+        productId,
+        locationId,
+        batchNumber,
+        expiryDate: { not: null },
+        quantity: { gt: 0 },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { expiryDate: true },
+    });
+    if (
+      existing?.expiryDate &&
+      suppliedExpiry &&
+      existing.expiryDate.getTime() !== suppliedExpiry.getTime()
+    ) {
+      throw new BadRequestException('Expiry date does not match the selected batch');
+    }
+    const expiryDate = existing?.expiryDate ?? suppliedExpiry;
+    if (requiresExpiry && !expiryDate) {
+      throw new BadRequestException('The selected batch has no tracked expiry date');
+    }
+    if (requiresExpiry && addingStock && !existing?.expiryDate && !suppliedExpiry) {
+      throw new BadRequestException('Expiry date is required when adding a new batch');
+    }
+    if (!addingStock && requiresExpiry && !existing?.expiryDate) {
+      throw new BadRequestException('Choose an existing tracked batch when removing stock');
+    }
+    return expiryDate;
+  }
+
+  private async currentBatchQuantity(
+    tx: Tx,
+    businessId: string,
+    productId: string,
+    locationId: string,
+    batchNumber: string,
+  ) {
+    const [movements, balance] = await Promise.all([
+      tx.inventoryMovement.findMany({
+        where: { businessId, productId, locationId },
+        include: {
+          product: { select: { id: true, name: true, sku: true, buyingPrice: true } },
+          location: { select: { id: true, name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+      tx.stockBalance.findUnique({
+        where: { productId_locationId: { productId, locationId } },
+        include: { product: true, location: true },
+      }),
+    ]);
+    if (!balance) return 0;
+    const net = movements.reduce((sum, movement) => sum + movement.quantity, 0);
+    const openingQuantity = round(balance.quantity - net);
+    const openingLayers: MovementLayer[] =
+      openingQuantity > EPSILON
+        ? [
+            {
+              productId,
+              locationId,
+              productName: balance.product.name,
+              sku: balance.product.sku,
+              locationName: balance.location.name,
+              quantity: openingQuantity,
+              unitCost: balance.product.buyingPrice,
+              batchNumber: null,
+              expiryDate: null,
+              receivedAt: balance.product.createdAt,
+              untracked: true,
+            },
+          ]
+        : [];
+    return round(
+      this.replayLayers(movements, 'FIFO', openingLayers)
+        .filter((layer) => layer.batchNumber === batchNumber)
+        .reduce((sum, layer) => sum + layer.quantity, 0),
+    );
+  }
+
   async createStockAdjustment(businessId: string, userId: string, dto: CreateStockAdjustmentDto) {
     const allowed = await accessibleLocationIds(this.prisma, businessId, userId);
     if (allowed && dto.items.some((item) => !allowed.includes(item.locationId)))
@@ -442,6 +544,16 @@ export class InventoryService {
           if (!product) throw new NotFoundException(`Active product ${line.productId} not found`);
           if (!location)
             throw new NotFoundException(`Active location ${line.locationId} not found`);
+          const expiryDate = await this.resolveInventoryExpiry(
+            tx,
+            businessId,
+            product.id,
+            location.id,
+            line.batchNumber,
+            line.expiryDate,
+            product.requiresExpiry,
+            line.quantity > 0,
+          );
           const stock = await tx.stockBalance.findUnique({
             where: { productId_locationId: { productId: product.id, locationId: location.id } },
           });
@@ -454,6 +566,7 @@ export class InventoryService {
             difference: round(line.quantity),
             reason: line.reason,
             batchNumber: line.batchNumber,
+            expiryDate,
             notes: line.notes,
           });
         }
@@ -547,6 +660,18 @@ export class InventoryService {
               `Adjustment would make ${item.product.name} stock negative`,
             );
           }
+          if (item.difference < -EPSILON && item.batchNumber) {
+            const lotQuantity = await this.currentBatchQuantity(
+              tx,
+              businessId,
+              item.productId,
+              item.locationId,
+              item.batchNumber,
+            );
+            if (lotQuantity + EPSILON < -item.difference) {
+              throw new ConflictException(`Batch ${item.batchNumber} no longer has enough stock`);
+            }
+          }
           await tx.stockBalance.update({
             where: {
               productId_locationId: { productId: item.productId, locationId: item.locationId },
@@ -565,6 +690,7 @@ export class InventoryService {
               notes: item.notes || item.reason,
               unitCost: item.product.buyingPrice,
               batchNumber: item.batchNumber,
+              expiryDate: item.expiryDate,
               createdBy: userId,
             },
           });
@@ -667,6 +793,20 @@ export class InventoryService {
           include: { defaultUnit: { select: { name: true } } },
         });
         if (!product) throw new NotFoundException(`Active product ${line.productId} not found`);
+        const batchNumber = line.batchNumber?.trim() || null;
+        const sourceBatch = batchNumber
+          ? await tx.inventoryMovement.findFirst({
+              where: {
+                businessId,
+                productId: product.id,
+                locationId: from.id,
+                batchNumber,
+                expiryDate: { not: null },
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              select: { expiryDate: true },
+            })
+          : null;
         const baseUnit = product.defaultUnit?.name || 'UNIT';
         if (
           line.unit?.trim() &&
@@ -680,7 +820,8 @@ export class InventoryService {
           productId: product.id,
           quantity: line.quantity,
           unit: baseUnit,
-          batchNumber: line.batchNumber,
+          batchNumber,
+          expiryDate: sourceBatch?.expiryDate ?? null,
           notes: line.notes,
         });
       }
@@ -780,6 +921,7 @@ export class InventoryService {
             notes: `Sent to ${transfer.toLocationId}`,
             unitCost,
             batchNumber: item.batchNumber,
+            expiryDate: item.expiryDate,
             createdBy: userId,
           },
         });
@@ -867,6 +1009,7 @@ export class InventoryService {
             notes: `Received from ${transfer.fromLocationId}`,
             unitCost: item.unitCost ?? item.product.buyingPrice,
             batchNumber: item.batchNumber,
+            expiryDate: item.expiryDate,
             createdBy: userId,
           },
         });
@@ -889,7 +1032,7 @@ export class InventoryService {
 
   async createPhysicalCount(businessId: string, userId: string, dto: CreatePhysicalCountDto) {
     await assertLocationAccess(this.prisma, businessId, userId, dto.locationId);
-    this.assertUniqueLines(dto.items, (i) => i.productId);
+    this.assertUniqueLines(dto.items, (i) => `${i.productId}:${i.batchNumber?.trim() || ''}`);
     return this.prisma.$transaction(async (tx) => {
       const location = await tx.location.findFirst({
         where: { id: dto.locationId, businessId, isActive: true },
@@ -911,8 +1054,26 @@ export class InventoryService {
         const stock = await tx.stockBalance.findUnique({
           where: { productId_locationId: { productId: line.productId, locationId: location.id } },
         });
-        const systemQuantity = round(stock?.quantity || 0);
+        const batchNumber = line.batchNumber?.trim() || null;
+        if (product.requiresExpiry && !batchNumber) {
+          throw new BadRequestException(`Choose a batch number when counting ${product.name}`);
+        }
+        const systemQuantity = batchNumber
+          ? await this.currentBatchQuantity(tx, businessId, product.id, location.id, batchNumber)
+          : round(stock?.quantity || 0);
         const variance = round(line.countedQuantity - systemQuantity);
+        const expiryDate = batchNumber
+          ? await this.resolveInventoryExpiry(
+              tx,
+              businessId,
+              product.id,
+              location.id,
+              batchNumber,
+              line.expiryDate,
+              product.requiresExpiry,
+              variance > 0,
+            )
+          : null;
         if (Math.abs(variance) > EPSILON) {
           varianceCount += 1;
           totalVarianceAmount += Math.abs(variance) * (product.buyingPrice || 0);
@@ -922,7 +1083,8 @@ export class InventoryService {
           systemQuantity,
           countedQuantity: line.countedQuantity,
           variance,
-          batchNumber: line.batchNumber,
+          batchNumber,
+          expiryDate,
           notes: line.notes,
         });
       }
@@ -1013,20 +1175,41 @@ export class InventoryService {
         const items = [...count.items].sort((a, b) => a.productId.localeCompare(b.productId));
         for (const item of items) {
           const balance = await this.lockBalance(tx, item.productId, count.locationId);
-          if (Math.abs(balance.quantity - item.systemQuantity) > EPSILON) {
+          const currentQuantity = item.batchNumber
+            ? await this.currentBatchQuantity(
+                tx,
+                businessId,
+                item.productId,
+                count.locationId,
+                item.batchNumber,
+              )
+            : balance.quantity;
+          if (Math.abs(currentQuantity - item.systemQuantity) > EPSILON) {
             throw new ConflictException(
               `Stock for ${item.product.name} changed since the count snapshot; create a fresh count`,
             );
           }
-          const quantity = round(item.countedQuantity - balance.quantity);
+          const quantity = round(item.countedQuantity - currentQuantity);
           if (!business?.allowNegativeStock && item.countedQuantity < -EPSILON)
             throw new BadRequestException('Count cannot post negative stock');
           if (Math.abs(quantity) <= EPSILON) continue;
+          if (quantity < -EPSILON && item.batchNumber) {
+            const lotQuantity = await this.currentBatchQuantity(
+              tx,
+              businessId,
+              item.productId,
+              count.locationId,
+              item.batchNumber,
+            );
+            if (lotQuantity + EPSILON < -quantity) {
+              throw new ConflictException(`Batch ${item.batchNumber} no longer has enough stock`);
+            }
+          }
           await tx.stockBalance.update({
             where: {
               productId_locationId: { productId: item.productId, locationId: count.locationId },
             },
-            data: { quantity: item.countedQuantity, lastMovementAt: new Date() },
+            data: { quantity: round(balance.quantity + quantity), lastMovementAt: new Date() },
           });
           await tx.inventoryMovement.create({
             data: {
@@ -1040,6 +1223,7 @@ export class InventoryService {
               notes: item.notes || `Physical count ${count.countNumber}`,
               unitCost: item.product.buyingPrice,
               batchNumber: item.batchNumber,
+              expiryDate: item.expiryDate,
               createdBy: userId,
             },
           });
@@ -1940,7 +2124,17 @@ export class InventoryService {
         }
       } else if (movement.quantity < -EPSILON) {
         let remaining = -movement.quantity;
-        const indexes = method === 'LIFO' ? [...lots.keys()].reverse() : [...lots.keys()];
+        const batchIndexes = movement.batchNumber
+          ? [...lots.keys()].filter(
+              (index) =>
+                lots[index].batchNumber === movement.batchNumber &&
+                (!movement.expiryDate ||
+                  !lots[index].expiryDate ||
+                  new Date(lots[index].expiryDate).getTime() ===
+                    new Date(movement.expiryDate).getTime()),
+            )
+          : [...lots.keys()];
+        const indexes = method === 'LIFO' ? batchIndexes.reverse() : batchIndexes;
         for (const index of indexes) {
           if (remaining <= EPSILON) break;
           const used = Math.min(lots[index].quantity, remaining);

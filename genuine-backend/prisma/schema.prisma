@@ -25,10 +25,10 @@ model Business {
   phone2                String?
   city                  String?
   region                String?
-  country               String                  @default("Tanzania")
+  country               String                 @default("Tanzania")
   taxId                 String?
-  timezone              String                  @default("Africa/Dar_es_Salaam")
-  language              String                  @default("en")
+  timezone              String                 @default("Africa/Dar_es_Salaam")
+  language              String                 @default("en")
   financialYear         String                 @default("CALENDAR")
   isSetupComplete       Boolean                @default(false)
   isActive              Boolean                @default(true)
@@ -86,40 +86,40 @@ model Business {
 }
 
 model User {
-  id                     String                  @id @default(cuid())
-  businessId             String
-  email                  String                  @unique
-  passwordHash           String
-  firstName              String
-  lastName               String
-  phone                  String?
-  avatar                 String?
-  isActive               Boolean                 @default(true)
-  isVerified             Boolean                 @default(false)
-  verificationToken      String?
-  passwordResetTokenHash String?
-  passwordResetExpiresAt DateTime?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  lastLogin              DateTime?
-  anonymizedAt           DateTime?
-  createdAuditLogs       AuditLog[]              @relation("AuditCreatedBy")
-  customerActivities     CustomerActivity[]
-  assignedLocations      Location[]              @relation("LocationManager")
-  business               Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  sessions               UserSession[]
-  permissions            Permission[]            @relation("UserPermissions")
-  userRoles              UserRole[]
-  createdExpenses        Expense[]               @relation("ExpenseCreatedBy")
-  approvedExpenses       Expense[]               @relation("ExpenseApprovedBy")
-  paidExpenses           Expense[]               @relation("ExpensePaidBy")
-  rejectedExpenses       Expense[]               @relation("ExpenseRejectedBy")
-  inAppNotifications     InAppNotification[]
+  id                      String                   @id @default(cuid())
+  businessId              String
+  email                   String                   @unique
+  passwordHash            String
+  firstName               String
+  lastName                String
+  phone                   String?
+  avatar                  String?
+  isActive                Boolean                  @default(true)
+  isVerified              Boolean                  @default(false)
+  verificationToken       String?
+  passwordResetTokenHash  String?
+  passwordResetExpiresAt  DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  lastLogin               DateTime?
+  anonymizedAt            DateTime?
+  createdAuditLogs        AuditLog[]               @relation("AuditCreatedBy")
+  customerActivities      CustomerActivity[]
+  assignedLocations       Location[]               @relation("LocationManager")
+  business                Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessions                UserSession[]
+  permissions             Permission[]             @relation("UserPermissions")
+  userRoles               UserRole[]
+  createdExpenses         Expense[]                @relation("ExpenseCreatedBy")
+  approvedExpenses        Expense[]                @relation("ExpenseApprovedBy")
+  paidExpenses            Expense[]                @relation("ExpensePaidBy")
+  rejectedExpenses        Expense[]                @relation("ExpenseRejectedBy")
+  inAppNotifications      InAppNotification[]
   notificationPreferences NotificationPreference[]
-  notificationRecipients NotificationRecipient[]
-  feedbackSubmissions    FeedbackSubmission[]    @relation("FeedbackSubmittedBy")
-  assignedFeedback      FeedbackSubmission[]    @relation("FeedbackAssignedTo")
-  feedbackMessages       FeedbackMessage[]       @relation("FeedbackMessageSender")
+  notificationRecipients  NotificationRecipient[]
+  feedbackSubmissions     FeedbackSubmission[]     @relation("FeedbackSubmittedBy")
+  assignedFeedback        FeedbackSubmission[]     @relation("FeedbackAssignedTo")
+  feedbackMessages        FeedbackMessage[]        @relation("FeedbackMessageSender")
 
   @@unique([businessId, email])
   @@index([businessId])
@@ -514,19 +514,19 @@ model Location {
 }
 
 model PaymentMethod {
-  id          String    @id @default(cuid())
-  businessId  String
-  name        String
-  description String?
-  code        String?
-  methodType  String    @default("CUSTOM")
-  requiresReference Boolean @default(false)
-  bankDetails String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  expenses    Expense[]
-  payments    Payment[]
-  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id                String    @id @default(cuid())
+  businessId        String
+  name              String
+  description       String?
+  code              String?
+  methodType        String    @default("CUSTOM")
+  requiresReference Boolean   @default(false)
+  bankDetails       String?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  expenses          Expense[]
+  payments          Payment[]
+  business          Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, name])
   @@unique([businessId, code], map: "PaymentMethod_businessId_code_key")
@@ -944,6 +944,7 @@ model StockTransferItem {
   quantity         Float
   unit             String        @default("UNIT")
   batchNumber      String?
+  expiryDate       DateTime?
   notes            String?
   receivedQuantity Float         @default(0)
   unitCost         Float?
@@ -987,6 +988,7 @@ model StockAdjustmentItem {
   difference   Float
   locationId   String?
   batchNumber  String?
+  expiryDate   DateTime?
   notes        String?
   reason       String?
   adjustment   StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
@@ -1068,6 +1070,7 @@ model PhysicalCountItem {
   countedQuantity Float
   variance        Float
   batchNumber     String?
+  expiryDate      DateTime?
   notes           String?
   physicalCount   PhysicalCount @relation(fields: [physicalCountId], references: [id], onDelete: Cascade)
   product         Product       @relation(fields: [productId], references: [id])

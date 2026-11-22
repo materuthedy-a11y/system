@@ -23,6 +23,7 @@ export class StockAdjustmentItemDto {
   @IsIn(['INVENTORY_COUNT', 'DAMAGE', 'EXPIRY', 'THEFT', 'SYSTEM_CORRECTION', 'OTHER'])
   reason: string;
   @IsOptional() @IsString() batchNumber?: string;
+  @IsOptional() @IsDateString() expiryDate?: string;
   @IsOptional() @IsString() notes?: string;
 }
 
@@ -69,6 +70,7 @@ export class PhysicalCountItemDto {
   @IsString() productId: string;
   @Type(() => Number) @IsNumber(number) @Min(0) countedQuantity: number;
   @IsOptional() @IsString() batchNumber?: string;
+  @IsOptional() @IsDateString() expiryDate?: string;
   @IsOptional() @IsString() notes?: string;
 }
 

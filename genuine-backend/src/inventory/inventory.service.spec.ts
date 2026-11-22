@@ -12,7 +12,12 @@ function createPrismaMock() {
       update: jest.fn(),
     },
     product: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-    inventoryMovement: { findMany: jest.fn(), groupBy: jest.fn(), create: jest.fn() },
+    inventoryMovement: {
+      findMany: jest.fn(),
+      findFirst: jest.fn(),
+      groupBy: jest.fn(),
+      create: jest.fn(),
+    },
     stockAdjustment: { count: jest.fn() },
     stockTransfer: { count: jest.fn() },
     physicalCount: {
@@ -540,6 +545,48 @@ describe('InventoryService expiry reports', () => {
       { unit: 'UNIT', quantity: 4 },
     ]);
   });
+
+  it('removes a dated adjustment from its named batch without consuming another batch', () => {
+    const service = new InventoryService(createPrismaMock() as PrismaService, {} as never);
+    const movements = [
+      {
+        productId: 'product-a',
+        locationId: 'location-a',
+        quantity: 3,
+        batchNumber: 'LOT-A',
+        expiryDate: new Date('2026-12-21T00:00:00.000Z'),
+        createdAt: new Date('2026-11-01T00:00:00.000Z'),
+        unitCost: 100,
+      },
+      {
+        productId: 'product-a',
+        locationId: 'location-a',
+        quantity: 4,
+        batchNumber: 'LOT-B',
+        expiryDate: new Date('2027-01-15T00:00:00.000Z'),
+        createdAt: new Date('2026-11-02T00:00:00.000Z'),
+        unitCost: 120,
+      },
+      {
+        productId: 'product-a',
+        locationId: 'location-a',
+        quantity: -2,
+        batchNumber: 'LOT-A',
+        expiryDate: new Date('2026-12-21T00:00:00.000Z'),
+        createdAt: new Date('2026-11-03T00:00:00.000Z'),
+        unitCost: 100,
+      },
+    ];
+
+    const remaining = (service as any).replayLayers(movements, 'FIFO');
+
+    expect(
+      remaining.map((layer: any) => [layer.batchNumber, layer.quantity, layer.expiryDate]),
+    ).toEqual([
+      ['LOT-A', 1, new Date('2026-12-21T00:00:00.000Z')],
+      ['LOT-B', 4, new Date('2027-01-15T00:00:00.000Z')],
+    ]);
+  });
 });
 
 describe('InventoryService physical count lifecycle', () => {
@@ -633,6 +680,86 @@ describe('InventoryService physical count lifecycle', () => {
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'CREATE', entityId: 'count-a' }),
     });
+  });
+
+  it('snapshots an expiry-tracked count by batch and carries the batch expiry into the count line', async () => {
+    const prisma = createPrismaMock();
+    const expiryDate = new Date('2026-12-21T00:00:00.000Z');
+    const product = {
+      id: 'product-a',
+      name: 'QA expiry product',
+      sku: 'EXP-QA-1',
+      status: 'ACTIVE',
+      buyingPrice: 1000,
+      requiresExpiry: true,
+    };
+    const balance = {
+      quantity: 3,
+      product: {
+        name: product.name,
+        sku: product.sku,
+        buyingPrice: 1000,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      location: { name: 'QA location' },
+    };
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    prisma.location.findFirst.mockResolvedValue({
+      id: 'location-a',
+      businessId: 'business-a',
+      isActive: true,
+    });
+    prisma.physicalCount.findMany.mockResolvedValue([]);
+    prisma.stockBalance.findUnique.mockResolvedValue(balance);
+    prisma.inventoryMovement.findMany.mockResolvedValue([
+      {
+        productId: 'product-a',
+        locationId: 'location-a',
+        type: 'PURCHASE',
+        quantity: 3,
+        batchNumber: 'LOT-A',
+        expiryDate,
+        unitCost: 1000,
+        createdAt: new Date('2026-11-01T00:00:00.000Z'),
+        product: { name: product.name, sku: product.sku, buyingPrice: 1000 },
+        location: { name: 'QA location' },
+      },
+    ]);
+    prisma.inventoryMovement.findFirst.mockResolvedValue({ expiryDate });
+    prisma.product.findFirst.mockResolvedValue(product);
+    prisma.physicalCount.create.mockImplementation(async ({ data }: any) => ({
+      id: 'count-a',
+      ...data,
+      location: { id: 'location-a', name: 'QA location' },
+      items: data.items.create.map((item: any) => ({ id: 'line-a', ...item, product })),
+    }));
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await service.createPhysicalCount('business-a', 'owner-a', {
+      locationId: 'location-a',
+      items: [{ productId: 'product-a', batchNumber: ' LOT-A ', countedQuantity: 2 }],
+    });
+
+    expect(prisma.physicalCount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            create: [
+              expect.objectContaining({
+                batchNumber: 'LOT-A',
+                systemQuantity: 3,
+                countedQuantity: 2,
+                variance: -1,
+                expiryDate,
+              }),
+            ],
+          },
+        }),
+      }),
+    );
   });
 
   it('completes a count without touching balances or movements and persists variance summary', async () => {

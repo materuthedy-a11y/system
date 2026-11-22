@@ -24,7 +24,7 @@ export interface StockBalance {
   location: { id: string; name: string; code: string };
 }
 export interface InventoryLine {
-  id: string; productId: string; quantity?: number; unit?: string; batchNumber?: string | null;
+  id: string; productId: string; quantity?: number; unit?: string; batchNumber?: string | null; expiryDate?: string | null;
   notes?: string | null; receivedQuantity?: number; unitCost?: number | null;
   currentQty?: number; adjustedQty?: number; difference?: number; reason?: string;
   systemQuantity?: number; countedQuantity?: number; variance?: number;
@@ -70,7 +70,7 @@ export const inventoryAPI = {
   balances: (filters: InventoryFilters = {}) => get<InventoryPage<StockBalance>>(`/inventory/balances?${params(filters)}`),
   adjustments: (filters: InventoryFilters = {}) => get<InventoryPage<StockAdjustment>>(`/inventory/adjustments?${params(filters)}`),
   adjustment: (id: string) => get<StockAdjustment>(`/inventory/adjustments/${encodeURIComponent(id)}`),
-  createAdjustment: (input: { notes?: string; items: Array<{ productId: string; locationId: string; quantity: number; reason: string; batchNumber?: string; notes?: string }> }) => post<StockAdjustment>('/inventory/adjustments', input),
+  createAdjustment: (input: { notes?: string; items: Array<{ productId: string; locationId: string; quantity: number; reason: string; batchNumber?: string; expiryDate?: string; notes?: string }> }) => post<StockAdjustment>('/inventory/adjustments', input),
   approveAdjustment: (id: string) => post<StockAdjustment>(`/inventory/adjustments/${encodeURIComponent(id)}/approve`),
   rejectAdjustment: (id: string, reason: string) => post<StockAdjustment>(`/inventory/adjustments/${encodeURIComponent(id)}/reject`, { reason }),
   transfers: (filters: InventoryFilters = {}) => get<InventoryPage<StockTransfer>>(`/inventory/transfers?${params(filters)}`),
@@ -80,7 +80,7 @@ export const inventoryAPI = {
   receiveTransfer: (id: string, receivedQuantities: Record<string, number>) => post<StockTransfer>(`/inventory/transfers/${encodeURIComponent(id)}/receive`, { receivedQuantities }),
   counts: (filters: InventoryFilters = {}) => get<InventoryPage<PhysicalCount>>(`/inventory/counts?${params(filters)}`),
   count: (id: string) => get<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}`),
-  createCount: (input: { locationId: string; notes?: string; items: Array<{ productId: string; countedQuantity: number; batchNumber?: string; notes?: string }> }) => post<PhysicalCount>('/inventory/counts', input),
+  createCount: (input: { locationId: string; notes?: string; items: Array<{ productId: string; countedQuantity: number; batchNumber?: string; expiryDate?: string; notes?: string }> }) => post<PhysicalCount>('/inventory/counts', input),
   completeCount: (id: string) => post<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}/complete`),
   postCount: (id: string) => post<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}/post`),
   valuation: (filters: InventoryFilters & { productId?: string; valuationMethod?: string } = {}) => get<InventoryPage<InventoryReportRow> & { totalValue: number; costingMethod: string }>(`/inventory/reports/valuation?${params(filters)}`),

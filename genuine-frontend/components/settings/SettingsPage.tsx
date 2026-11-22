@@ -201,7 +201,14 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
             setBusy(true);
             try {
               const blob = await settingsAPI.exportData();
-              const url = URL.createObjectURL(blob);
+              const rawExport = JSON.parse(await blob.text()) as unknown;
+              // The API wraps every response in { statusCode, timestamp, data }.
+              // Save the actual backup payload as readable, indented JSON.
+              const exportPayload = rawExport && typeof rawExport === 'object' && 'data' in rawExport
+                ? (rawExport as { data: unknown }).data
+                : rawExport;
+              const readableExport = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json;charset=utf-8' });
+              const url = URL.createObjectURL(readableExport);
               const a = document.createElement('a');
               a.href = url;
               a.download = `mizania-export-${new Date().toISOString().slice(0, 10)}.json`;

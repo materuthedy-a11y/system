@@ -91,6 +91,53 @@ button:not(:disabled):hover {
   transform: translateY(-1px);
 }
 button:not(:disabled):active { transform: translateY(1px); }
+
+/* Give quiet, outlined action controls a clear blue surface throughout
+   the app. Explicitly colored buttons (status tabs, danger actions, gold auth
+   submits, etc.) keep their own semantic colors. */
+html:not(.dark) :is(button, a[href])[class*="min-h-10"][class*="rounded-"][class~="border"]:not([class*="bg-"]) {
+  background-color: #1D5DB5;
+  border-color: #1D5DB5;
+  color: #ffffff;
+  transition: background-color 260ms ease, border-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
+}
+html:not(.dark) :is(button, a[href])[class*="min-h-10"][class*="rounded-"][class~="border"]:not([class*="bg-"]):hover {
+  background-color: #1a54a3;
+  border-color: #1a54a3;
+  color: #ffffff;
+}
+html.dark :is(button, a[href])[class*="min-h-10"][class*="rounded-"][class~="border"]:not([class*="bg-"]) {
+  background-color: rgb(29 93 181 / 78%);
+  border-color: rgb(102 157 230 / 58%);
+  color: #ffffff;
+  backdrop-filter: blur(10px);
+}
+html.dark :is(button, a[href])[class*="min-h-10"][class*="rounded-"][class~="border"]:not([class*="bg-"]):hover {
+  background-color: rgb(36 105 196 / 88%);
+  border-color: rgb(132 178 238 / 68%);
+  color: #ffffff;
+}
+.ui-create-return-button {
+  background-color: #059669 !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+  transition: background-color 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
+}
+.ui-create-return-button:hover:not(:disabled) {
+  background-color: #04845d !important;
+  border-color: #04845d !important;
+  color: #ffffff !important;
+}
+html.dark .ui-create-return-button {
+  background-color: rgb(5 150 105 / 88%) !important;
+  border-color: rgb(52 211 153 / 48%) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(10px);
+}
+html.dark .ui-create-return-button:hover:not(:disabled) {
+  background-color: rgb(4 132 93 / 94%) !important;
+  border-color: rgb(52 211 153 / 62%) !important;
+}
 .language-switch-button:not(:disabled):hover,
 .language-switch-button:not(:disabled):active {
   filter: none;

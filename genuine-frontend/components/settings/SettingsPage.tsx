@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { Building2, CreditCard, ImagePlus, MapPin, Package, Percent, ReceiptText, RefreshCw, Save, Settings2, Plus, Power, Loader2, Pencil, X, Users, Shield, ArrowRightLeft, Trash2 } from 'lucide-react';
+import { Building2, CreditCard, Download, ImagePlus, MapPin, Package, Percent, ReceiptText, RefreshCw, Save, Settings2, Plus, Power, Loader2, Pencil, X, Users, Shield, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { getApiError } from '@/lib/api';
 import { settingsAPI, BusinessProfile, BusinessSettings, Location, PaymentMethod, ExpenseCategory, TaxRate, ManagedUser } from '@/lib/api/settings';
 import { productsAPI, Category, Unit } from '@/lib/api/products';
@@ -192,6 +192,26 @@ export default function SettingsPage({ initialSection = 'profile' }: { initialSe
           <label className={`${label} sm:col-span-2`}>Business description<Textarea className={field} rows={3} disabled={!canEdit} value={String(draft.description ?? profile.description ?? '')} onChange={(e)=>setDraft({...draft,description:e.target.value})}/></label>
           <div className="sm:col-span-2 flex justify-end"><button className={button} disabled={!canEdit||busy}><Save size={16}/>{busy?'Saving…':'Save profile'}</button></div>
         </form> : null}
+        {activeSection === 'profile' && canEdit ? <div className={`${card} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-[#20231f] dark:text-white">Export business data</h3>
+            <p className="mt-1 text-xs leading-5 text-[#687064] dark:text-white/55">Download a JSON backup of products, customers, suppliers, invoices, purchases, expenses, payments and stock levels. Keep it somewhere safe.</p>
+          </div>
+          <button type="button" disabled={busy} onClick={async () => {
+            setBusy(true);
+            try {
+              const blob = await settingsAPI.exportData();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `mizania-export-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              notify.success('Business data exported.');
+            } catch (cause) { notify.error(getApiError(cause, 'Export failed.')); }
+            finally { setBusy(false); }
+          }} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-[#dfe5d3] px-4 text-sm font-semibold text-[#46523a] hover:bg-[#f4f8e7] disabled:opacity-50 dark:border-white/10 dark:text-white/70"><Download size={15}/>Export JSON</button>
+        </div> : null}
         {activeSection === 'users' || activeSection === 'roles' ? <AccessManagement mode={activeSection!} /> : null}
         {activeSection === 'exchange-rates' && profile ? <ExchangeRatesPanel canEdit={canEdit} currentBaseCurrency={profile.currency} /> : null}
         {activeSection === 'general' && general && profile ? <form className={`${card} grid gap-4 sm:grid-cols-2`} onSubmit={(event)=>submit(event, async()=>{ const profileKeys = ['currency','taxPercentage','costingMethod','financialYear','allowNegativeStock']; const g = Object.fromEntries(Object.entries(draft).filter(([key])=>!profileKeys.includes(key))); const p = Object.fromEntries(Object.entries(draft).filter(([key])=>profileKeys.includes(key))); await settingsAPI.updateGeneral(g as Partial<BusinessSettings>); if(Object.keys(p).length) await settingsAPI.updateProfile(p as Partial<BusinessProfile>); if(typeof draft.theme==='string') setTheme(draft.theme.toLowerCase()); })}>

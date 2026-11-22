@@ -27,6 +27,10 @@ export interface Permission { id: string; key: string; name: string; description
 export const settingsAPI = {
   async getBrand() { return unwrap<BusinessBrand>(await apiClient.get('/business/brand')); },
   async getProfile() { return unwrap<BusinessProfile>(await apiClient.get('/business/profile')); },
+  async exportData() {
+    const res = await apiClient.get('/business/export', { responseType: 'blob' });
+    return res.data as Blob;
+  },
   async updateProfile(input: Partial<BusinessProfile>) { return unwrap<BusinessProfile>(await apiClient.patch('/business/profile', input)); },
   async getGeneral() { return unwrap<BusinessSettings>(await apiClient.get('/business/settings')); },
   async updateGeneral(input: Partial<BusinessSettings>) { return unwrap<BusinessSettings>(await apiClient.patch('/business/settings', input)); },

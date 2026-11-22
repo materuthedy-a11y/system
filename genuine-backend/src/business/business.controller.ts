@@ -84,6 +84,15 @@ export class BusinessController {
     return this.businessService.getBusinessProfile(businessId);
   }
 
+  @Get('export')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('settings.edit')
+  @ApiOperation({ summary: 'Export all business data as JSON (backup/migration)' })
+  @ApiResponse({ status: 200 })
+  async exportBusinessData(@Business() businessId: string) {
+    return this.businessService.exportBusinessData(businessId);
+  }
+
   @Patch('profile')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('settings.edit')

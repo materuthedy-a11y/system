@@ -2086,4 +2086,59 @@ export class BusinessService {
       setupStep: business.isSetupComplete ? 'COMPLETE' : 'PENDING',
     };
   }
+
+  async exportBusinessData(businessId: string) {
+    const locations = await this.prisma.location.findMany({ where: { businessId } });
+    const locationIds = locations.map((l) => l.id);
+    const [
+      business,
+      categories,
+      units,
+      brands,
+      products,
+      customers,
+      suppliers,
+      invoices,
+      purchases,
+      expenses,
+      payments,
+      stockBalances,
+    ] = await Promise.all([
+      this.prisma.business.findUnique({ where: { id: businessId } }),
+      this.prisma.category.findMany({ where: { businessId } }),
+      this.prisma.unit.findMany({ where: { isActive: true, OR: [{ businessId: null }, { businessId }] } }),
+      this.prisma.brand.findMany({ where: { businessId } }),
+      this.prisma.product.findMany({
+        where: { businessId },
+        include: { units: true, images: true },
+      }),
+      this.prisma.customer.findMany({ where: { businessId }, include: { contacts: true, address: true } }),
+      this.prisma.supplier.findMany({ where: { businessId }, include: { contacts: true, address: true } }),
+      this.prisma.salesInvoice.findMany({ where: { businessId }, include: { items: true } }),
+      this.prisma.purchaseOrder.findMany({ where: { businessId }, include: { items: true } }),
+      this.prisma.expense.findMany({ where: { businessId }, include: { items: true } }),
+      this.prisma.payment.findMany({ where: { businessId } }),
+      locationIds.length
+        ? this.prisma.stockBalance.findMany({ where: { locationId: { in: locationIds } } })
+        : Promise.resolve([]),
+    ]);
+    if (!business) throw new NotFoundException('Business not found');
+    return {
+      exportedAt: new Date().toISOString(),
+      formatVersion: 1,
+      business,
+      locations,
+      categories,
+      units,
+      brands,
+      products,
+      customers,
+      suppliers,
+      salesInvoices: invoices,
+      purchaseOrders: purchases,
+      expenses,
+      payments,
+      stockBalances,
+    };
+  }
 }

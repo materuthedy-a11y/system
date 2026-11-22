@@ -28,6 +28,12 @@ const envSchema = z
     CORS_ORIGIN: z.string().default('http://localhost:3000'),
     FRONTEND_URL: z.string().default('http://localhost:3000'),
     NOTIFICATION_CONFIG_ENCRYPTION_KEY: z.string().optional(),
+    PLATFORM_SMTP_HOST: z.string().optional(),
+    PLATFORM_SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    PLATFORM_SMTP_USER: z.string().optional(),
+    PLATFORM_SMTP_PASS: z.string().optional(),
+    PLATFORM_SMTP_FROM_EMAIL: z.string().optional(),
+    PLATFORM_SMTP_FROM_NAME: z.string().optional(),
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug', 'verbose']).default('info'),
     ALLOW_NEGATIVE_STOCK: z
       .string()

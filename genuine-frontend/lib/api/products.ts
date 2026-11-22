@@ -211,6 +211,14 @@ export const productsAPI = {
   async create(input: ProductInput) {
     return unwrap<Product>(await apiClient.post('/products', input));
   },
+  async bulkImport(products: ProductInput[]) {
+    return unwrap<{
+      total: number;
+      successful: number;
+      failed: number;
+      details: Array<{ sku: string; success: boolean; productId?: string; error?: string }>;
+    }>(await apiClient.post('/products/bulk/import', { products }));
+  },
   async update(id: string, input: ProductUpdateInput) {
     return unwrap<Product>(await apiClient.patch(`/products/${encodeURIComponent(id)}`, input));
   },

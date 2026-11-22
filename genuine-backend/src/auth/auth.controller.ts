@@ -17,6 +17,7 @@ import {
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AllowAnonymous } from '../common/decorators';
@@ -44,6 +45,7 @@ export class AuthController {
 
   @Post('register')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 5, ttl: 3_600_000 } })
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register new business and admin user' })
   @ApiResponse({ status: 201, type: AuthResponseDto })
@@ -65,6 +67,7 @@ export class AuthController {
 
   @Post('login')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, type: AuthResponseDto })
@@ -83,6 +86,7 @@ export class AuthController {
 
   @Post('refresh')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200 })
@@ -121,6 +125,7 @@ export class AuthController {
 
   @Post('restore-workspace')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 5, ttl: 900_000 } })
   @ApiOperation({ summary: 'Restore a closed business workspace (owner credentials, within retention)' })
   async restoreWorkspace(@Body() dto: RestoreWorkspaceDto) {
     return this.authService.restoreWorkspace(dto);
@@ -128,6 +133,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 3, ttl: 300_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset link' })
   @ApiResponse({ status: 200, type: PasswordResetRequestDto })
@@ -137,6 +143,7 @@ export class AuthController {
 
   @Post('reset-password')
   @AllowAnonymous()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with token' })
   @ApiResponse({ status: 200 })

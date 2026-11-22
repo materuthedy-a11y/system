@@ -109,16 +109,21 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       select: { businessId: true },
     });
     if (!providerConfigured) {
+      // Auth-critical emails fall back to the platform SMTP account when the
+      // business has not configured its own provider.
+      const sent = await this.sendPlatformEmail(input.email, input.firstName || input.email, 'Reset your Mizania account password', this.passwordResetHtml(input.firstName, input.resetLink));
+      if (sent) {
+        this.logger.log(`Password reset email sent via platform SMTP for business ${input.businessId}`);
+        return true;
+      }
       this.logger.warn(
         `Password reset email not queued: no email provider configured for business ${input.businessId}`,
       );
       return false;
     }
 
-    const safeName = this.escapeHtml(input.firstName || 'there');
-    const safeLink = this.escapeHtml(input.resetLink);
-    const subject = 'Reset your Genuine account password';
-    const body = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#20231f"><h2>Password reset requested</h2><p>Hello ${safeName},</p><p>Use the secure link below to choose a new password. This link expires in one hour and can only be used once.</p><p style="margin:28px 0"><a href="${safeLink}" style="background:#173d31;color:#fff;padding:13px 20px;border-radius:8px;text-decoration:none">Reset password</a></p><p>If you did not request this change, you can ignore this email. Your current password will remain active.</p></div>`;
+    const subject = 'Reset your Mizania account password';
+    const body = this.passwordResetHtml(input.firstName, input.resetLink);
     const idempotencyKey = `PASSWORD_RESET:${randomBytes(18).toString('hex')}`;
 
     await this.prisma.notification.create({
@@ -141,6 +146,45 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       },
     });
     return true;
+  }
+
+  private passwordResetHtml(firstName: string, resetLink: string) {
+    const safeName = this.escapeHtml(firstName || 'there');
+    const safeLink = this.escapeHtml(resetLink);
+    return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#20231f"><h2>Password reset requested</h2><p>Hello ${safeName},</p><p>Use the secure link below to choose a new password. This link expires in one hour and can only be used once.</p><p style="margin:28px 0"><a href="${safeLink}" style="background:#173d31;color:#fff;padding:13px 20px;border-radius:8px;text-decoration:none">Reset password</a></p><p>If you did not request this change, you can ignore this email. Your current password will remain active.</p></div>`;
+  }
+
+  private async sendPlatformEmail(to: string, name: string, subject: string, html: string) {
+    const host = process.env.PLATFORM_SMTP_HOST;
+    const port = Number(process.env.PLATFORM_SMTP_PORT);
+    const user = process.env.PLATFORM_SMTP_USER;
+    const pass = process.env.PLATFORM_SMTP_PASS;
+    if (!host || !Number.isFinite(port) || !user || !pass) return false;
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
+    });
+    try {
+      await transporter.sendMail({
+        from: {
+          name: process.env.PLATFORM_SMTP_FROM_NAME || 'Mizania',
+          address: process.env.PLATFORM_SMTP_FROM_EMAIL || user,
+        },
+        to: { name, address: to },
+        subject,
+        html,
+      });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      transporter.close();
+    }
   }
 
   async createTemplate(businessId: string, dto: CreateNotificationTemplateDto) {

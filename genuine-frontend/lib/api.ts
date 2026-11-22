@@ -180,6 +180,9 @@ export function unwrap<T>(response: { data: ApiEnvelope<T> | T }): T {
 
 export function getApiError(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
+    if (error.response?.status === 429) {
+      return 'Too many attempts. Please wait a minute and try again.';
+    }
     const message = error.response?.data?.message;
     if (Array.isArray(message)) return message.join('. ');
     if (typeof message === 'string' && message.trim()) return message;

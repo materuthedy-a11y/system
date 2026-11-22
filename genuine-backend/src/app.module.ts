@@ -1,6 +1,7 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
 // Database
@@ -48,6 +49,7 @@ import { AppController } from './app.controller';
       validate: (config) => validateEnv(config),
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
     DatabaseModule,
     CommonModule,
     AuthModule,
@@ -76,6 +78,10 @@ import { AppController } from './app.controller';
     },
 
     // Global Guards
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

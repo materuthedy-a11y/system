@@ -25,6 +25,9 @@ import {
   PasswordResetRequestDto,
 } from './dto';
 
+const RESET_LINK_MESSAGE =
+  'This password reset link is invalid or has already been used. Please request a new one.';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -562,11 +565,11 @@ export class AuthService {
         secret: this.config.get('JWT_RESET_SECRET'),
       });
       if (payload.type !== 'password-reset') {
-        throw new UnauthorizedException('Invalid or expired reset token');
+        throw new UnauthorizedException(RESET_LINK_MESSAGE);
       }
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
-      throw new UnauthorizedException('Invalid or expired reset token');
+      throw new UnauthorizedException(RESET_LINK_MESSAGE);
     }
 
     const user = await this.prisma.user.findUnique({
@@ -579,11 +582,11 @@ export class AuthService {
 
     const isTokenValid = await bcrypt.compare(dto.token, user.passwordResetTokenHash || '');
     if (!isTokenValid) {
-      throw new UnauthorizedException('Invalid reset token');
+      throw new UnauthorizedException(RESET_LINK_MESSAGE);
     }
 
     if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
-      throw new UnauthorizedException('Reset token expired');
+      throw new UnauthorizedException(RESET_LINK_MESSAGE);
     }
 
     const hashedPassword = await bcrypt.hash(dto.newPassword, 10);
@@ -602,7 +605,7 @@ export class AuthService {
         },
       });
       if (consumed.count !== 1) {
-        throw new UnauthorizedException('Invalid or expired reset token');
+        throw new UnauthorizedException(RESET_LINK_MESSAGE);
       }
       await tx.auditLog.create({
         data: {

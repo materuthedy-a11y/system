@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  FileUp,
   Loader2,
   Package,
   Plus,
@@ -29,6 +30,7 @@ import {
 } from '@/lib/api/products';
 import { notify } from '@/components/ui/AppToaster';
 import { ProductPhoto } from '@/components/products/ProductImages';
+import { ImportProductsModal } from '@/components/products/ImportProductsModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Checkbox } from '@/components/ui/forms/checkbox';
 import { Input } from '@/components/ui/forms/input';
@@ -67,6 +69,7 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [stockStatus, setStockStatus] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
   const [sort, setSort] = useState<'createdAt' | 'name' | 'price'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selected, setSelected] = useState<string[]>([]);
@@ -273,6 +276,16 @@ export default function ProductsPage() {
               <Settings2 size={16} />
               Catalogs
             </Link>
+          ) : null}
+          {canCreate ? (
+            <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#dfe5d3] bg-white px-3.5 text-sm font-semibold text-[#46523a] hover:bg-[#f4f8e7]"
+            >
+              <FileUp size={16} />
+              Import CSV
+            </button>
           ) : null}
           {canCreate ? (
             <Link
@@ -877,6 +890,11 @@ export default function ProductsPage() {
           </section>
         </div>
       ) : null}
+      <ImportProductsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onDone={() => void load()}
+      />
     </div>
   );
 }

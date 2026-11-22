@@ -18,7 +18,11 @@ function createPrismaMock() {
       groupBy: jest.fn(),
       create: jest.fn(),
     },
-    stockAdjustment: { count: jest.fn() },
+    stockAdjustment: {
+      count: jest.fn(),
+      findFirst: jest.fn(),
+      updateMany: jest.fn(),
+    },
     stockTransfer: { count: jest.fn() },
     physicalCount: {
       count: jest.fn(),
@@ -458,6 +462,40 @@ describe('InventoryService expiry reports', () => {
     expect(all.untrackedExpiryQuantity).toBe(0);
   });
 
+  it('combines movement layers for the same batch, location, and expiry date', async () => {
+    const prisma = setup();
+    const duplicateBatch = {
+      ...expiryBatches[0],
+      id: 'movement-expired-yesterday-adjustment',
+      quantity: 1,
+    };
+    prisma.inventoryMovement.findMany.mockResolvedValue([...expiryBatches, duplicateBatch]);
+    prisma.stockBalance.findMany.mockResolvedValue([
+      {
+        productId: 'product-a',
+        locationId: 'location-a',
+        quantity: expiryBatches.length + 1,
+        product: { defaultUnit: { symbol: 'btl' } },
+      },
+    ]);
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    const report = await service.getStockExpiryReport('business-a', 'owner-a', {
+      page: 1,
+      limit: 20,
+      status: 'ALL',
+      asOfDate: '2026-11-20',
+    } as never);
+
+    expect(report.total).toBe(6);
+    expect(report.data.filter((row) => row.batchNumber === 'expired-yesterday')).toHaveLength(1);
+    expect(report.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ batchNumber: 'expired-yesterday', quantity: 2 }),
+      ]),
+    );
+  });
+
   it('limits expiry layers and untracked quantities to active locations assigned to the user', async () => {
     const prisma = setup();
     prisma.user.findFirst.mockResolvedValue({
@@ -586,6 +624,196 @@ describe('InventoryService expiry reports', () => {
       ['LOT-A', 1, new Date('2026-12-21T00:00:00.000Z')],
       ['LOT-B', 4, new Date('2027-01-15T00:00:00.000Z')],
     ]);
+  });
+
+  it('clearly rejects adding a new expiry-tracked batch without an expiry date', async () => {
+    const service = new InventoryService(createPrismaMock() as PrismaService, {} as never);
+    const tx = { inventoryMovement: { findFirst: jest.fn().mockResolvedValue(null) } };
+
+    await expect(
+      (service as any).resolveInventoryExpiry(
+        tx,
+        'business-a',
+        'product-a',
+        'location-a',
+        'NEW-LOT',
+        undefined,
+        true,
+        true,
+      ),
+    ).rejects.toThrow('Expiry date is required for a new batch');
+    expect(tx.inventoryMovement.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects adding stock to a batch whose expiry is today or earlier', () => {
+    const service = new InventoryService(createPrismaMock() as PrismaService, {} as never);
+    const today = new Date(
+      `${new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Dar_es_Salaam',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date())}T00:00:00.000Z`,
+    );
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const tomorrow = new Date(today);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+    expect(() =>
+      (service as any).assertExpiryAfterToday(yesterday, 'Africa/Dar_es_Salaam'),
+    ).toThrow('Expiry date must be after today to add stock');
+    expect(() => (service as any).assertExpiryAfterToday(today, 'Africa/Dar_es_Salaam')).toThrow(
+      'Expiry date must be after today to add stock',
+    );
+    expect(() =>
+      (service as any).assertExpiryAfterToday(tomorrow, 'Africa/Dar_es_Salaam'),
+    ).not.toThrow();
+  });
+
+  it('revalidates pending expiry-tracked adjustments before posting stock', async () => {
+    const prisma = createPrismaMock();
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    const today = new Date(
+      `${new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Dar_es_Salaam',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date())}T00:00:00.000Z`,
+    );
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const adjustment = {
+      id: 'adjustment-a',
+      status: 'PENDING',
+      items: [
+        {
+          id: 'item-a',
+          productId: 'product-a',
+          locationId: 'location-a',
+          difference: 1,
+          expiryDate: yesterday,
+          product: {
+            id: 'product-a',
+            name: 'QA expiry product',
+            requiresExpiry: true,
+            buyingPrice: 100,
+          },
+        },
+      ],
+    };
+    jest.spyOn(service, 'getStockAdjustmentById').mockResolvedValue(adjustment as never);
+    prisma.stockAdjustment.findFirst.mockResolvedValue(adjustment);
+    prisma.stockAdjustment.updateMany.mockResolvedValue({ count: 1 });
+    prisma.business.findUnique.mockResolvedValue({
+      allowNegativeStock: false,
+      timezone: 'Africa/Dar_es_Salaam',
+    });
+
+    await expect(
+      service.approveStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+    ).rejects.toThrow('Expiry date must be after today to add stock');
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventoryService expiry batch allocation', () => {
+  it('allocates the earliest-expiring eligible batches and excludes expired or untracked stock', async () => {
+    const prisma = createPrismaMock();
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    prisma.business.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prisma.stockBalance.findUnique.mockResolvedValue({
+      product: {
+        name: 'Expiry product',
+        sku: 'EXP-1',
+        buyingPrice: 100,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      location: { name: 'Warehouse' },
+    });
+    prisma.inventoryMovement.findMany.mockResolvedValue([]);
+    jest.spyOn(service as any, 'replayLayers').mockReturnValue([
+      {
+        quantity: 2,
+        batchNumber: 'LOT-LATE',
+        expiryDate: new Date('2027-02-01T00:00:00.000Z'),
+        receivedAt: new Date('2026-01-02T00:00:00.000Z'),
+        untracked: false,
+      },
+      {
+        quantity: 1,
+        batchNumber: 'LOT-SOON',
+        expiryDate: new Date('2026-12-01T00:00:00.000Z'),
+        receivedAt: new Date('2026-01-03T00:00:00.000Z'),
+        untracked: false,
+      },
+      {
+        quantity: 5,
+        batchNumber: 'LOT-EXPIRED',
+        expiryDate: new Date('2026-01-01T00:00:00.000Z'),
+        receivedAt: new Date('2025-01-01T00:00:00.000Z'),
+        untracked: false,
+      },
+      { quantity: 4, batchNumber: null, expiryDate: null, untracked: true },
+    ]);
+
+    const allocations = await service.allocateExpiryTrackedStock(
+      prisma,
+      'business-a',
+      'product-a',
+      'location-a',
+      2,
+      12,
+      'Expiry product',
+    );
+
+    expect(allocations).toEqual([
+      { quantity: 1, batchNumber: 'LOT-SOON', expiryDate: new Date('2026-12-01T00:00:00.000Z') },
+      { quantity: 1, batchNumber: 'LOT-LATE', expiryDate: new Date('2027-02-01T00:00:00.000Z') },
+    ]);
+  });
+
+  it('blocks a sale when only untracked or expired quantities can cover it', async () => {
+    const prisma = createPrismaMock();
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    prisma.business.findUnique.mockResolvedValue({ timezone: 'UTC' });
+    prisma.stockBalance.findUnique.mockResolvedValue({
+      product: {
+        name: 'Expiry product',
+        sku: 'EXP-1',
+        buyingPrice: 100,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      location: { name: 'Warehouse' },
+    });
+    prisma.inventoryMovement.findMany.mockResolvedValue([]);
+    jest.spyOn(service as any, 'replayLayers').mockReturnValue([
+      {
+        quantity: 3,
+        batchNumber: 'LOT-EXPIRED',
+        expiryDate: new Date('2026-01-01T00:00:00.000Z'),
+        receivedAt: new Date('2025-01-01T00:00:00.000Z'),
+        untracked: false,
+      },
+      { quantity: 2, batchNumber: null, expiryDate: null, untracked: true },
+    ]);
+
+    await expect(
+      service.allocateExpiryTrackedStock(
+        prisma,
+        'business-a',
+        'product-a',
+        'location-a',
+        1,
+        5,
+        'Expiry product',
+      ),
+    ).rejects.toThrow(
+      'Insufficient non-expired, batch-tracked stock for Expiry product; available: 0',
+    );
   });
 });
 

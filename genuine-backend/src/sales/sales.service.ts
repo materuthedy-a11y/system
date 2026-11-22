@@ -32,6 +32,7 @@ import {
 } from './dto';
 
 const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+const EPSILON = 1e-8;
 const termsDays: Record<string, number> = {
   'NET-7': 7,
   'NET-14': 14,
@@ -575,6 +576,10 @@ export class SalesService {
       if (!business) throw new NotFoundException('Business not found');
       const quantities = this.aggregateQuantities(invoice.items);
       const unitCostByProduct = new Map<string, number>();
+      const expiryAllocationsByProduct = new Map<
+        string,
+        Awaited<ReturnType<InventoryService['allocateExpiryTrackedStock']>>
+      >();
       for (const [productId, quantity] of [...quantities].sort(([a], [b]) => a.localeCompare(b))) {
         await tx.stockBalance.upsert({
           where: { productId_locationId: { productId, locationId: invoice.locationId } },
@@ -602,27 +607,64 @@ export class SalesService {
             product?.buyingPrice || 0,
           ),
         );
+        if (product?.requiresExpiry) {
+          expiryAllocationsByProduct.set(
+            productId,
+            await this.inventory.allocateExpiryTrackedStock(
+              tx,
+              businessId,
+              productId,
+              invoice.locationId,
+              quantity,
+              available,
+              product.name,
+            ),
+          );
+        }
         await tx.stockBalance.update({
           where: { productId_locationId: { productId, locationId: invoice.locationId } },
           data: { quantity: available - quantity, lastMovementAt: new Date() },
         });
       }
-      for (const item of invoice.items)
-        await tx.inventoryMovement.create({
-          data: {
-            id: uuid(),
-            businessId,
-            productId: item.productId,
-            locationId: invoice.locationId,
-            type: 'SALE',
-            quantity: -item.quantity,
-            referenceId: invoiceId,
-            referenceType: 'SalesInvoice',
-            notes: `Invoice ${invoice.invoiceNumber}`,
-            unitCost: unitCostByProduct.get(item.productId),
-            createdBy: userId,
-          },
-        });
+      for (const [productId, quantity] of quantities) {
+        const allocations = expiryAllocationsByProduct.get(productId);
+        const productName =
+          invoice.items.find((item) => item.productId === productId)?.product.name || productId;
+        const movements = allocations?.length
+          ? allocations.map((allocation) => ({
+              quantity: -allocation.quantity,
+              batchNumber: allocation.batchNumber,
+              expiryDate: allocation.expiryDate,
+              notes: `Invoice ${invoice.invoiceNumber} · batch ${allocation.batchNumber}`,
+            }))
+          : [
+              {
+                quantity: -quantity,
+                batchNumber: null,
+                expiryDate: null,
+                notes: `Invoice ${invoice.invoiceNumber}`,
+              },
+            ];
+        for (const movement of movements) {
+          await tx.inventoryMovement.create({
+            data: {
+              id: uuid(),
+              businessId,
+              productId,
+              locationId: invoice.locationId,
+              type: 'SALE',
+              quantity: movement.quantity,
+              referenceId: invoiceId,
+              referenceType: 'SalesInvoice',
+              notes: movement.notes || `Invoice ${invoice.invoiceNumber} · ${productName}`,
+              unitCost: unitCostByProduct.get(productId),
+              batchNumber: movement.batchNumber,
+              expiryDate: movement.expiryDate,
+              createdBy: userId,
+            },
+          });
+        }
+      }
       const now = new Date();
       const updated = await tx.salesInvoice.update({
         where: { id: invoiceId },
@@ -875,7 +917,13 @@ export class SalesService {
             referenceId: invoiceId,
             type: 'SALE',
           },
-          select: { productId: true, unitCost: true },
+          select: {
+            productId: true,
+            quantity: true,
+            unitCost: true,
+            batchNumber: true,
+            expiryDate: true,
+          },
         });
         const unitCostByProduct = new Map(
           originalSaleMovements.map((movement) => [movement.productId, movement.unitCost]),
@@ -903,18 +951,25 @@ export class SalesService {
               lastMovementAt: new Date(),
             },
           });
+        }
+        for (const movement of originalSaleMovements) {
+          const product = invoice.items.find(
+            (item) => item.productId === movement.productId,
+          )?.product;
           await tx.inventoryMovement.create({
             data: {
               id: uuid(),
               businessId,
-              productId: item.productId,
+              productId: movement.productId,
               locationId: invoice.locationId,
               type: 'SALE_REVERSAL',
-              quantity: item.quantity,
+              quantity: -movement.quantity,
               referenceId: invoiceId,
               referenceType: 'SalesInvoice',
               notes: `${invoice.invoiceNumber}: ${reason}`,
-              unitCost: unitCostByProduct.get(item.productId) ?? item.product.buyingPrice,
+              unitCost: unitCostByProduct.get(movement.productId) ?? product?.buyingPrice ?? 0,
+              batchNumber: movement.batchNumber,
+              expiryDate: movement.expiryDate,
               createdBy: userId,
             },
           });
@@ -1185,11 +1240,39 @@ export class SalesService {
           referenceId: ret.invoiceId,
           type: 'SALE',
         },
-        select: { productId: true, unitCost: true },
+        select: {
+          id: true,
+          productId: true,
+          quantity: true,
+          unitCost: true,
+          batchNumber: true,
+          expiryDate: true,
+          createdAt: true,
+        },
       });
+      const priorReceivedReturns = await tx.salesReturn.findMany({
+        where: { invoiceId: ret.invoiceId, status: { in: ['RECEIVED', 'COMPLETED'] } },
+        select: { id: true },
+      });
+      const priorReturnMovements = priorReceivedReturns.length
+        ? await tx.inventoryMovement.findMany({
+            where: {
+              businessId,
+              referenceType: 'SalesReturn',
+              referenceId: { in: priorReceivedReturns.map((item) => item.id) },
+              type: 'CUSTOMER_RETURN',
+            },
+            select: { productId: true, quantity: true, batchNumber: true, expiryDate: true },
+          })
+        : [];
+      const returnedByBatch = new Map<string, number>();
+      for (const movement of priorReturnMovements) {
+        const key = `${movement.productId}:${movement.batchNumber || ''}:${movement.expiryDate?.toISOString() || ''}`;
+        returnedByBatch.set(key, money((returnedByBatch.get(key) || 0) + movement.quantity));
+      }
       const products = await tx.product.findMany({
         where: { businessId, id: { in: ret.items.map((item) => item.productId) } },
-        select: { id: true, buyingPrice: true },
+        select: { id: true, name: true, buyingPrice: true, requiresExpiry: true },
       });
       const fallbackCostByProduct = new Map(
         products.map((product) => [product.id, product.buyingPrice]),
@@ -1220,24 +1303,77 @@ export class SalesService {
             lastMovementAt: new Date(),
           },
         });
-        await tx.inventoryMovement.create({
-          data: {
-            id: uuid(),
-            businessId,
-            productId: item.productId,
-            locationId: ret.invoice.locationId,
-            type: 'CUSTOMER_RETURN',
+        const product = products.find((entry) => entry.id === item.productId);
+        const allocations: Array<{
+          quantity: number;
+          batchNumber: string | null;
+          expiryDate: Date | null;
+          unitCost: number;
+        }> = [];
+        if (product?.requiresExpiry) {
+          let remainingToReturn = item.quantity;
+          const soldLots = originalSaleMovements
+            .filter(
+              (movement) =>
+                movement.productId === item.productId &&
+                movement.batchNumber &&
+                movement.expiryDate,
+            )
+            .sort(
+              (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+            );
+          for (const soldLot of soldLots) {
+            if (remainingToReturn <= EPSILON) break;
+            const key = `${soldLot.productId}:${soldLot.batchNumber}:${soldLot.expiryDate!.toISOString()}`;
+            const soldQuantity = -soldLot.quantity;
+            const alreadyReturned = returnedByBatch.get(key) || 0;
+            const availableToReturn = Math.max(0, money(soldQuantity - alreadyReturned));
+            const quantity = money(Math.min(availableToReturn, remainingToReturn));
+            if (quantity <= EPSILON) continue;
+            allocations.push({
+              quantity,
+              batchNumber: soldLot.batchNumber,
+              expiryDate: soldLot.expiryDate,
+              unitCost: soldLot.unitCost ?? fallbackCostByProduct.get(item.productId) ?? 0,
+            });
+            returnedByBatch.set(key, money(alreadyReturned + quantity));
+            remainingToReturn = money(remainingToReturn - quantity);
+          }
+          if (remainingToReturn > EPSILON) {
+            throw new ConflictException(
+              `Return quantity for ${product.name} exceeds the unreturned tracked batches sold on this invoice`,
+            );
+          }
+        } else {
+          allocations.push({
             quantity: item.quantity,
-            referenceId: ret.id,
-            referenceType: 'SalesReturn',
-            notes: `${ret.returnNumber}: ${item.reason || ret.reason}`,
+            batchNumber: null,
+            expiryDate: null,
             unitCost:
               unitCostByProduct.get(item.productId) ??
               fallbackCostByProduct.get(item.productId) ??
               0,
-            createdBy: userId,
-          },
-        });
+          });
+        }
+        for (const allocation of allocations) {
+          await tx.inventoryMovement.create({
+            data: {
+              id: uuid(),
+              businessId,
+              productId: item.productId,
+              locationId: ret.invoice.locationId,
+              type: 'CUSTOMER_RETURN',
+              quantity: allocation.quantity,
+              referenceId: ret.id,
+              referenceType: 'SalesReturn',
+              notes: `${ret.returnNumber}: ${item.reason || ret.reason}`,
+              unitCost: allocation.unitCost,
+              batchNumber: allocation.batchNumber,
+              expiryDate: allocation.expiryDate,
+              createdBy: userId,
+            },
+          });
+        }
       }
       const updated = await tx.salesReturn.update({
         where: { id: returnId },

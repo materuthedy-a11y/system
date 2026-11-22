@@ -38,6 +38,11 @@ type MovementLayer = {
   receivedAt: Date;
   untracked?: boolean;
 };
+export type ExpiryBatchAllocation = {
+  quantity: number;
+  batchNumber: string;
+  expiryDate: Date;
+};
 const EPSILON = 1e-8;
 const round = (n: number) => Math.round((n + Number.EPSILON) * 10000) / 10000;
 const startOfUtcDay = (date: Date) =>
@@ -457,16 +462,22 @@ export class InventoryService {
       throw new BadRequestException('Expiry date does not match the selected batch');
     }
     const expiryDate = existing?.expiryDate ?? suppliedExpiry;
-    if (requiresExpiry && !expiryDate) {
-      throw new BadRequestException('The selected batch has no tracked expiry date');
-    }
     if (requiresExpiry && addingStock && !existing?.expiryDate && !suppliedExpiry) {
-      throw new BadRequestException('Expiry date is required when adding a new batch');
+      throw new BadRequestException('Expiry date is required for a new batch');
     }
     if (!addingStock && requiresExpiry && !existing?.expiryDate) {
       throw new BadRequestException('Choose an existing tracked batch when removing stock');
     }
+    if (requiresExpiry && !expiryDate) {
+      throw new BadRequestException('The selected batch has no tracked expiry date');
+    }
     return expiryDate;
+  }
+
+  private assertExpiryAfterToday(expiryDate: Date, timezone: string) {
+    if (startOfUtcDay(expiryDate).getTime() <= startOfBusinessDay(new Date(), timezone).getTime()) {
+      throw new BadRequestException('Expiry date must be after today to add stock');
+    }
   }
 
   private async currentBatchQuantity(
@@ -532,6 +543,11 @@ export class InventoryService {
     return this.prisma.$transaction(
       async (tx) => {
         const adjustmentNumber = await this.nextNumber(tx, businessId, 'ADJ', now);
+        const business = await tx.business.findUnique({
+          where: { id: businessId },
+          select: { timezone: true },
+        });
+        const timezone = business?.timezone || 'UTC';
         const data = [];
         for (const line of dto.items) {
           this.assertFinite(line.quantity, 'quantity');
@@ -554,6 +570,7 @@ export class InventoryService {
             product.requiresExpiry,
             line.quantity > 0,
           );
+          if (line.quantity > 0 && expiryDate) this.assertExpiryAfterToday(expiryDate, timezone);
           const stock = await tx.stockBalance.findUnique({
             where: { productId_locationId: { productId: product.id, locationId: location.id } },
           });
@@ -644,7 +661,7 @@ export class InventoryService {
         }
         const business = await tx.business.findUnique({
           where: { id: businessId },
-          select: { allowNegativeStock: true },
+          select: { allowNegativeStock: true, timezone: true },
         });
         for (const item of [...existing.items].sort((a, b) =>
           `${a.productId}:${a.locationId}`.localeCompare(`${b.productId}:${b.locationId}`),
@@ -653,6 +670,12 @@ export class InventoryService {
             throw new ConflictException(
               'This legacy adjustment has no location; create a new adjustment with a location',
             );
+          if (item.difference > EPSILON && item.product.requiresExpiry) {
+            if (!item.expiryDate) {
+              throw new BadRequestException('Expiry date is required for a new batch');
+            }
+            this.assertExpiryAfterToday(item.expiryDate, business?.timezone || 'UTC');
+          }
           const balance = await this.lockBalance(tx, item.productId, item.locationId);
           const next = round(balance.quantity + item.difference);
           if (!business?.allowNegativeStock && next < -EPSILON) {
@@ -1516,8 +1539,29 @@ export class InventoryService {
       reportLocationIds,
       true,
     );
-    const rows = layers
-      .filter((x) => !x.untracked && x.quantity > EPSILON && x.expiryDate)
+    const groupedLayers = new Map<string, MovementLayer>();
+    for (const layer of layers) {
+      if (layer.untracked || layer.quantity <= EPSILON || !layer.expiryDate) continue;
+      const key = JSON.stringify([
+        layer.productId,
+        layer.locationId,
+        layer.batchNumber || '',
+        startOfUtcDay(layer.expiryDate).toISOString(),
+      ]);
+      const existing = groupedLayers.get(key);
+      if (!existing) {
+        groupedLayers.set(key, { ...layer, quantity: round(layer.quantity) });
+        continue;
+      }
+      const combinedQuantity = existing.quantity + layer.quantity;
+      existing.unitCost =
+        combinedQuantity > EPSILON
+          ? (existing.quantity * existing.unitCost + layer.quantity * layer.unitCost) /
+            combinedQuantity
+          : 0;
+      existing.quantity = round(combinedQuantity);
+    }
+    const rows = [...groupedLayers.values()]
       .map((x) => {
         const expiry = x.expiryDate!;
         const daysUntilExpiry = (startOfUtcDay(expiry).getTime() - asOf.getTime()) / 86400000;
@@ -1963,6 +2007,93 @@ export class InventoryService {
     }
     if (remainingToIssue > EPSILON) totalCost += remainingToIssue * fallback;
     return round(totalCost / quantityToIssue);
+  }
+
+  async allocateExpiryTrackedStock(
+    tx: Tx,
+    businessId: string,
+    productId: string,
+    locationId: string,
+    quantityToIssue: number,
+    availableQuantity: number,
+    productName: string,
+  ): Promise<ExpiryBatchAllocation[]> {
+    const [business, balance, movements] = await Promise.all([
+      tx.business.findUnique({ where: { id: businessId }, select: { timezone: true } }),
+      tx.stockBalance.findUnique({
+        where: { productId_locationId: { productId, locationId } },
+        include: { product: true, location: true },
+      }),
+      tx.inventoryMovement.findMany({
+        where: { businessId, productId, locationId },
+        include: {
+          product: { select: { id: true, name: true, sku: true, buyingPrice: true } },
+          location: { select: { id: true, name: true } },
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+    ]);
+    if (!balance) {
+      throw new BadRequestException(`No tracked batch stock is available for ${productName}`);
+    }
+    const movementQuantity = movements.reduce((sum, movement) => sum + movement.quantity, 0);
+    const openingQuantity = Math.max(0, round(availableQuantity - movementQuantity));
+    const openingLayers: MovementLayer[] =
+      openingQuantity > EPSILON
+        ? [
+            {
+              productId,
+              locationId,
+              productName: balance.product.name,
+              sku: balance.product.sku,
+              locationName: balance.location.name,
+              quantity: openingQuantity,
+              unitCost: balance.product.buyingPrice,
+              batchNumber: null,
+              expiryDate: null,
+              receivedAt: balance.product.createdAt,
+              untracked: true,
+            },
+          ]
+        : [];
+    const today = startOfBusinessDay(new Date(), business?.timezone || 'UTC');
+    const eligibleLayers = this.replayLayers(movements, 'FIFO', openingLayers)
+      .filter(
+        (layer) =>
+          !layer.untracked &&
+          layer.batchNumber &&
+          layer.expiryDate &&
+          layer.quantity > EPSILON &&
+          startOfUtcDay(layer.expiryDate).getTime() >= today.getTime(),
+      )
+      .sort((a, b) => {
+        const expiryDifference = a.expiryDate!.getTime() - b.expiryDate!.getTime();
+        if (expiryDifference) return expiryDifference;
+        const receivedDifference = a.receivedAt.getTime() - b.receivedAt.getTime();
+        return receivedDifference || a.batchNumber!.localeCompare(b.batchNumber!);
+      });
+    let remaining = quantityToIssue;
+    const allocations: ExpiryBatchAllocation[] = [];
+    for (const layer of eligibleLayers) {
+      if (remaining <= EPSILON) break;
+      const allocated = round(Math.min(layer.quantity, remaining));
+      if (allocated <= EPSILON) continue;
+      allocations.push({
+        quantity: allocated,
+        batchNumber: layer.batchNumber!,
+        expiryDate: layer.expiryDate!,
+      });
+      remaining = round(remaining - allocated);
+    }
+    if (remaining > EPSILON) {
+      const trackedAvailable = round(
+        allocations.reduce((sum, allocation) => sum + allocation.quantity, 0),
+      );
+      throw new BadRequestException(
+        `Insufficient non-expired, batch-tracked stock for ${productName}; available: ${trackedAvailable}`,
+      );
+    }
+    return allocations;
   }
 
   private async getCurrentLayers(

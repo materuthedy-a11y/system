@@ -65,7 +65,7 @@ export function InventoryCreateForm({ kind }: { kind: Kind }) {
         const created = await inventoryAPI.createCount({ locationId, notes: notes.trim() || undefined, items: lines.map((x) => ({ productId: x.productId, countedQuantity: Number(x.quantity), batchNumber: x.batchNumber.trim() || undefined, expiryDate: x.expiryDate || undefined, notes: x.notes.trim() || undefined })) });
         notify.success(`Physical count ${created.countNumber} created.`); router.push(`/dashboard/inventory/counts/${created.id}`);
       }
-    } catch (cause) { setError(getApiError(cause, 'Could not save the inventory record.')); }
+    } catch (cause) { const message = getApiError(cause, 'Could not save the inventory record.'); setError(message); notify.error(message); }
     finally { setSaving(false); }
   };
   return <div className="min-w-0 space-y-6">

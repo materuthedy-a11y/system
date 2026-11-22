@@ -1243,10 +1243,15 @@ html.dark .ui-field--auth:-webkit-autofill:focus {
 @media print {
   body * { visibility: hidden; }
   .print-area, .print-area * { visibility: visible; }
+  /* Remove non-receipt content from the layout so it cannot create extra
+     pages; position:fixed would repeat the receipt on every page. */
+  body *:not(:has(.print-area)):not(.print-area):not(.print-area *) {
+    display: none !important;
+  }
   .print-area {
-    position: fixed;
-    inset: 0;
     display: block !important;
+    position: absolute;
+    inset: 0;
     width: 100%;
     margin: 0 auto;
     padding: 4mm 2mm;

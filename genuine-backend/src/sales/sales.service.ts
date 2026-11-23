@@ -315,7 +315,7 @@ export class SalesService {
       businessId,
       ...(accessibleIds ? { locationId: { in: accessibleIds } } : {}),
       ...(filter.customerId && { customerId: filter.customerId }),
-      ...(filter.locationId && { AND: [{ locationId: filter.locationId }] }),
+      ...(filter.locationId && { locationId: filter.locationId }),
       ...(filter.salespersonId && { salespersonId: filter.salespersonId }),
       ...(filter.search && {
         OR: [
@@ -333,7 +333,13 @@ export class SalesService {
             dueDate: { lt: new Date() },
             balance: { gt: 0 },
           }
-        : filter.status && { status: filter.status }),
+        : filter.status === 'ISSUED' || filter.status === 'PARTIALLY_PAID'
+          ? {
+              status: filter.status,
+              balance: { gt: 0 },
+              AND: [{ OR: [{ dueDate: null }, { dueDate: { gte: new Date() } }] }],
+            }
+          : filter.status && { status: filter.status }),
     };
     const direction = filter.sortOrder === 'asc' ? 'asc' : 'desc';
     const orderBy: Record<string, Prisma.SalesInvoiceOrderByWithRelationInput> = {

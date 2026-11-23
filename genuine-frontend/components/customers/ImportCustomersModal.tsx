@@ -47,10 +47,19 @@ export function ImportCustomersModal({ open, onClose, onDone }: { open: boolean;
       skipEmptyLines: true,
       transformHeader: (h) => h.trim().toLowerCase(),
       complete: (res) => {
-        if (!res.meta.fields?.length) { setParseError('No columns found in the CSV file.'); return; }
+        if (!res.meta.fields?.length) {
+          const message = 'No columns found in the CSV file.';
+          setParseError(message);
+          notify.error(message);
+          return;
+        }
         setRows(res.data.filter((r) => Object.values(r).some((v) => String(v ?? '').trim())));
       },
-      error: () => setParseError('Could not read this CSV file.'),
+      error: () => {
+        const message = 'Could not read this CSV file.';
+        setParseError(message);
+        notify.error(message);
+      },
     });
   };
 

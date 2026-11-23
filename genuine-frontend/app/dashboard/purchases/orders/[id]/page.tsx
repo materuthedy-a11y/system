@@ -1648,7 +1648,7 @@ export default function PurchaseOrderDetailPage() {
                 setCancelReasonError('');
                 setCancelDialog(true);
               }}
-              className="min-h-10 rounded-xl border border-[#efd4cf] px-4 text-sm font-semibold text-[#a63832] transition hover:bg-[#fff7f5] hover:underline disabled:opacity-50"
+              className="ui-danger-action min-h-10 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50"
             >
               Cancel order
             </button>
@@ -1733,7 +1733,7 @@ export default function PurchaseOrderDetailPage() {
                 type="button"
                 disabled={!!busy}
                 onClick={() => void submitCancel()}
-                className="min-h-10 rounded-xl bg-[#a63832] px-4 text-sm font-semibold text-white transition hover:bg-[#8f302b] disabled:opacity-50"
+                className="ui-danger-action min-h-10 rounded-xl border px-4 text-sm font-semibold disabled:opacity-50"
               >
                 {busy === 'cancel' ? 'Cancellingâ€¦' : 'Confirm cancellation'}
               </button>

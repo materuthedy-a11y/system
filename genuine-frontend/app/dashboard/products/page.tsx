@@ -793,7 +793,7 @@ export default function ProductsPage() {
                           <button
                             type="button"
                             onClick={() => void changeStatus(product, 'DISCONTINUED')}
-                            className="min-h-9 rounded-lg border border-[#efd4cf] px-3 py-2 text-xs font-semibold text-[#a63832]"
+                              className="ui-danger-action min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold"
                           >
                             Discontinue
                           </button>
@@ -802,7 +802,7 @@ export default function ProductsPage() {
                           <button
                             type="button"
                             onClick={() => setDeleting(product)}
-                            className="min-h-9 rounded-lg border border-[#efd4cf] px-3 py-2 text-xs font-semibold text-[#a63832]"
+                            className="ui-danger-action min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold"
                           >
                             Delete
                           </button>

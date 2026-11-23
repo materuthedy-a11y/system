@@ -156,3 +156,10 @@ Phase 17 bado haijafungwa. Hifadhi maendeleo haya ili tuendelee hapa tutakaporud
 - Middleware hutumia cookie ya presence kwa navigation tu. Backend JWT guard ndiyo inayolinda data na endpoints.
 - Logout na password reset/change-password hufuta sessions zote za user kwenye backend.
 - Password-reset email hutumia email provider iliyosanidiwa kwa business husika; jibu la forgot-password halitoi reset token.
+
+## 12. P0 follow-up audit — rate limiting na email (2026-11-23)
+
+- [x] **Code audit — throttling is wired:** global `ThrottlerGuard` is registered; auth routes define explicit limits for register (5/hour), login (10/minute), refresh (30/minute), restore (5/15 minutes), forgot-password (3/5 minutes) and reset-password (10/minute). `trust proxy = 1` is configured for Express. This confirms source configuration only; it does not prove the deployed proxy/IP behavior or a live HTTP 429 response.
+- [x] **Code audit — password-reset delivery path exists:** forgot-password generates a time-limited reset token, stores only its hash and uses a generic response; notification delivery checks the business provider and can fall back to platform SMTP configuration. Missing SMTP configuration returns a safe failure and does not return the reset token to the caller. Worker/outbox code is present.
+- [ ] **P0 live delivery remains unverified:** confirm a sandbox reset email reaches the inbox through the configured provider, outbox/delivery status becomes `SENT`, the link works once, and failed-provider behavior/retry is safe. Runtime SMTP/provider configuration was not inspected or exposed in this audit; `.env.example` has SMTP entries commented out, which is not evidence of deployed configuration.
+- [ ] **P0 live throttling remains unverified:** using a dedicated test account/IP, safely exercise the documented limits and confirm HTTP 429 plus `Retry-After`/reset behavior through the actual local/deployed proxy. Do not test by locking a real user account.

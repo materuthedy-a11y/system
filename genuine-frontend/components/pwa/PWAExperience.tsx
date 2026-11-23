@@ -159,6 +159,7 @@ export function PWAExperience() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not sync saved drafts. They remain on this device.';
       setSyncError(message);
+      notify.error(message);
     } finally {
       setSyncingDrafts(false);
     }

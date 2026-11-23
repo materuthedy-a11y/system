@@ -167,6 +167,10 @@ apiClient.interceptors.response.use(
         }
       }
     }
+    if (typeof window !== 'undefined' && !isAuthEntryRequest && error.response?.status !== 401) {
+      const message = getApiError(error, 'Could not complete this request.');
+      window.dispatchEvent(new CustomEvent('mizania:api-error', { detail: { message } }));
+    }
     return Promise.reject(error);
   },
 );

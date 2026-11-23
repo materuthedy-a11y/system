@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ImagePlus, Package, Trash2, Upload } from 'lucide-react';
 import { productsAPI, type ProductImageMeta } from '@/lib/api/products';
 import { getApiError } from '@/lib/api';
+import { notify } from '@/components/ui/AppToaster';
 
 const MAX_IMAGE_BYTES = 128 * 1024;
 const MAX_IMAGES = 5;
@@ -121,7 +122,9 @@ export function ProductImagePicker({
     if (!files?.length) return;
     setError('');
     if (images.length + files.length > MAX_IMAGES) {
-      setError(`A product can have up to ${MAX_IMAGES} photos.`);
+      const message = `A product can have up to ${MAX_IMAGES} photos.`;
+      setError(message);
+      notify.error(message);
       return;
     }
     setBusy(true);
@@ -130,9 +133,9 @@ export function ProductImagePicker({
       for (const file of Array.from(files)) next.push(await compressImage(file));
       onChange(next);
     } catch (cause) {
-      setError(
-        getApiError(cause, cause instanceof Error ? cause.message : 'Could not process this image.')
-      );
+      const message = getApiError(cause, cause instanceof Error ? cause.message : 'Could not process this image.');
+      setError(message);
+      notify.error(message);
     } finally {
       setBusy(false);
     }

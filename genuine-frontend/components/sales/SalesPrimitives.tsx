@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useAuthStore } from '@/store/authStore';
 import type { InvoiceStatus, ReturnStatus } from '@/lib/api/sales';
+import type { InvoiceDisplayStatus } from '@/lib/api/invoiceStatus';
 import { formatBusinessCalendarDate, formatBusinessDate } from '@/lib/format/businessDate';
 
 export const money = (value: number, currency?: string) => new Intl.NumberFormat(undefined, {
@@ -35,15 +36,22 @@ const invoiceColors: Record<InvoiceStatus, string> = {
   PARTIALLY_PAID: 'bg-amber-500 text-white', PAID: 'bg-emerald-600 text-white',
   OVERDUE: 'bg-rose-600 text-white', CANCELLED: 'bg-zinc-600 text-white',
 };
+const invoiceDisplayColors: Record<InvoiceDisplayStatus, string> = {
+  ...invoiceColors,
+  RETURNED: 'bg-violet-600 text-white',
+  PARTIALLY_CREDITED: 'bg-violet-100 text-violet-900',
+  SETTLED: 'bg-emerald-700 text-white',
+  PARTIALLY_SETTLED: 'bg-amber-600 text-white',
+};
 const returnColors: Record<ReturnStatus, string> = {
   DRAFT: 'bg-amber-400 text-amber-950', AUTHORIZED: 'bg-blue-600 text-white',
   RECEIVED: 'bg-emerald-600 text-white', COMPLETED: 'bg-emerald-700 text-white',
   REJECTED: 'bg-rose-600 text-white',
 };
 
-export function StatusBadge({ status }: { status: InvoiceStatus | ReturnStatus }) {
-  const className = status in invoiceColors
-    ? invoiceColors[status as InvoiceStatus]
+export function StatusBadge({ status }: { status: InvoiceDisplayStatus | ReturnStatus }) {
+  const className = status in invoiceDisplayColors
+    ? invoiceDisplayColors[status as InvoiceDisplayStatus]
     : returnColors[status as ReturnStatus];
   return <span className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold ${className}`}>{status.replace(/_/g, ' ')}</span>;
 }

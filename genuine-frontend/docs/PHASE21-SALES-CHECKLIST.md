@@ -176,6 +176,13 @@ Do not check any manual test until its result is observed and evidence/date are 
 - [ ] 7.4 BLOCKED ON PHASE GATES — Phase 19 checklist explicitly says INCOMPLETE; Phase 20 checklist says UI/device/accessibility Section 12 is deferred and its acceptance gate remains closed. Both must be completed separately before Phase 21 can be accepted.
 - [x] 7.5 GREEN — Prior checked evidence verifies the listed source fixes: permission-gated tax override and totals (3.2), recorded/reconciled/void payment status and cash-flow behavior (4.6), customer balances/returns/credit display and TZS currency (5.6). Related Phase 19/20 source evidence remains subject to those phases' own incomplete acceptance gates.
 
+### 7.6 Follow-up status and receipt checks (2026-11-23)
+
+- [x] Invoice status semantics: full-return invoice `PH25-INV-202611-00004` displays `RETURNED`; invoice figures show total TZS 1,533.75, paid TZS 0.00, return credits TZS 1,533.75 and balance TZS 0.00. Status filters were checked in the live UI: PARTIALLY SETTLED returned one partially credited invoice (not overdue); OVERDUE returned 3; ISSUED 1; SETTLED 4 (2 returned, 1 paid, 1 settled); CANCELLED 3; DRAFT 23. Restored All statuses after checking.
+- [x] Status-display behavior matrix: 11 ad-hoc cases passed for DRAFT, CANCELLED, ISSUED, PAID, PARTIALLY_PAID, OVERDUE, full return, partial return credit, and mixed payment/return-credit balances. These were one-off checks, not a committed automated test suite.
+- [x] Receipt content review: user-provided print preview for paid invoice `INV-202611-00026` showed business header, invoice/customer/location/status/date/terms, one product line, subtotal TZS 3,000, tax TZS 540, total/paid TZS 3,540 and balance TZS 0. Content is accepted from the preview; physical printer output and 58/80 mm paper sizing remain unverified.
+- [x] Targeted code checks: frontend/backend TypeScript checks passed; targeted ESLint passed, with one existing `<img>` warning in invoice detail. Production build was not verified in this run because the configured production API URL was a placeholder and the retry collided with the running Next.js `.next` output; do not treat this as a production-build green.
+
 ## Implementation map
 
 - API contracts: `genuine-frontend/lib/api/sales.ts`

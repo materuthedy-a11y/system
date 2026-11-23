@@ -117,6 +117,28 @@ html.dark :is(button, a[href])[class*="min-h-10"][class*="rounded-"][class~="bor
   border-color: rgb(132 178 238 / 68%);
   color: #ffffff;
 }
+/* Semantic destructive buttons stay red even when they use an outlined
+   Tailwind class; they must not inherit the global blue quiet-action style. */
+button[class*="min-h-"][class*="border-rose"]:not([class*="bg-"]) {
+  background-color: #b42318 !important;
+  border-color: #b42318 !important;
+  color: #ffffff !important;
+}
+button[class*="min-h-"][class*="border-rose"]:not([class*="bg-"]):hover:not(:disabled) {
+  background-color: #912018 !important;
+  border-color: #912018 !important;
+  color: #ffffff !important;
+}
+html.dark button[class*="min-h-"][class*="border-rose"]:not([class*="bg-"]) {
+  background-color: rgb(180 35 24 / 82%) !important;
+  border-color: rgb(248 113 113 / 52%) !important;
+  color: #ffffff !important;
+}
+html.dark button[class*="min-h-"][class*="border-rose"]:not([class*="bg-"]):hover:not(:disabled) {
+  background-color: rgb(153 27 27 / 92%) !important;
+  border-color: rgb(248 113 113 / 68%) !important;
+  color: #ffffff !important;
+}
 .ui-create-return-button {
   background-color: #059669 !important;
   border-color: #059669 !important;
@@ -137,6 +159,37 @@ html.dark .ui-create-return-button {
 html.dark .ui-create-return-button:hover:not(:disabled) {
   background-color: rgb(4 132 93 / 94%) !important;
   border-color: rgb(52 211 153 / 62%) !important;
+}
+.ui-danger-action {
+  background-color: #b42318 !important;
+  border-color: #b42318 !important;
+  color: #ffffff !important;
+  transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.ui-danger-action:hover:not(:disabled) {
+  background-color: #912018 !important;
+  border-color: #912018 !important;
+  color: #ffffff !important;
+}
+.ui-danger-action:disabled {
+  background-color: #e7aaa5 !important;
+  border-color: #e7aaa5 !important;
+  color: #ffffff !important;
+}
+html.dark .ui-danger-action {
+  background-color: rgb(180 35 24 / 82%) !important;
+  border-color: rgb(248 113 113 / 52%) !important;
+  color: #ffffff !important;
+  backdrop-filter: blur(10px);
+}
+html.dark .ui-danger-action:hover:not(:disabled) {
+  background-color: rgb(153 27 27 / 92%) !important;
+  border-color: rgb(248 113 113 / 68%) !important;
+}
+html.dark .ui-danger-action:disabled {
+  background-color: rgb(127 29 29 / 50%) !important;
+  border-color: rgb(248 113 113 / 28%) !important;
+  color: rgb(255 255 255 / 65%) !important;
 }
 .language-switch-button:not(:disabled):hover,
 .language-switch-button:not(:disabled):active {

@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { Toaster, toast, type Toast } from 'react-hot-toast';
 import { createPortal } from 'react-dom';
 
 type NoticeKind = 'success' | 'error' | 'warning' | 'info';
+let errorToastRevision = 0;
 
 const styles: Record<NoticeKind, { icon: typeof CheckCircle2; accent: string; tint: string }> = {
   success: { icon: CheckCircle2, accent: '#16734a', tint: '#e9f7ef' },
@@ -40,11 +42,34 @@ function ToastCard({ item, kind, message }: { item: Toast; kind: NoticeKind; mes
 
 export const notify = {
   success: (message: string) => toast.custom((item) => <ToastCard item={item} kind="success" message={message} />, { duration: 5_500 }),
-  error: (message: string) => toast.custom((item) => <ToastCard item={item} kind="error" message={message} />, { duration: 6_000 }),
+  error: (message: string) => {
+    errorToastRevision += 1;
+    return toast.custom((item) => <ToastCard item={item} kind="error" message={message} />, { duration: 6_000 });
+  },
   warning: (message: string) => toast.custom((item) => <ToastCard item={item} kind="warning" message={message} />, { duration: 5_500 }),
   info: (message: string) => toast.custom((item) => <ToastCard item={item} kind="info" message={message} />, { duration: 5_500 }),
 };
 
 export function AppToaster() {
+  useEffect(() => {
+    const timers = new Set<number>();
+    const onApiError = (event: Event) => {
+      const message = (event as CustomEvent<{ message?: string }>).detail?.message?.trim();
+      if (!message) return;
+      const revisionAtDispatch = errorToastRevision;
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        // A page-level error handler already showed a toast for this failure.
+        if (revisionAtDispatch === errorToastRevision) notify.error(message);
+      }, 60);
+      timers.add(timer);
+    };
+    window.addEventListener('mizania:api-error', onApiError);
+    return () => {
+      window.removeEventListener('mizania:api-error', onApiError);
+      timers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, []);
+
   return <Toaster position="top-right" gutter={10} containerClassName="!top-4 !right-4 !z-[300]" />;
 }

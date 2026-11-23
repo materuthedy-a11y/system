@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { AuthField, AuthFrame, FormError, reportAuthError } from '@/components/auth/AuthFrame';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
+import { notify } from '@/components/ui/AppToaster';
 import { authAPI, getApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const authStatus = useAuthStore((state) => state.status);
   const initialize = useAuthStore((state) => state.initialize);
   const initializationStarted = useRef(false);
+  const expiryNoticeShown = useRef(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +27,13 @@ export default function LoginPage() {
   const [reopenBusy, setReopenBusy] = useState(false);
   const [reopenMessage, setReopenMessage] = useState('');
   const [reopenSuccess, setReopenSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!expiryNoticeShown.current && new URLSearchParams(window.location.search).get('reason') === 'session-expired') {
+      expiryNoticeShown.current = true;
+      notify.warning('Your session expired. Sign in again to continue.');
+    }
+  }, []);
 
   useEffect(() => {
     if (!initializationStarted.current) {
@@ -77,7 +86,9 @@ export default function LoginPage() {
       setReopenMessage(result.message);
       setReopenSuccess(true);
     } catch (cause) {
-      setReopenMessage(getApiError(cause, 'Unable to restore this workspace. Check your details or contact support.'));
+      const message = getApiError(cause, 'Unable to restore this workspace. Check your details or contact support.');
+      setReopenMessage(message);
+      notify.error(message);
     } finally {
       setReopenBusy(false);
     }

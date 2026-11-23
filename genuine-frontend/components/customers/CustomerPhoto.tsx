@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { ImagePlus, Loader2, Trash2, Upload, UserRound } from 'lucide-react';
 import { customersAPI } from '@/lib/api/customers';
+import { notify } from '@/components/ui/AppToaster';
 
 const MAX_COMPRESSED_BYTES = 128 * 1024;
 
@@ -114,7 +115,11 @@ export function CustomerPhotoField({
     setBusy(true);
     setError('');
     try { onChange(await compressCustomerPhoto(file)); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Picha haikuweza kuandaliwa.'); }
+    catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Picha haikuweza kuandaliwa.';
+      setError(message);
+      notify.error(message);
+    }
     finally { setBusy(false); }
   }
 

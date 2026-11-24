@@ -27,6 +27,7 @@
     "db:seed": "ts-node src/database/seed.ts",
     "db:seed:phases": "ts-node src/database/phase19-21-fixtures.ts",
     "db:seed:phase24-inventory": "ts-node src/database/phase24-inventory-fixtures.ts",
+    "db:seed:phase24-low-stock": "ts-node src/database/phase24-low-stock-fixtures.ts",
     "db:seed:phase24-expiry": "ts-node src/database/phase24-expiry-fixtures.ts",
     "db:studio": "prisma studio"
   },

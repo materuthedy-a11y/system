@@ -43,6 +43,39 @@ function createPrismaMock() {
 }
 
 describe('InventoryService location scope and thresholds', () => {
+  it('includes each active product base unit in inventory form options', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    prisma.product.findMany.mockResolvedValue([
+      {
+        id: 'product-a',
+        name: 'QA product',
+        sku: 'QA-1',
+        minimumStock: 4,
+        reorderLevel: 12,
+        buyingPrice: 100,
+        defaultUnit: { name: 'Bottle', symbol: 'btl' },
+      },
+    ]);
+    prisma.location.findMany.mockResolvedValue([]);
+
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    const result = await service.getInventoryOptions('business-a', 'owner-a');
+
+    expect(result.products[0].defaultUnit).toEqual({ name: 'Bottle', symbol: 'btl' });
+    expect(prisma.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { businessId: 'business-a', status: 'ACTIVE' },
+        select: expect.objectContaining({
+          defaultUnit: { select: { name: true, symbol: true } },
+        }),
+      }),
+    );
+  });
+
   it('updates reorder thresholds and records the exact before/after audit values', async () => {
     const prisma = createPrismaMock();
     prisma.product.findFirst.mockResolvedValue({

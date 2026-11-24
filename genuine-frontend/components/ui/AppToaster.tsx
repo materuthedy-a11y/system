@@ -7,6 +7,8 @@ import { createPortal } from 'react-dom';
 
 type NoticeKind = 'success' | 'error' | 'warning' | 'info';
 let errorToastRevision = 0;
+const recentErrorToasts = new Map<string, number>();
+const errorToastDedupeWindowMs = 1_500;
 
 const styles: Record<NoticeKind, { icon: typeof CheckCircle2; accent: string; tint: string }> = {
   success: { icon: CheckCircle2, accent: '#16734a', tint: '#e9f7ef' },
@@ -44,6 +46,13 @@ export const notify = {
   success: (message: string) => toast.custom((item) => <ToastCard item={item} kind="success" message={message} />, { duration: 5_500 }),
   error: (message: string) => {
     errorToastRevision += 1;
+    const now = Date.now();
+    const lastShownAt = recentErrorToasts.get(message);
+    if (lastShownAt !== undefined && now - lastShownAt < errorToastDedupeWindowMs) return;
+    recentErrorToasts.set(message, now);
+    window.setTimeout(() => {
+      if (recentErrorToasts.get(message) === now) recentErrorToasts.delete(message);
+    }, errorToastDedupeWindowMs);
     return toast.custom((item) => <ToastCard item={item} kind="error" message={message} />, { duration: 6_000 });
   },
   warning: (message: string) => toast.custom((item) => <ToastCard item={item} kind="warning" message={message} />, { duration: 5_500 }),

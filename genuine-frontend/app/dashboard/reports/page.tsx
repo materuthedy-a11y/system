@@ -11,6 +11,7 @@ import { AnimatedNumber } from '@/components/ui/AnimatedNumber';
 import { notify } from '@/components/ui/AppToaster';
 import { Input } from '@/components/ui/forms/input';
 import { Select } from '@/components/ui/forms/select';
+import { formatSignedChange, signedChangeClass } from '@/lib/ui/signed-change';
 
 const tabs: Array<{ id: ReportTab; label: string }> = [
   { id: 'overview', label: 'Overview' }, { id: 'sales', label: 'Sales' },
@@ -171,7 +172,7 @@ function MetricDefinition({ metric, code, index }: { metric: ReportMetric; code:
     { text: 'text-violet-700 dark:text-violet-300/85', icon: 'bg-violet-600 text-white dark:bg-violet-400/15 dark:text-violet-300' },
   ];
   const accent = accents[index % accents.length];
-  return <article className={panelClass}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-bold text-[#536153] dark:text-[#b8c0b3]">{m.label || m.name}</p><p className={`mt-2 break-words text-xl font-extrabold tabular-nums ${accent.text}`}><AnimatedNumber value={m.value} format={format}/></p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl shadow-sm ${accent.icon}`}><TrendingUp size={17}/></span></div><p className="mt-3 text-[11px] text-[#6e766b] dark:text-[#aeb6a9]">{m.changePercent === null || m.changePercent === undefined ? 'No prior-period baseline' : `${m.changePercent.toLocaleString()}% vs previous period`}</p>{m.formula ? <p className="mt-2 text-[11px] leading-5 text-[#777e73] dark:text-[#9da69a]">{m.formula}</p> : null}</article>;
+  return <article className={panelClass}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-bold text-[#536153] dark:text-[#b8c0b3]">{m.label || m.name}</p><p className={`mt-2 break-words text-xl font-extrabold tabular-nums ${accent.text}`}><AnimatedNumber value={m.value} format={format}/></p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl shadow-sm ${accent.icon}`}><TrendingUp size={17}/></span></div><p className="mt-3 text-[11px]">{m.changePercent === null || m.changePercent === undefined ? <span className="text-[#6e766b] dark:text-[#aeb6a9]">No prior-period baseline</span> : <><span className={signedChangeClass(m.changePercent)}>{formatSignedChange(m.changePercent, 1)}%</span><span className="ml-1 text-[#6e766b] dark:text-[#aeb6a9]">vs previous period</span></>}</p>{m.formula ? <p className="mt-2 text-[11px] leading-5 text-[#777e73] dark:text-[#9da69a]">{m.formula}</p> : null}</article>;
 }
 
 function asRows(value: unknown): Array<Record<string, unknown>> {

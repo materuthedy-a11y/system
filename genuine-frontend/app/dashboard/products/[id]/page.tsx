@@ -25,6 +25,7 @@ import { useAuthStore } from '@/store/authStore';
 import { ProductPhoto } from '@/components/products/ProductImages';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatBusinessDate } from '@/lib/format/businessDate';
+import { formatSignedChange, signedChangeClass } from '@/lib/ui/signed-change';
 
 const panel = 'min-w-0 rounded-2xl border border-[#e6e9e1] bg-white p-4 shadow-sm sm:p-6';
 const statusStyles: Record<Product['status'], string> = {
@@ -320,8 +321,8 @@ export default function ProductDetailPage() {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3 text-right">
-                  <span className="text-sm font-bold tabular-nums text-[#343832]">
-                    {movement.quantity} {product.defaultUnit}
+                  <span className={`text-sm tabular-nums ${signedChangeClass(movement.quantity)}`}>
+                    {formatSignedChange(movement.quantity)} {product.defaultUnit}
                   </span>
                   <time className="text-xs text-[#858880]">
                     {formatBusinessDate(movement.createdAt)}

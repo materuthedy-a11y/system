@@ -93,7 +93,7 @@ export function MetricCard({
   const negative = metric.trend === 'DOWN';
   const favorable = (positive && !invertTrend) || (negative && invertTrend);
   const unfavorable = (negative && !invertTrend) || (positive && invertTrend);
-  const changeClass = favorable ? 'text-[#2d8152]' : unfavorable ? 'text-[#b54742]' : 'text-[#777b73]';
+  const changeClass = favorable ? 'text-emerald-700 dark:text-emerald-300' : unfavorable ? 'text-rose-700 dark:text-rose-300' : 'text-[#777b73] dark:text-[#afb5ac]';
   const TrendIcon = positive ? ArrowUpRight : negative ? ArrowDownRight : Minus;
 
   return (

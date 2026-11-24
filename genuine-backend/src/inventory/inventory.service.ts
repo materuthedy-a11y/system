@@ -140,6 +140,7 @@ export class InventoryService {
           minimumStock: true,
           reorderLevel: true,
           buyingPrice: true,
+          defaultUnit: { select: { name: true, symbol: true } },
         },
         orderBy: { name: 'asc' },
       }),

@@ -577,6 +577,7 @@ export class InventoryService {
           });
           const currentQty = round(stock?.quantity || 0);
           data.push({
+            businessId,
             productId: product.id,
             locationId: location.id,
             currentQty,
@@ -638,6 +639,37 @@ export class InventoryService {
     });
     if (!result) throw new NotFoundException('Stock adjustment not found');
     return result;
+  }
+
+  async deleteDraftStockAdjustment(businessId: string, id: string, userId: string) {
+    await this.getStockAdjustmentById(businessId, id, userId);
+    return this.serializableTransaction(async (tx) => {
+      const existing = await tx.stockAdjustment.findFirst({
+        where: { id, businessId },
+        include: { items: { include: { product: true, location: true } } },
+      });
+      if (!existing) throw new NotFoundException('Stock adjustment not found');
+      if (existing.status !== 'DRAFT')
+        throw new ConflictException('Only DRAFT adjustments can be deleted');
+
+      const movement = await tx.inventoryMovement.findFirst({
+        where: { businessId, referenceId: id, referenceType: 'StockAdjustment' },
+        select: { id: true },
+      });
+      if (movement)
+        throw new ConflictException('Cannot delete a draft adjustment with stock movements');
+
+      const deleted = await tx.stockAdjustment.deleteMany({
+        where: { id, businessId, status: 'DRAFT' },
+      });
+      if (deleted.count !== 1) throw new ConflictException('Adjustment has already been processed');
+
+      await this.audit(tx, businessId, userId, 'DELETE', 'StockAdjustment', id, existing, {
+        id,
+        status: 'DELETED',
+      });
+      return { id, deleted: true };
+    });
   }
 
   async approveStockAdjustment(businessId: string, id: string, userId: string) {
@@ -841,6 +873,7 @@ export class InventoryService {
           );
         }
         items.push({
+          businessId,
           productId: product.id,
           quantity: line.quantity,
           unit: baseUnit,
@@ -894,6 +927,40 @@ export class InventoryService {
     });
     if (!result) throw new NotFoundException('Stock transfer not found');
     return result;
+  }
+
+  async cancelDraftStockTransfer(businessId: string, id: string, userId: string) {
+    await this.getStockTransferById(businessId, id, userId);
+    return this.serializableTransaction(async (tx) => {
+      const transfer = await tx.stockTransfer.findFirst({
+        where: { id, businessId },
+        include: { fromLocation: true, toLocation: true, items: { include: { product: true } } },
+      });
+      if (!transfer) throw new NotFoundException('Stock transfer not found');
+      if (transfer.status !== 'DRAFT')
+        throw new ConflictException('Only DRAFT transfers can be cancelled');
+
+      const movement = await tx.inventoryMovement.findFirst({
+        where: { businessId, referenceId: id, referenceType: 'StockTransfer' },
+        select: { id: true },
+      });
+      if (movement)
+        throw new ConflictException('Cannot cancel a draft transfer with stock movements');
+
+      const claimed = await tx.stockTransfer.updateMany({
+        where: { id, businessId, status: 'DRAFT' },
+        data: { status: 'CANCELLED' },
+      });
+      if (claimed.count !== 1) throw new ConflictException('Transfer has already been processed');
+
+      const updated = await tx.stockTransfer.findFirst({
+        where: { id, businessId },
+        include: { fromLocation: true, toLocation: true, items: { include: { product: true } } },
+      });
+      if (!updated) throw new NotFoundException('Stock transfer not found');
+      await this.audit(tx, businessId, userId, 'CANCEL', 'StockTransfer', id, transfer, updated);
+      return updated;
+    });
   }
 
   async sendStockTransfer(businessId: string, id: string, userId: string) {
@@ -1103,6 +1170,7 @@ export class InventoryService {
           totalVarianceAmount += Math.abs(variance) * (product.buyingPrice || 0);
         }
         items.push({
+          businessId,
           productId: product.id,
           systemQuantity,
           countedQuantity: line.countedQuantity,

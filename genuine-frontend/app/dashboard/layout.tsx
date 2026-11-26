@@ -43,6 +43,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
+  const [avatarPreviewSize, setAvatarPreviewSize] = useState({ width: 360, height: 360, isCircle: true });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsedNavGroups, setCollapsedNavGroups] = useState<Record<string, boolean>>({});
   const [isDesktop, setIsDesktop] = useState(false);
@@ -274,20 +275,27 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         image.onerror = () => reject(new Error('This image could not be opened.'));
       });
       const canvas = document.createElement('canvas');
-      const scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight));
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const maxAvatarBytes = 1_000_000;
+      const maxDimension = 1600;
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      let width = Math.max(1, Math.round(image.naturalWidth * scale));
+      let height = Math.max(1, Math.round(image.naturalHeight * scale));
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Your browser could not prepare this image.');
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      let quality = 0.82;
       let blob: Blob | null = null;
-      while (quality >= 0.42) {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-        if (blob && blob.size <= 65_536) break;
-        quality -= 0.1;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        canvas.width = width;
+        canvas.height = height;
+        context.drawImage(image, 0, 0, width, height);
+        for (let quality = 0.94; quality >= 0.78; quality -= 0.04) {
+          blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+          if (blob && blob.size <= maxAvatarBytes) break;
+        }
+        if (blob && blob.size <= maxAvatarBytes) break;
+        width = Math.max(1, Math.round(width * 0.8));
+        height = Math.max(1, Math.round(height * 0.8));
       }
-      if (!blob || blob.size > 65_536) throw new Error('Choose a smaller or simpler image (maximum 64 KB after compression).');
+      if (!blob || blob.size > maxAvatarBytes) throw new Error('This photo is too detailed to save at high quality. Choose a smaller image.');
       const avatar = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read this image.'));
@@ -445,17 +453,39 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </header>
         <main className="w-full min-w-0 p-2 min-[390px]:p-3 sm:p-5 lg:p-10">{children}</main>
       </div>
-      {avatarPreviewOpen && avatarUrl && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title" aria-describedby="avatar-preview-description" className="fixed inset-0 ui-modal-backdrop z-[70] flex items-center justify-center p-3 sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) setAvatarPreviewOpen(false); }}>
-        <div className="w-full max-w-5xl overflow-hidden rounded-[24px] border border-[#e8eadf] bg-white text-[#20211f] shadow-[0_28px_100px_rgba(0,0,0,0.38)] dark:border-white/10 dark:bg-[#191d1a] dark:text-white sm:rounded-[30px]">
-          <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-5">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#f2f6d9] text-[#53630b] dark:bg-[#38331d] dark:text-[#e5d17c]"><UserRound size={20} /></span>
-              <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#687b0d] dark:text-[#d8c36a]">Profile photo</p><h2 id="avatar-preview-title" className="mt-0.5 truncate text-base font-semibold sm:text-lg">{user.name || `${user.firstName} ${user.lastName}`}</h2><p id="avatar-preview-description" className="mt-0.5 text-xs text-[#777c71] dark:text-[#aeb4aa]">Account profile image</p></div>
-            </div>
-            <button ref={avatarPreviewCloseButton} type="button" aria-label="Close profile photo preview" onClick={() => setAvatarPreviewOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[#e6e8df] bg-[#f7f8f3] text-[#42473e] transition hover:border-[#cad39b] hover:bg-[#eef3d5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#91a719] dark:border-white/10 dark:bg-white/[0.06] dark:text-white/85 dark:hover:border-white/20 dark:hover:bg-white/[0.12]"><X size={18} /></button>
+      {avatarPreviewOpen && avatarUrl && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title" aria-describedby="avatar-preview-description" className="avatar-viewer-backdrop ui-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) setAvatarPreviewOpen(false); }}>
+        <div className="avatar-viewer-panel relative flex h-[min(82dvh,720px)] max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#101411] text-white shadow-[0_32px_100px_rgba(0,0,0,0.55)] sm:h-[min(78dvh,720px)] sm:rounded-[40px]">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <Image src={avatarUrl} alt="" fill unoptimized sizes="100vw" className="scale-110 object-cover opacity-20 blur-3xl" />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(9,13,10,0.76),rgba(9,13,10,0.52)_38%,rgba(9,13,10,0.88))]" />
           </div>
-          <div className="mx-3 mb-3 grid h-[min(70vh,760px)] min-h-60 place-items-center overflow-hidden rounded-[20px] border border-[#e9ebdf] bg-[radial-gradient(circle_at_50%_42%,rgba(176,193,74,0.13),transparent_62%),linear-gradient(145deg,#f5f6f0,#ecefe6)] p-3 sm:mx-5 sm:mb-5 sm:rounded-[26px] sm:p-6 dark:border-white/[0.08] dark:bg-[radial-gradient(circle_at_50%_42%,rgba(181,158,71,0.12),transparent_62%),linear-gradient(145deg,#111512,#171c18)]">
-            <Image src={avatarUrl} alt={`Profile photo of ${user.name || `${user.firstName} ${user.lastName}`}`} width={1200} height={1200} unoptimized className="h-full w-full rounded-xl object-contain drop-shadow-[0_18px_36px_rgba(0,0,0,0.22)] sm:rounded-2xl" />
+          <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="avatar-story-ring grid h-12 w-12 shrink-0 place-items-center rounded-full p-[2px]">
+                <span className="h-full w-full overflow-hidden rounded-full border-2 border-[#101411] bg-[#263126]">
+                  <Image src={avatarUrl} alt="" width={48} height={48} unoptimized className="h-full w-full object-cover" />
+                </span>
+              </span>
+              <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#e6ce72]">Profile photo</p><h2 id="avatar-preview-title" className="mt-0.5 truncate text-base font-semibold sm:text-lg">{user.name || `${user.firstName} ${user.lastName}`}</h2><p id="avatar-preview-description" className="mt-0.5 text-xs text-white/65">Account profile image · Full view</p></div>
+            </div>
+            <button ref={avatarPreviewCloseButton} type="button" aria-label="Close profile photo preview" onClick={() => setAvatarPreviewOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 bg-black/25 text-white/90 backdrop-blur-md transition hover:border-white/30 hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f2cd58]"><X size={18} /></button>
+          </div>
+          <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-3 pb-3 sm:px-6 sm:pb-5">
+            <div className={`avatar-photo-frame relative shrink-0 p-[3px] shadow-[0_18px_55px_rgba(0,0,0,0.42)] ${avatarPreviewSize.isCircle ? 'rounded-full' : 'rounded-[34px]'}`} style={{ width: avatarPreviewSize.width, height: avatarPreviewSize.height }}>
+              <div className={`h-full w-full overflow-hidden border-[3px] border-[#111611] bg-[#111611] ${avatarPreviewSize.isCircle ? 'rounded-full' : 'rounded-[31px]'}`}>
+                <Image src={avatarUrl} alt={`Profile photo of ${user.name || `${user.firstName} ${user.lastName}`}`} width={1600} height={1600} unoptimized sizes="(max-width: 640px) 82vw, 520px" onLoad={(event) => {
+                  const { naturalWidth, naturalHeight } = event.currentTarget;
+                  if (!naturalWidth || !naturalHeight) return;
+                  const maxSide = Math.min(520, window.innerWidth * 0.82, window.innerHeight * 0.58);
+                  const scale = maxSide / Math.max(naturalWidth, naturalHeight);
+                  const ratio = naturalWidth / naturalHeight;
+                  setAvatarPreviewSize({ width: Math.max(1, Math.round(naturalWidth * scale)), height: Math.max(1, Math.round(naturalHeight * scale)), isCircle: ratio >= 0.92 && ratio <= 1.08 });
+                }} className="h-full w-full object-cover" />
+              </div>
+            </div>
+          </div>
+          <div className="relative z-10 flex shrink-0 items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:pb-5">
+            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[11px] font-medium tracking-wide text-white/65 backdrop-blur">Mizania · Profile photo</span>
           </div>
         </div>
       </div>, document.body) : null}

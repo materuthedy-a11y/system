@@ -26,6 +26,7 @@ import { Select } from '@/components/ui/forms/select';
 import { Textarea } from '@/components/ui/forms/textarea';
 
 type Kind = 'adjustments' | 'transfers' | 'counts';
+const MIN_TRANSFER_QUANTITY = 0.0001;
 type Line = {
   productId: string;
   quantity: string;
@@ -146,6 +147,13 @@ export function InventoryCreateForm({ kind }: { kind: Kind }) {
     }
     if (kind === 'adjustments' && lines.some((x) => Number(x.quantity) === 0)) {
       setError('Adjustment quantity cannot be zero.');
+      return;
+    }
+    if (
+      kind === 'transfers' &&
+      lines.some((line) => Number(line.quantity) < MIN_TRANSFER_QUANTITY)
+    ) {
+      setError(`Transfer quantities must be at least ${MIN_TRANSFER_QUANTITY}.`);
       return;
     }
     if (kind === 'transfers' && (!locationId || !toLocationId || locationId === toLocationId)) {
@@ -341,12 +349,24 @@ export function InventoryCreateForm({ kind }: { kind: Kind }) {
                       </span>
                       <Input
                         type="number"
-                        min={kind === 'adjustments' ? undefined : 0}
+                        min={
+                          kind === 'adjustments'
+                            ? undefined
+                            : kind === 'transfers'
+                              ? MIN_TRANSFER_QUANTITY
+                              : 0
+                        }
                         step="0.0001"
                         className={fieldClass}
                         value={line.quantity}
                         onChange={(e) => updateLine(index, { quantity: e.target.value })}
-                        placeholder={kind === 'adjustments' ? '+5 or -2' : '0'}
+                        placeholder={
+                          kind === 'adjustments'
+                            ? '+5 or -2'
+                            : kind === 'transfers'
+                              ? '0.0001'
+                              : '0'
+                        }
                       />
                     </label>
                     {kind === 'adjustments' ? (

@@ -1350,3 +1350,22 @@ html.dark .ui-field--auth:-webkit-autofill:focus {
   -webkit-backdrop-filter: blur(6px) !important;
   backdrop-filter: blur(6px) !important;
 }
+
+@keyframes avatar-viewer-backdrop-in {
+  from { opacity: 0; backdrop-filter: blur(0); }
+  to { opacity: 1; backdrop-filter: blur(6px); }
+}
+@keyframes avatar-viewer-panel-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes avatar-story-ring-turn {
+  to { transform: rotate(360deg); }
+}
+.avatar-viewer-backdrop { animation: avatar-viewer-backdrop-in 220ms ease-out both; }
+.avatar-viewer-panel { animation: avatar-viewer-panel-in 320ms cubic-bezier(0.2, 0.75, 0.25, 1) both; }
+.avatar-story-ring { background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75); animation: avatar-story-ring-turn 8s linear infinite; }
+.avatar-photo-frame { background: conic-gradient(from 0deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5, #feda75); }
+@media (prefers-reduced-motion: reduce) {
+  .avatar-viewer-backdrop, .avatar-viewer-panel, .avatar-story-ring { animation: none !important; }
+}

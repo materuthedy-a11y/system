@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -118,6 +119,18 @@ export class InventoryController {
     return this.inventory.getStockAdjustmentById(businessId, id, userId);
   }
 
+  @Delete('adjustments/:id')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('inventory.adjust')
+  @ApiOperation({ summary: 'Delete a draft stock adjustment without changing stock' })
+  deleteDraftAdjustment(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.inventory.deleteDraftStockAdjustment(businessId, id, userId);
+  }
+
   @Post('adjustments/:id/approve')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('inventory.adjust')
@@ -173,6 +186,18 @@ export class InventoryController {
   @RequirePermission('inventory.transfer')
   sendTransfer(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
     return this.inventory.sendStockTransfer(businessId, id, userId);
+  }
+
+  @Post('transfers/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('inventory.transfer')
+  @ApiOperation({ summary: 'Cancel a draft stock transfer without changing stock' })
+  cancelTransfer(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.inventory.cancelDraftStockTransfer(businessId, id, userId);
   }
 
   @Post('transfers/:id/receive')

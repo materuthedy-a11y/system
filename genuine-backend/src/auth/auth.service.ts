@@ -26,6 +26,7 @@ import {
 
 const RESET_LINK_MESSAGE =
   'This password reset link is invalid or has already been used. Please request a new one.';
+const MAX_AVATAR_BYTES = 1_000_000;
 
 @Injectable()
 export class AuthService {
@@ -57,7 +58,7 @@ export class AuthService {
     const bytes = Buffer.from(encoded[2], 'base64');
     if (
       bytes.length === 0 ||
-      bytes.length > 65_536 ||
+      bytes.length > MAX_AVATAR_BYTES ||
       bytes.length < 12 ||
       bytes.toString('ascii', 0, 4) !== 'RIFF' ||
       bytes.toString('ascii', 8, 12) !== 'WEBP'
@@ -75,11 +76,11 @@ export class AuthService {
       const bytes = Buffer.from(encoded[1], 'base64');
       if (
         bytes.length === 0 ||
-        bytes.length > 65_536 ||
+        bytes.length > MAX_AVATAR_BYTES ||
         bytes.toString('ascii', 0, 4) !== 'RIFF' ||
         bytes.toString('ascii', 8, 12) !== 'WEBP'
       ) {
-        throw new BadRequestException('Profile photo must be a valid WebP image under 64 KB');
+        throw new BadRequestException('Profile photo must be a valid WebP image under 1 MB');
       }
     }
 

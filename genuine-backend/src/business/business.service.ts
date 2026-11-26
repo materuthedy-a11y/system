@@ -1599,18 +1599,32 @@ export class BusinessService {
       );
     }
 
-    const location = await this.prisma.location.create({
-      data: {
-        id: uuid(),
-        businessId,
-        name: dto.name,
-        code,
-        type,
-        address: dto.address,
-        description: dto.description,
-        managerId,
-        isActive: true,
-      },
+    const location = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.location.create({
+        data: {
+          id: uuid(),
+          businessId,
+          name: dto.name,
+          code,
+          type,
+          address: dto.address,
+          description: dto.description,
+          managerId,
+          isActive: true,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          businessId,
+          userId,
+          entityType: 'Location',
+          entityId: created.id,
+          action: 'CREATE',
+          afterData: JSON.stringify(created),
+          description: 'CREATE Location',
+        },
+      });
+      return created;
     });
 
     return {

@@ -509,6 +509,7 @@ model Location {
   expenses        Expense[]
 
   @@unique([businessId, code])
+  @@unique([businessId, id])
   @@index([businessId])
   @@index([managerId])
 }
@@ -869,16 +870,18 @@ model SalesReturnItem {
 
 model StockBalance {
   id             String   @id @default(cuid())
+  businessId     String
   productId      String
   locationId     String
   quantity       Float    @default(0)
   lastMovementAt DateTime @default(now())
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  location       Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location       Location @relation(fields: [businessId, locationId], references: [businessId, id], onDelete: Cascade)
+  product        Product  @relation(fields: [businessId, productId], references: [businessId, id], onDelete: Cascade)
 
   @@unique([productId, locationId])
+  @@index([businessId])
   @@index([productId])
   @@index([locationId])
 }
@@ -899,8 +902,8 @@ model InventoryMovement {
   createdBy     String
   createdAt     DateTime  @default(now())
   business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location      Location  @relation(fields: [locationId], references: [id])
-  product       Product   @relation(fields: [productId], references: [id])
+  location      Location  @relation(fields: [businessId, locationId], references: [businessId, id])
+  product       Product   @relation(fields: [businessId, productId], references: [businessId, id])
 
   @@index([businessId])
   @@index([productId])
@@ -932,6 +935,7 @@ model StockTransfer {
   items          StockTransferItem[]
 
   @@unique([businessId, transferNumber])
+  @@unique([businessId, id])
   @@index([businessId])
   @@index([fromLocationId])
   @@index([toLocationId])
@@ -939,6 +943,7 @@ model StockTransfer {
 
 model StockTransferItem {
   id               String        @id @default(cuid())
+  businessId       String
   transferId       String
   productId        String
   quantity         Float
@@ -948,9 +953,10 @@ model StockTransferItem {
   notes            String?
   receivedQuantity Float         @default(0)
   unitCost         Float?
-  product          Product       @relation(fields: [productId], references: [id])
-  transfer         StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product          Product       @relation(fields: [businessId, productId], references: [businessId, id])
+  transfer         StockTransfer @relation(fields: [businessId, transferId], references: [businessId, id], onDelete: Cascade)
 
+  @@index([businessId])
   @@index([transferId])
   @@index([productId])
 }
@@ -975,12 +981,14 @@ model StockAdjustment {
   items            StockAdjustmentItem[]
 
   @@unique([businessId, adjustmentNumber])
+  @@unique([businessId, id])
   @@index([businessId])
   @@index([status])
 }
 
 model StockAdjustmentItem {
   id           String          @id @default(cuid())
+  businessId   String
   adjustmentId String
   productId    String
   currentQty   Float
@@ -991,10 +999,11 @@ model StockAdjustmentItem {
   expiryDate   DateTime?
   notes        String?
   reason       String?
-  adjustment   StockAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
-  product      Product         @relation(fields: [productId], references: [id])
-  location     Location?       @relation(fields: [locationId], references: [id])
+  adjustment   StockAdjustment @relation(fields: [businessId, adjustmentId], references: [businessId, id], onDelete: Cascade)
+  product      Product         @relation(fields: [businessId, productId], references: [businessId, id])
+  location     Location?       @relation(fields: [businessId, locationId], references: [businessId, id])
 
+  @@index([businessId])
   @@index([adjustmentId])
   @@index([productId])
 }
@@ -1053,10 +1062,11 @@ model PhysicalCount {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   business            Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location            Location            @relation(fields: [locationId], references: [id])
+  location            Location            @relation(fields: [businessId, locationId], references: [businessId, id])
   items               PhysicalCountItem[]
 
   @@unique([businessId, countNumber])
+  @@unique([businessId, id])
   @@index([businessId])
   @@index([locationId])
   @@index([status])
@@ -1064,6 +1074,7 @@ model PhysicalCount {
 
 model PhysicalCountItem {
   id              String        @id @default(uuid())
+  businessId      String
   physicalCountId String
   productId       String
   systemQuantity  Float
@@ -1072,9 +1083,10 @@ model PhysicalCountItem {
   batchNumber     String?
   expiryDate      DateTime?
   notes           String?
-  physicalCount   PhysicalCount @relation(fields: [physicalCountId], references: [id], onDelete: Cascade)
-  product         Product       @relation(fields: [productId], references: [id])
+  physicalCount   PhysicalCount @relation(fields: [businessId, physicalCountId], references: [businessId, id], onDelete: Cascade)
+  product         Product       @relation(fields: [businessId, productId], references: [businessId, id])
 
+  @@index([businessId])
   @@unique([physicalCountId, productId, batchNumber])
   @@index([physicalCountId])
   @@index([productId])

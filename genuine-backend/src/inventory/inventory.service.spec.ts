@@ -22,8 +22,16 @@ function createPrismaMock() {
       count: jest.fn(),
       findFirst: jest.fn(),
       updateMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
-    stockTransfer: { count: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    stockTransfer: {
+      count: jest.fn(),
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
     stockTransferItem: { update: jest.fn(), findMany: jest.fn() },
     physicalCount: {
       count: jest.fn(),
@@ -900,6 +908,128 @@ describe('InventoryService stock adjustment approval', () => {
 });
 
 describe('InventoryService stock transfer guards', () => {
+  it('rejects a same-location transfer before opening a transaction', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await expect(
+      service.createStockTransfer('business-a', 'owner-a', {
+        fromLocationId: 'location-a',
+        toLocationId: 'location-a',
+        items: [{ productId: 'qa-product', quantity: 1 }],
+      }),
+    ).rejects.toThrow('Source and destination locations must differ');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.stockTransfer.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an inactive transfer location before creating a record or audit', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    prisma.location.findFirst
+      .mockResolvedValueOnce({ id: 'location-from' })
+      .mockResolvedValueOnce(null);
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await expect(
+      service.createStockTransfer('business-a', 'owner-a', {
+        fromLocationId: 'location-from',
+        toLocationId: 'inactive-location',
+        items: [{ productId: 'qa-product', quantity: 1 }],
+      }),
+    ).rejects.toThrow('Active source or destination location not found in this business');
+
+    expect(prisma.stockTransfer.create).not.toHaveBeenCalled();
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects alternate transfer units without creating a record, movement, or audit', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    prisma.location.findFirst
+      .mockResolvedValueOnce({ id: 'location-from' })
+      .mockResolvedValueOnce({ id: 'location-to' });
+    prisma.stockTransfer.findMany.mockResolvedValue([]);
+    prisma.product.findFirst.mockResolvedValue({
+      id: 'qa-product',
+      defaultUnit: { name: 'Bottle' },
+    });
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await expect(
+      service.createStockTransfer('business-a', 'owner-a', {
+        fromLocationId: 'location-from',
+        toLocationId: 'location-to',
+        items: [{ productId: 'qa-product', quantity: 1, unit: 'Case' }],
+      }),
+    ).rejects.toThrow(
+      'Inventory transfers use the product base unit (Bottle); convert alternate units before transferring',
+    );
+
+    expect(prisma.stockTransfer.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('stores the product base unit on a transfer draft without moving stock', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    prisma.location.findFirst
+      .mockResolvedValueOnce({ id: 'location-from' })
+      .mockResolvedValueOnce({ id: 'location-to' });
+    prisma.stockTransfer.findMany.mockResolvedValue([]);
+    prisma.product.findFirst.mockResolvedValue({
+      id: 'qa-product',
+      defaultUnit: { name: 'Bottle' },
+    });
+    prisma.stockTransfer.create.mockResolvedValue({ id: 'transfer-a' });
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await service.createStockTransfer('business-a', 'owner-a', {
+      fromLocationId: 'location-from',
+      toLocationId: 'location-to',
+      reason: 'TRANSFER',
+      items: [{ productId: 'qa-product', quantity: 1 }],
+    });
+
+    expect(prisma.stockTransfer.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'DRAFT',
+          items: {
+            create: [
+              expect.objectContaining({
+                productId: 'qa-product',
+                quantity: 1,
+                unit: 'Bottle',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
   it('rejects sending an insufficient multi-line transfer before any stock, status, movement, or audit writes', async () => {
     const prisma = createPrismaMock();
     prisma.user.findFirst.mockResolvedValue({
@@ -932,9 +1062,33 @@ describe('InventoryService stock transfer guards', () => {
       .mockResolvedValueOnce([{ quantity: 0 }]);
     const service = new InventoryService(prisma as PrismaService, {} as never);
 
-    await expect(
-      service.sendStockTransfer('business-a', 'transfer-a', 'owner-a'),
-    ).rejects.toThrow('Insufficient stock for QA product B');
+    await expect(service.sendStockTransfer('business-a', 'transfer-a', 'owner-a')).rejects.toThrow(
+      'Insufficient stock for QA product B',
+    );
+
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransfer.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransferItem.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate sending after a transfer leaves DRAFT without another stock, movement, or audit write', async () => {
+    const prisma = createPrismaMock();
+    const transfer = {
+      id: 'transfer-a',
+      status: 'SENT',
+      fromLocationId: 'location-from',
+      toLocationId: 'location-to',
+      items: [],
+    };
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    jest.spyOn(service, 'getStockTransferById').mockResolvedValue(transfer as never);
+    prisma.stockTransfer.findFirst.mockResolvedValue(transfer);
+
+    await expect(service.sendStockTransfer('business-a', 'transfer-a', 'owner-a')).rejects.toThrow(
+      'Only DRAFT transfers can be sent',
+    );
 
     expect(prisma.stockBalance.update).not.toHaveBeenCalled();
     expect(prisma.stockTransfer.update).not.toHaveBeenCalled();
@@ -1198,6 +1352,232 @@ describe('InventoryService physical count lifecycle', () => {
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'CREATE', entityId: 'count-a' }),
+    });
+  });
+
+  describe('InventoryService draft adjustment deletion and transfer cancellation', () => {
+    const owner = {
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    };
+    const adjustment = (status: string, locationId = 'location-a') => ({
+      id: 'adjustment-a',
+      businessId: 'business-a',
+      status,
+      items: [{ id: 'adjustment-item-a', locationId, productId: 'product-a', quantity: 1 }],
+    });
+    const transfer = (
+      status: string,
+      fromLocationId = 'location-a',
+      toLocationId = 'location-b',
+    ) => ({
+      id: 'transfer-a',
+      businessId: 'business-a',
+      status,
+      fromLocationId,
+      toLocationId,
+      fromLocation: { id: fromLocationId, name: 'Source' },
+      toLocation: { id: toLocationId, name: 'Destination' },
+      items: [{ id: 'transfer-item-a', productId: 'product-a', quantity: 1 }],
+    });
+
+    it('deletes only a draft adjustment and audits without writing stock or movement', async () => {
+      const prisma = createPrismaMock();
+      const draft = adjustment('DRAFT');
+      prisma.user.findFirst.mockResolvedValue(owner);
+      prisma.stockAdjustment.findFirst.mockResolvedValue(draft);
+      prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+      prisma.stockAdjustment.deleteMany.mockResolvedValue({ count: 1 });
+      const service = new InventoryService(prisma as PrismaService, {} as never);
+
+      await expect(
+        service.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+      ).resolves.toEqual({ id: 'adjustment-a', deleted: true });
+
+      expect(prisma.stockAdjustment.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'adjustment-a', businessId: 'business-a', status: 'DRAFT' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          businessId: 'business-a',
+          userId: 'owner-a',
+          action: 'DELETE',
+          entityType: 'StockAdjustment',
+          entityId: 'adjustment-a',
+        }),
+      });
+      expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+      expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects deleting a non-draft adjustment or an adjustment with a movement', async () => {
+      const processedPrisma = createPrismaMock();
+      processedPrisma.user.findFirst.mockResolvedValue(owner);
+      processedPrisma.stockAdjustment.findFirst.mockResolvedValue(adjustment('PENDING'));
+      const processedService = new InventoryService(processedPrisma as PrismaService, {} as never);
+
+      await expect(
+        processedService.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+      ).rejects.toThrow('Only DRAFT adjustments can be deleted');
+      expect(processedPrisma.stockAdjustment.deleteMany).not.toHaveBeenCalled();
+      expect(processedPrisma.auditLog.create).not.toHaveBeenCalled();
+
+      const movedPrisma = createPrismaMock();
+      movedPrisma.user.findFirst.mockResolvedValue(owner);
+      movedPrisma.stockAdjustment.findFirst.mockResolvedValue(adjustment('DRAFT'));
+      movedPrisma.inventoryMovement.findFirst.mockResolvedValue({ id: 'movement-a' });
+      const movedService = new InventoryService(movedPrisma as PrismaService, {} as never);
+
+      await expect(
+        movedService.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+      ).rejects.toThrow('Cannot delete a draft adjustment with stock movements');
+      expect(movedPrisma.stockAdjustment.deleteMany).not.toHaveBeenCalled();
+      expect(movedPrisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('does not audit a duplicate adjustment deletion', async () => {
+      const prisma = createPrismaMock();
+      prisma.user.findFirst.mockResolvedValue(owner);
+      prisma.stockAdjustment.findFirst
+        .mockResolvedValueOnce(adjustment('DRAFT'))
+        .mockResolvedValueOnce(adjustment('DRAFT'))
+        .mockResolvedValueOnce(null);
+      prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+      prisma.stockAdjustment.deleteMany.mockResolvedValue({ count: 1 });
+      const service = new InventoryService(prisma as PrismaService, {} as never);
+
+      await service.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'owner-a');
+      await expect(
+        service.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+      ).rejects.toThrow('Stock adjustment not found');
+
+      expect(prisma.stockAdjustment.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('cancels only a draft transfer and audits without writing stock or movement', async () => {
+      const prisma = createPrismaMock();
+      const draft = transfer('DRAFT');
+      const cancelled = transfer('CANCELLED');
+      prisma.user.findFirst.mockResolvedValue(owner);
+      prisma.stockTransfer.findFirst
+        .mockResolvedValueOnce(draft)
+        .mockResolvedValueOnce(draft)
+        .mockResolvedValueOnce(cancelled);
+      prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+      prisma.stockTransfer.updateMany.mockResolvedValue({ count: 1 });
+      const service = new InventoryService(prisma as PrismaService, {} as never);
+
+      await expect(
+        service.cancelDraftStockTransfer('business-a', 'transfer-a', 'owner-a'),
+      ).resolves.toEqual(cancelled);
+
+      expect(prisma.stockTransfer.updateMany).toHaveBeenCalledWith({
+        where: { id: 'transfer-a', businessId: 'business-a', status: 'DRAFT' },
+        data: { status: 'CANCELLED' },
+      });
+      expect(prisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          businessId: 'business-a',
+          userId: 'owner-a',
+          action: 'CANCEL',
+          entityType: 'StockTransfer',
+          entityId: 'transfer-a',
+        }),
+      });
+      expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+      expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects cancelling a non-draft transfer or a transfer with a movement', async () => {
+      const processedPrisma = createPrismaMock();
+      processedPrisma.user.findFirst.mockResolvedValue(owner);
+      processedPrisma.stockTransfer.findFirst.mockResolvedValue(transfer('SENT'));
+      const processedService = new InventoryService(processedPrisma as PrismaService, {} as never);
+
+      await expect(
+        processedService.cancelDraftStockTransfer('business-a', 'transfer-a', 'owner-a'),
+      ).rejects.toThrow('Only DRAFT transfers can be cancelled');
+      expect(processedPrisma.stockTransfer.updateMany).not.toHaveBeenCalled();
+      expect(processedPrisma.auditLog.create).not.toHaveBeenCalled();
+
+      const movedPrisma = createPrismaMock();
+      movedPrisma.user.findFirst.mockResolvedValue(owner);
+      movedPrisma.stockTransfer.findFirst.mockResolvedValue(transfer('DRAFT'));
+      movedPrisma.inventoryMovement.findFirst.mockResolvedValue({ id: 'movement-a' });
+      const movedService = new InventoryService(movedPrisma as PrismaService, {} as never);
+
+      await expect(
+        movedService.cancelDraftStockTransfer('business-a', 'transfer-a', 'owner-a'),
+      ).rejects.toThrow('Cannot cancel a draft transfer with stock movements');
+      expect(movedPrisma.stockTransfer.updateMany).not.toHaveBeenCalled();
+      expect(movedPrisma.auditLog.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duplicate transfer cancellation without a second audit', async () => {
+      const prisma = createPrismaMock();
+      prisma.user.findFirst.mockResolvedValue(owner);
+      prisma.stockTransfer.findFirst
+        .mockResolvedValueOnce(transfer('DRAFT'))
+        .mockResolvedValueOnce(transfer('DRAFT'))
+        .mockResolvedValueOnce(transfer('CANCELLED'))
+        .mockResolvedValueOnce(transfer('CANCELLED'))
+        .mockResolvedValueOnce(transfer('CANCELLED'));
+      prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+      prisma.stockTransfer.updateMany.mockResolvedValue({ count: 1 });
+      const service = new InventoryService(prisma as PrismaService, {} as never);
+
+      await service.cancelDraftStockTransfer('business-a', 'transfer-a', 'owner-a');
+      await expect(
+        service.cancelDraftStockTransfer('business-a', 'transfer-a', 'owner-a'),
+      ).rejects.toThrow('Only DRAFT transfers can be cancelled');
+
+      expect(prisma.stockTransfer.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.auditLog.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('denies draft actions outside the user location scope', async () => {
+      const prisma = createPrismaMock();
+      prisma.user.findFirst.mockResolvedValue({
+        userRoles: [{ role: { name: 'Staff', isSystem: false } }],
+        assignedLocations: [{ id: 'location-allowed' }],
+      });
+      prisma.stockAdjustment.findFirst.mockResolvedValue(null);
+      prisma.stockTransfer.findFirst.mockResolvedValue(null);
+      const service = new InventoryService(prisma as PrismaService, {} as never);
+
+      await expect(
+        service.deleteDraftStockAdjustment('business-a', 'adjustment-a', 'staff-a'),
+      ).rejects.toThrow('Stock adjustment not found');
+      await expect(
+        service.cancelDraftStockTransfer('business-a', 'transfer-a', 'staff-a'),
+      ).rejects.toThrow('Stock transfer not found');
+
+      expect(prisma.stockAdjustment.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.stockTransfer.updateMany).not.toHaveBeenCalled();
+      expect(prisma.auditLog.create).not.toHaveBeenCalled();
+      expect(prisma.stockAdjustment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'adjustment-a',
+            businessId: 'business-a',
+            items: {
+              some: { locationId: { in: ['location-allowed'] } },
+              every: { locationId: { in: ['location-allowed'] } },
+            },
+          },
+        }),
+      );
+      expect(prisma.stockTransfer.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'transfer-a',
+            businessId: 'business-a',
+            fromLocationId: { in: ['location-allowed'] },
+            toLocationId: { in: ['location-allowed'] },
+          },
+        }),
+      );
     });
   });
 

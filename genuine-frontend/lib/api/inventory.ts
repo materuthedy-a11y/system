@@ -194,6 +194,10 @@ export const inventoryAPI = {
       notes?: string;
     }>;
   }) => post<StockAdjustment>('/inventory/adjustments', input),
+  deleteDraftAdjustment: (id: string) =>
+    apiClient
+      .delete(`/inventory/adjustments/${encodeURIComponent(id)}`)
+      .then((response) => unwrap<{ id: string; deleted: boolean }>(response)),
   approveAdjustment: (id: string) =>
     post<StockAdjustment>(`/inventory/adjustments/${encodeURIComponent(id)}/approve`),
   rejectAdjustment: (id: string, reason: string) =>
@@ -216,6 +220,8 @@ export const inventoryAPI = {
   }) => post<StockTransfer>('/inventory/transfers', input),
   sendTransfer: (id: string) =>
     post<StockTransfer>(`/inventory/transfers/${encodeURIComponent(id)}/send`),
+  cancelTransfer: (id: string) =>
+    post<StockTransfer>(`/inventory/transfers/${encodeURIComponent(id)}/cancel`),
   receiveTransfer: (id: string, receivedQuantities: Record<string, number>) =>
     post<StockTransfer>(`/inventory/transfers/${encodeURIComponent(id)}/receive`, {
       receivedQuantities,

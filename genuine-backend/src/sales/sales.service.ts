@@ -589,7 +589,13 @@ export class SalesService {
       for (const [productId, quantity] of [...quantities].sort(([a], [b]) => a.localeCompare(b))) {
         await tx.stockBalance.upsert({
           where: { productId_locationId: { productId, locationId: invoice.locationId } },
-          create: { id: uuid(), productId, locationId: invoice.locationId, quantity: 0 },
+          create: {
+            id: uuid(),
+            businessId,
+            productId,
+            locationId: invoice.locationId,
+            quantity: 0,
+          },
           update: {},
         });
         const locked = await tx.$queryRaw<
@@ -941,6 +947,7 @@ export class SalesService {
             },
             create: {
               id: uuid(),
+              businessId,
               productId: item.productId,
               locationId: invoice.locationId,
               quantity: 0,
@@ -1293,6 +1300,7 @@ export class SalesService {
           },
           create: {
             id: uuid(),
+            businessId,
             productId: item.productId,
             locationId: ret.invoice.locationId,
             quantity: 0,

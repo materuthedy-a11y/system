@@ -399,6 +399,7 @@ async function main() {
   // Create stock balance for test product
   await prisma.stockBalance.create({
     data: {
+      businessId: business.id,
       productId: testProduct.id,
       locationId: mainLocation.id,
       quantity: 100,

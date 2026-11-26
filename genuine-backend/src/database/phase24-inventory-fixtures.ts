@@ -176,6 +176,7 @@ async function main() {
       });
       await tx.stockBalance.create({
         data: {
+          businessId: business.id,
           productId: created.id,
           locationId: opening.location.id,
           quantity: opening.quantity,

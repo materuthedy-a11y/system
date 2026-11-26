@@ -199,6 +199,7 @@ async function main() {
       const receivedAt = addCalendarDays(expiryDate, -30);
       await tx.stockBalance.create({
         data: {
+          businessId: business.id,
           productId: created.id,
           locationId: location.id,
           quantity: QUANTITY_PER_BATCH,

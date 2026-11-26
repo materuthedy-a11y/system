@@ -440,6 +440,7 @@ async function seed() {
         await tx.stockBalance.upsert({
           where: { productId_locationId: { productId: product.id, locationId: location.id } },
           create: {
+            businessId: BUSINESS_ID,
             productId: product.id,
             locationId: location.id,
             quantity: spec.accepted,

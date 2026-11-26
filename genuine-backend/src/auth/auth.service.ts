@@ -26,7 +26,7 @@ import {
 
 const RESET_LINK_MESSAGE =
   'This password reset link is invalid or has already been used. Please request a new one.';
-const MAX_AVATAR_BYTES = 1_000_000;
+const MAX_AVATAR_BYTES = 5_000_000;
 
 @Injectable()
 export class AuthService {
@@ -53,15 +53,19 @@ export class AuthService {
       select: { avatar: true },
     });
     if (!user?.avatar) throw new BadRequestException('Profile photo not found');
-    const encoded = user.avatar.match(/^data:(image\/webp);base64,([A-Za-z0-9+/]+={0,2})$/);
+    const encoded = user.avatar.match(/^data:(image\/(?:webp|jpeg|png));base64,([A-Za-z0-9+/]+={0,2})$/);
     if (!encoded) throw new BadRequestException('Profile photo is invalid');
     const bytes = Buffer.from(encoded[2], 'base64');
+    const validSignature = encoded[1] === 'image/webp'
+      ? bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+      : encoded[1] === 'image/jpeg'
+        ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+        : bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
     if (
       bytes.length === 0 ||
       bytes.length > MAX_AVATAR_BYTES ||
       bytes.length < 12 ||
-      bytes.toString('ascii', 0, 4) !== 'RIFF' ||
-      bytes.toString('ascii', 8, 12) !== 'WEBP'
+      !validSignature
     ) {
       throw new BadRequestException('Profile photo is invalid');
     }
@@ -71,16 +75,21 @@ export class AuthService {
   async updateAvatar(userId: string, businessId: string, avatar: string) {
     const normalizedAvatar = avatar || null;
     if (normalizedAvatar) {
-      const encoded = normalizedAvatar.match(/^data:image\/webp;base64,([A-Za-z0-9+/]+={0,2})$/);
-      if (!encoded) throw new BadRequestException('Use a valid WebP profile photo');
-      const bytes = Buffer.from(encoded[1], 'base64');
+      const encoded = normalizedAvatar.match(/^data:image\/(webp|jpeg|png);base64,([A-Za-z0-9+/]+={0,2})$/);
+      if (!encoded) throw new BadRequestException('Use a valid JPG, PNG or WebP profile photo');
+      const bytes = Buffer.from(encoded[2], 'base64');
+      const validSignature = encoded[1] === 'webp'
+        ? bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+        : encoded[1] === 'jpeg'
+          ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+          : bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
       if (
         bytes.length === 0 ||
         bytes.length > MAX_AVATAR_BYTES ||
-        bytes.toString('ascii', 0, 4) !== 'RIFF' ||
-        bytes.toString('ascii', 8, 12) !== 'WEBP'
+        bytes.length < 12 ||
+        !validSignature
       ) {
-        throw new BadRequestException('Profile photo must be a valid WebP image under 1 MB');
+        throw new BadRequestException('Profile photo must be a valid image under 5 MB');
       }
     }
 

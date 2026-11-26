@@ -1683,6 +1683,7 @@ export class PurchaseService {
             },
             create: {
               id: uuid(),
+              businessId,
               productId: poItem.productId,
               locationId: grn.purchaseOrder.locationId,
               quantity: item.acceptedQuantity,

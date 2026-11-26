@@ -173,6 +173,7 @@ export class ProductService {
           await tx.stockBalance.createMany({
             data: locations.map((location) => ({
               id: uuid(),
+              businessId,
               productId: created.id,
               locationId: location.id,
               quantity: 0,

@@ -185,7 +185,12 @@ async function main() {
   });
   await prisma.stockBalance.upsert({
     where: { productId_locationId: { productId: tenantProduct.id, locationId: tenantLocation.id } },
-    create: { productId: tenantProduct.id, locationId: tenantLocation.id, quantity: 25 },
+    create: {
+      businessId: tenantB.id,
+      productId: tenantProduct.id,
+      locationId: tenantLocation.id,
+      quantity: 25,
+    },
     update: {},
   });
   const tenantCustomer = await prisma.customer.upsert({
@@ -409,13 +414,23 @@ async function main() {
     });
     await prisma.stockBalance.upsert({
       where: { productId_locationId: { productId: product.id, locationId: location.id } },
-      create: { productId: product.id, locationId: location.id, quantity: spec.quantity },
+      create: {
+        businessId: business.id,
+        productId: product.id,
+        locationId: location.id,
+        quantity: spec.quantity,
+      },
       update: {},
     });
     if (spec.status === 'ACTIVE') {
       await prisma.stockBalance.upsert({
         where: { productId_locationId: { productId: product.id, locationId: branchLocation.id } },
-        create: { productId: product.id, locationId: branchLocation.id, quantity: spec.quantity },
+        create: {
+          businessId: business.id,
+          productId: product.id,
+          locationId: branchLocation.id,
+          quantity: spec.quantity,
+        },
         update: {},
       });
     }

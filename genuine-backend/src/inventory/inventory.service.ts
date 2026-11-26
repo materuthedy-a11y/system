@@ -577,7 +577,6 @@ export class InventoryService {
           });
           const currentQty = round(stock?.quantity || 0);
           data.push({
-            businessId,
             productId: product.id,
             locationId: location.id,
             currentQty,
@@ -709,7 +708,7 @@ export class InventoryService {
             }
             this.assertExpiryAfterToday(item.expiryDate, business?.timezone || 'UTC');
           }
-          const balance = await this.lockBalance(tx, item.productId, item.locationId);
+          const balance = await this.lockBalance(tx, businessId, item.productId, item.locationId);
           const next = round(balance.quantity + item.difference);
           if (!business?.allowNegativeStock && next < -EPSILON) {
             throw new BadRequestException(
@@ -873,7 +872,6 @@ export class InventoryService {
           );
         }
         items.push({
-          businessId,
           productId: product.id,
           quantity: line.quantity,
           unit: baseUnit,
@@ -976,7 +974,12 @@ export class InventoryService {
       const balances = new Map<string, number>();
       const sorted = [...transfer.items].sort((a, b) => a.productId.localeCompare(b.productId));
       for (const item of sorted) {
-        const balance = await this.lockBalance(tx, item.productId, transfer.fromLocationId);
+        const balance = await this.lockBalance(
+          tx,
+          businessId,
+          item.productId,
+          transfer.fromLocationId,
+        );
         if (balance.quantity + EPSILON < item.quantity)
           throw new BadRequestException(`Insufficient stock for ${item.product.name}`);
         balances.set(item.id, balance.quantity);
@@ -1072,7 +1075,8 @@ export class InventoryService {
       const positive = incoming
         .filter((x) => x.quantity > EPSILON)
         .sort((a, b) => a.item.productId.localeCompare(b.item.productId));
-      for (const x of positive) await this.lockBalance(tx, x.item.productId, transfer.toLocationId);
+      for (const x of positive)
+        await this.lockBalance(tx, businessId, x.item.productId, transfer.toLocationId);
       const now = new Date();
       for (const { item, quantity } of positive) {
         await tx.stockBalance.update({
@@ -1170,7 +1174,6 @@ export class InventoryService {
           totalVarianceAmount += Math.abs(variance) * (product.buyingPrice || 0);
         }
         items.push({
-          businessId,
           productId: product.id,
           systemQuantity,
           countedQuantity: line.countedQuantity,
@@ -1266,7 +1269,7 @@ export class InventoryService {
         });
         const items = [...count.items].sort((a, b) => a.productId.localeCompare(b.productId));
         for (const item of items) {
-          const balance = await this.lockBalance(tx, item.productId, count.locationId);
+          const balance = await this.lockBalance(tx, businessId, item.productId, count.locationId);
           const currentQuantity = item.batchNumber
             ? await this.currentBatchQuantity(
                 tx,
@@ -1960,10 +1963,10 @@ export class InventoryService {
     return `${stem}${String(currentMax + 1).padStart(5, '0')}`;
   }
 
-  private async lockBalance(tx: Tx, productId: string, locationId: string) {
+  private async lockBalance(tx: Tx, businessId: string, productId: string, locationId: string) {
     await tx.stockBalance.upsert({
       where: { productId_locationId: { productId, locationId } },
-      create: { productId, locationId, quantity: 0 },
+      create: { businessId, productId, locationId, quantity: 0 },
       update: {},
     });
     const rows = await tx.$queryRaw<

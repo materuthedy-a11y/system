@@ -13,10 +13,10 @@ async function bootstrap() {
     bodyParser: false,
   });
 
-  // Product photos are compressed to WebP in the browser before upload.
-  // Allow a bounded batch while keeping request size finite.
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+  // Profile-photo requests may contain up to 5 MB of image data.
+  // Bound JSON size while allowing base64 request overhead.
+  app.use(express.json({ limit: '8mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '8mb' }));
   // Trust the first proxy hop (Railway/hosting LB) so req.ip reflects the real
   // client via X-Forwarded-For — required for correct per-IP rate limiting.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);

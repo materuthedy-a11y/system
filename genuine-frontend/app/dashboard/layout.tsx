@@ -44,6 +44,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
   const [avatarPreviewSize, setAvatarPreviewSize] = useState({ width: 360, height: 360, isCircle: true });
+  const [avatarCropSource, setAvatarCropSource] = useState<{ url: string; width: number; height: number } | null>(null);
+  const [avatarCropZoom, setAvatarCropZoom] = useState(1);
+  const [avatarCropOffset, setAvatarCropOffset] = useState({ x: 0, y: 0 });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [collapsedNavGroups, setCollapsedNavGroups] = useState<Record<string, boolean>>({});
   const [isDesktop, setIsDesktop] = useState(false);
@@ -66,6 +69,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const photoInput = useRef<HTMLInputElement>(null);
   const avatarButton = useRef<HTMLButtonElement>(null);
   const avatarPreviewCloseButton = useRef<HTMLButtonElement>(null);
+  const avatarCropViewport = useRef<HTMLDivElement>(null);
+  const avatarCropDrag = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
   const avatarObjectUrl = useRef<string | null>(null);
 
   const replaceAvatarUrl = useCallback((nextUrl: string | null) => {
@@ -243,6 +248,24 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   }, [avatarPreviewOpen]);
 
   useEffect(() => {
+    if (!avatarCropSource) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !avatarBusy) {
+        URL.revokeObjectURL(avatarCropSource.url);
+        setAvatarCropSource(null);
+        if (photoInput.current) photoInput.current.value = '';
+      }
+    };
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [avatarCropSource, avatarBusy]);
+
+  useEffect(() => {
     if (!logoutConfirmOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !isSigningOut) setLogoutConfirmOpen(false);
@@ -258,60 +281,126 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     router.replace('/login');
   }
 
+  async function saveAvatarBlob(blob: Blob) {
+    if (!user) return;
+    setAvatarBusy(true);
+    try {
+      const avatar = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read this image.'));
+        reader.onerror = () => reject(new Error('Could not read this image.'));
+        reader.readAsDataURL(blob);
+      });
+      const result = await authAPI.updateAvatar(avatar);
+      updateUser({ ...user, avatar: result.avatar });
+      setAccountMenuOpen(false);
+      if (avatarCropSource) URL.revokeObjectURL(avatarCropSource.url);
+      setAvatarCropSource(null);
+      notify.success('Profile photo updated.');
+    } catch (error) {
+      notify.error(getApiError(error, error instanceof Error ? error.message : 'Could not update your profile photo.'));
+    } finally {
+      setAvatarBusy(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  }
+
+  async function encodeAvatarSource(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
+    const maxAvatarBytes = 5_000_000;
+    const canvas = document.createElement('canvas');
+    let width = sourceWidth;
+    let height = sourceHeight;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Your browser could not prepare this image.');
+    let blob: Blob | null = null;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(source, 0, 0, width, height);
+      for (let quality = 0.95; quality >= 0.82; quality -= 0.03) {
+        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+        if (!blob || blob.type !== 'image/webp') {
+          const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+          blob = jpeg?.type === 'image/jpeg' ? jpeg : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+        }
+        if (blob && blob.size <= maxAvatarBytes) return blob;
+      }
+      width = Math.max(1, Math.round(width * 0.9));
+      height = Math.max(1, Math.round(height * 0.9));
+    }
+    if (!blob || blob.size > maxAvatarBytes) throw new Error('Could not fit this photo under 5 MB. Try cropping a smaller area.');
+    return blob;
+  }
+
   async function handleAvatarChange(file?: File) {
     if (!file || !user) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       notify.error('Choose a JPG, PNG or WebP image.');
       return;
     }
-    setAvatarBusy(true);
-    let temporaryUrl: string | null = null;
+    if (file.size > 10_000_000) {
+      notify.error('Profile photos must be 10 MB or smaller.');
+      return;
+    }
+    const temporaryUrl = URL.createObjectURL(file);
+    let keepTemporaryUrl = false;
     try {
-      temporaryUrl = URL.createObjectURL(file);
       const image = new window.Image();
       image.src = temporaryUrl;
       await new Promise<void>((resolve, reject) => {
         image.onload = () => resolve();
         image.onerror = () => reject(new Error('This image could not be opened.'));
       });
-      const canvas = document.createElement('canvas');
-      const maxAvatarBytes = 1_000_000;
-      const maxDimension = 1600;
-      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
-      let width = Math.max(1, Math.round(image.naturalWidth * scale));
-      let height = Math.max(1, Math.round(image.naturalHeight * scale));
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Your browser could not prepare this image.');
-      let blob: Blob | null = null;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        canvas.width = width;
-        canvas.height = height;
-        context.drawImage(image, 0, 0, width, height);
-        for (let quality = 0.94; quality >= 0.78; quality -= 0.04) {
-          blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-          if (blob && blob.size <= maxAvatarBytes) break;
-        }
-        if (blob && blob.size <= maxAvatarBytes) break;
-        width = Math.max(1, Math.round(width * 0.8));
-        height = Math.max(1, Math.round(height * 0.8));
+      if (file.size > 5_000_000) {
+        setAvatarCropSource({ url: temporaryUrl, width: image.naturalWidth, height: image.naturalHeight });
+        setAvatarCropZoom(1);
+        setAvatarCropOffset({ x: 0, y: 0 });
+        setAccountMenuOpen(false);
+        keepTemporaryUrl = true;
+        return;
       }
-      if (!blob || blob.size > maxAvatarBytes) throw new Error('This photo is too detailed to save at high quality. Choose a smaller image.');
-      const avatar = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Could not read this image.'));
-        reader.onerror = () => reject(new Error('Could not read this image.'));
-        reader.readAsDataURL(blob as Blob);
-      });
-      const result = await authAPI.updateAvatar(avatar);
-      updateUser({ ...user, avatar: result.avatar });
-      setAccountMenuOpen(false);
-      notify.success('Profile photo updated.');
+      const blob = await encodeAvatarSource(image, image.naturalWidth, image.naturalHeight);
+      await saveAvatarBlob(blob);
     } catch (error) {
       notify.error(getApiError(error, error instanceof Error ? error.message : 'Could not update your profile photo.'));
     } finally {
-      if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
+      if (!keepTemporaryUrl) URL.revokeObjectURL(temporaryUrl);
+    }
+  }
+
+  async function confirmAvatarCrop() {
+    if (!avatarCropSource) return;
+    setAvatarBusy(true);
+    try {
+      const image = new window.Image();
+      image.src = avatarCropSource.url;
+      await new Promise<void>((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('This image could not be opened.'));
+      });
+      const viewportSize = avatarCropViewport.current?.clientWidth || 320;
+      const outputSize = 1200;
+      const baseScale = Math.max(outputSize / image.naturalWidth, outputSize / image.naturalHeight) * avatarCropZoom;
+      const drawWidth = image.naturalWidth * baseScale;
+      const drawHeight = image.naturalHeight * baseScale;
+      const canvas = document.createElement('canvas');
+      canvas.width = outputSize;
+      canvas.height = outputSize;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Your browser could not prepare this crop.');
+      context.drawImage(image, (outputSize - drawWidth) / 2 + avatarCropOffset.x * (outputSize / viewportSize), (outputSize - drawHeight) / 2 + avatarCropOffset.y * (outputSize / viewportSize), drawWidth, drawHeight);
+      let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.94));
+      if (!blob || blob.type !== 'image/webp') {
+        const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+        blob = jpeg?.type === 'image/jpeg' ? jpeg : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      }
+      if (!blob) throw new Error('Could not create the cropped photo.');
+      const finalBlob = blob.size <= 5_000_000 ? blob : await encodeAvatarSource(canvas, outputSize, outputSize);
+      await saveAvatarBlob(finalBlob);
+    } catch (error) {
+      notify.error(getApiError(error, error instanceof Error ? error.message : 'Could not crop this profile photo.'));
+    } finally {
       setAvatarBusy(false);
-      if (photoInput.current) photoInput.current.value = '';
     }
   }
 
@@ -453,6 +542,64 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </header>
         <main className="w-full min-w-0 p-2 min-[390px]:p-3 sm:p-5 lg:p-10">{children}</main>
       </div>
+      {avatarCropSource && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-crop-title" aria-describedby="avatar-crop-description" className="ui-modal-backdrop fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={(event) => {
+        if (event.target === event.currentTarget && !avatarBusy) {
+          URL.revokeObjectURL(avatarCropSource.url);
+          setAvatarCropSource(null);
+          if (photoInput.current) photoInput.current.value = '';
+        }
+      }}>
+        <section className="w-full max-w-md overflow-hidden rounded-[30px] border border-white/10 bg-[#111612] p-5 text-white shadow-[0_30px_90px_rgba(0,0,0,0.55)] sm:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#e6ce72]">Photo is over 5 MB</p><h2 id="avatar-crop-title" className="mt-1 text-lg font-semibold">Crop your profile photo</h2><p id="avatar-crop-description" className="mt-1 max-w-sm text-sm leading-5 text-white/65">Drag the photo to choose what appears in the round profile picture. Zoom in or out, then save.</p></div>
+            <button type="button" disabled={avatarBusy} aria-label="Cancel photo crop" onClick={() => {
+              URL.revokeObjectURL(avatarCropSource.url);
+              setAvatarCropSource(null);
+              if (photoInput.current) photoInput.current.value = '';
+            }} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/15 text-white/80 transition hover:bg-white/10 disabled:opacity-50"><X size={18} /></button>
+          </div>
+          <div ref={avatarCropViewport} className="relative mx-auto mt-5 size-[min(76vw,320px)] touch-none select-none overflow-hidden rounded-full border-4 border-white/10 bg-black shadow-[0_0_0_3px_rgba(250,126,30,0.8),0_0_34px_rgba(214,41,118,0.2)]" onPointerDown={(event) => {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            avatarCropDrag.current = { x: event.clientX, y: event.clientY, offsetX: avatarCropOffset.x, offsetY: avatarCropOffset.y };
+          }} onPointerMove={(event) => {
+            const drag = avatarCropDrag.current;
+            if (!drag || !avatarCropSource) return;
+            const size = event.currentTarget.clientWidth;
+            const coverScale = Math.max(size / avatarCropSource.width, size / avatarCropSource.height) * avatarCropZoom;
+            const boundX = Math.max(0, (avatarCropSource.width * coverScale - size) / 2);
+            const boundY = Math.max(0, (avatarCropSource.height * coverScale - size) / 2);
+            setAvatarCropOffset({ x: Math.max(-boundX, Math.min(boundX, drag.offsetX + event.clientX - drag.x)), y: Math.max(-boundY, Math.min(boundY, drag.offsetY + event.clientY - drag.y)) });
+          }} onPointerUp={() => { avatarCropDrag.current = null; }} onPointerCancel={() => { avatarCropDrag.current = null; }}>
+            {(() => {
+              const size = 320;
+              const scale = Math.max(size / avatarCropSource.width, size / avatarCropSource.height) * avatarCropZoom;
+              return <Image src={avatarCropSource.url} alt="Moveable crop preview" width={Math.ceil(avatarCropSource.width * scale)} height={Math.ceil(avatarCropSource.height * scale)} unoptimized draggable={false} className="pointer-events-none absolute left-1/2 top-1/2 max-w-none" style={{ width: avatarCropSource.width * scale, height: avatarCropSource.height * scale, transform: `translate(calc(-50% + ${avatarCropOffset.x}px), calc(-50% + ${avatarCropOffset.y}px))` }} />;
+            })()}
+          </div>
+          <label className="mt-5 block text-xs font-semibold text-white/75" htmlFor="avatar-crop-zoom">Zoom</label>
+          <input id="avatar-crop-zoom" type="range" min="1" max="3" step="0.01" value={avatarCropZoom} onChange={(event) => {
+            const nextZoom = Number(event.target.value);
+            setAvatarCropZoom(nextZoom);
+            if (avatarCropSource && avatarCropViewport.current) {
+              const size = avatarCropViewport.current.clientWidth;
+              const coverScale = Math.max(size / avatarCropSource.width, size / avatarCropSource.height) * nextZoom;
+              const boundX = Math.max(0, (avatarCropSource.width * coverScale - size) / 2);
+              const boundY = Math.max(0, (avatarCropSource.height * coverScale - size) / 2);
+              setAvatarCropOffset((current) => ({ x: Math.max(-boundX, Math.min(boundX, current.x)), y: Math.max(-boundY, Math.min(boundY, current.y)) }));
+            }
+          }} className="mt-2 w-full accent-[#f28b27]" />
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" disabled={avatarBusy} onClick={() => {
+              URL.revokeObjectURL(avatarCropSource.url);
+              setAvatarCropSource(null);
+              if (photoInput.current) photoInput.current.value = '';
+            }} className="min-h-10 rounded-xl border border-white/15 px-4 text-sm font-semibold text-white/80 transition hover:bg-white/10 disabled:opacity-50">Cancel</button>
+            <button type="button" disabled={avatarBusy} onClick={() => void confirmAvatarCrop()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-[#f5c94e] via-[#fa7e1e] to-[#d62976] px-4 text-sm font-bold text-[#1a1711] transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60">{avatarBusy ? <Loader2 size={16} className="animate-spin" /> : null}{avatarBusy ? 'Saving crop…' : 'Save cropped photo'}</button>
+          </div>
+          <p className="mt-3 text-center text-[11px] text-white/45">Images larger than 5 MB open here. Maximum file size is 10 MB.</p>
+        </section>
+      </div>, document.body) : null}
       {avatarPreviewOpen && avatarUrl && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title" aria-describedby="avatar-preview-description" className="avatar-viewer-backdrop ui-modal-backdrop fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) setAvatarPreviewOpen(false); }}>
         <div className="avatar-viewer-panel relative flex h-[min(82dvh,720px)] max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#101411] text-white shadow-[0_32px_100px_rgba(0,0,0,0.55)] sm:h-[min(78dvh,720px)] sm:rounded-[40px]">
           <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">

@@ -3,7 +3,6 @@ import {
   BadRequestException,
   UnauthorizedException,
   ConflictException,
-  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -125,87 +124,90 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const business = await tx.business.create({
-          data: {
-            id: uuid(),
-            name: dto.businessName,
-            businessType: dto.businessType,
-            currency: 'TZS',
-            taxPercentage: 18,
-            allowNegativeStock: false,
-            costingMethod: 'FIFO',
-          },
-        });
+      const result = await this.prisma.$transaction(
+        async (tx) => {
+          const business = await tx.business.create({
+            data: {
+              id: uuid(),
+              name: dto.businessName,
+              businessType: dto.businessType,
+              currency: 'TZS',
+              taxPercentage: 18,
+              allowNegativeStock: false,
+              costingMethod: 'FIFO',
+            },
+          });
 
-        const user = await tx.user.create({
-          data: {
-            id: uuid(),
-            email: normalizedEmail,
-            passwordHash: hashedPassword,
-            firstName: dto.firstName.trim(),
-            lastName: dto.lastName.trim(),
-            businessId: business.id,
-            isActive: true,
-          },
-        });
+          const user = await tx.user.create({
+            data: {
+              id: uuid(),
+              email: normalizedEmail,
+              passwordHash: hashedPassword,
+              firstName: dto.firstName.trim(),
+              lastName: dto.lastName.trim(),
+              businessId: business.id,
+              isActive: true,
+            },
+          });
 
-        const roles = await this._createDefaultRolesAndPermissions(business.id, tx);
-        const ownerRole = roles.find((role) => role.name === 'Owner');
-        if (!ownerRole) throw new BadRequestException('Could not create the business owner role');
+          const roles = await this._createDefaultRolesAndPermissions(business.id, tx);
+          const ownerRole = roles.find((role) => role.name === 'Owner');
+          if (!ownerRole) throw new BadRequestException('Could not create the business owner role');
 
-        await tx.userRole.create({ data: { userId: user.id, roleId: ownerRole.id } });
-        const userWithDetails = await tx.user.findUniqueOrThrow({
-          where: { id: user.id },
-          include: {
-            userRoles: { include: { role: { include: { permissions: true } } } },
-            permissions: true,
-          },
-        });
-        const sessionId = uuid();
-        const tokens = await this._generateTokens(
-          user.id,
-          user.email,
-          business.id,
-          userWithDetails,
-          sessionId,
-        );
-        const now = new Date();
-        const absoluteExpiresAt = this._sessionAbsoluteExpiry(now);
+          await tx.userRole.create({ data: { userId: user.id, roleId: ownerRole.id } });
+          const userWithDetails = await tx.user.findUniqueOrThrow({
+            where: { id: user.id },
+            include: {
+              userRoles: { include: { role: { include: { permissions: true } } } },
+              permissions: true,
+            },
+          });
+          const sessionId = uuid();
+          const tokens = await this._generateTokens(
+            user.id,
+            user.email,
+            business.id,
+            userWithDetails,
+            sessionId,
+          );
+          const now = new Date();
+          const absoluteExpiresAt = this._sessionAbsoluteExpiry(now);
 
-        await tx.userSession.create({
-          data: {
-            id: sessionId,
-            userId: user.id,
-            refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 10),
-            ipAddress,
-            userAgent,
-            expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
-            absoluteExpiresAt,
-          },
-        });
+          await tx.userSession.create({
+            data: {
+              id: sessionId,
+              userId: user.id,
+              refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 10),
+              ipAddress,
+              userAgent,
+              expiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt),
+              absoluteExpiresAt,
+            },
+          });
 
-        return {
-          accessToken: tokens.accessToken,
-          expiresIn: tokens.expiresIn,
-          idleTimeoutSeconds: durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m'),
-          refreshTokenCookie: tokens.refreshToken,
-          idleExpiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt).toISOString(),
-          absoluteExpiresAt: absoluteExpiresAt.toISOString(),
-          user: {
-            id: user.id,
-            email: user.email,
-            name: `${user.firstName} ${user.lastName}`,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            avatar: null,
-            businessId: business.id,
-            businessName: business.name,
-            roles: userWithDetails.userRoles.map((userRole) => userRole.role.name),
-            permissions: this._permissionKeys(userWithDetails),
-          },
-        };
-      });
+          return {
+            accessToken: tokens.accessToken,
+            expiresIn: tokens.expiresIn,
+            idleTimeoutSeconds: durationSeconds(this.config, 'SESSION_IDLE_TIMEOUT', '30m'),
+            refreshTokenCookie: tokens.refreshToken,
+            idleExpiresAt: this._sessionIdleExpiry(now, absoluteExpiresAt).toISOString(),
+            absoluteExpiresAt: absoluteExpiresAt.toISOString(),
+            user: {
+              id: user.id,
+              email: user.email,
+              name: `${user.firstName} ${user.lastName}`,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              avatar: null,
+              businessId: business.id,
+              businessName: business.name,
+              roles: userWithDetails.userRoles.map((userRole) => userRole.role.name),
+              permissions: this._permissionKeys(userWithDetails),
+            },
+          };
+        },
+        { maxWait: 10_000, timeout: 30_000 },
+      );
 
       this.logger.log(
         `[AUTH] Registration successful: ${result.user.email} (Business: ${result.user.businessId})`,
@@ -888,7 +890,7 @@ export class AuthService {
           id: uuid(),
           businessId,
           key: p.key,
-          name: p.key.replace('_', ' ').toUpperCase(),
+          name: `${p.category} · ${p.action.charAt(0).toUpperCase()}${p.action.slice(1)}`,
           category: p.category,
           action: p.action,
         })),
@@ -1243,18 +1245,29 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       include: {
-        business: { select: { id: true, isActive: true, deletedAt: true, deletionScheduledAt: true } },
-        userRoles: { include: { role: { select: { name: true, isSystem: true, businessId: true } } } },
+        business: {
+          select: { id: true, isActive: true, deletedAt: true, deletionScheduledAt: true },
+        },
+        userRoles: {
+          include: { role: { select: { name: true, isSystem: true, businessId: true } } },
+        },
       },
     });
     const isOwner = user?.userRoles.some(
-      (ur) => ur.role.name === 'Owner' && ur.role.isSystem && ur.role.businessId === user.businessId,
+      (ur) =>
+        ur.role.name === 'Owner' && ur.role.isSystem && ur.role.businessId === user.businessId,
     );
     const business = user?.business;
     const restorable =
       !!business?.deletedAt &&
       (!business.deletionScheduledAt || business.deletionScheduledAt > new Date());
-    if (!user || !user.isActive || !isOwner || !restorable || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+    if (
+      !user ||
+      !user.isActive ||
+      !isOwner ||
+      !restorable ||
+      !(await bcrypt.compare(dto.password, user.passwordHash))
+    ) {
       throw new UnauthorizedException('Unable to restore this workspace');
     }
     await this.prisma.$transaction(async (tx) => {
@@ -1275,5 +1288,4 @@ export class AuthService {
     });
     return { message: 'Workspace restored. You can now sign in.' };
   }
-
 }

@@ -41,9 +41,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     const status = HttpStatus.INTERNAL_SERVER_ERROR;
-    // Do not log exception messages/stacks: database drivers may embed SQL,
-    // customer data, credentials, or request values in them.
-    this.logger.error(`Unhandled exception for ${request.method} ${request.path}`);
+    // Keep production diagnostics useful without logging exception messages or
+    // stacks, which may contain SQL, customer data, credentials, or request values.
+    const record =
+      exception && typeof exception === 'object' ? (exception as Record<string, unknown>) : null;
+    const type = exception instanceof Error ? exception.name : typeof exception;
+    const code =
+      typeof record?.code === 'string' && /^[A-Z0-9_]+$/.test(record.code)
+        ? ` code=${record.code}`
+        : '';
+    this.logger.error(`Unhandled ${type}${code} for ${request.method} ${request.path}`);
 
     const errorResponse = {
       statusCode: status,

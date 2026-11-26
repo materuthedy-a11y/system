@@ -10,7 +10,7 @@ import { DatabaseModule } from './database/database.module';
 // Common
 import { CommonModule } from './common/common.module';
 import { HttpExceptionFilter, AllExceptionsFilter } from './common/filters';
-import { LoggingInterceptor, TransformInterceptor } from './common/interceptors';
+import { TransformInterceptor } from './common/interceptors';
 import { JwtAuthGuard } from './common/guards';
 import { createValidationPipe } from './common/pipes';
 import { LoggerMiddleware, RequestIdMiddleware } from './common/middleware';
@@ -94,10 +94,6 @@ import { AppController } from './app.controller';
     },
 
     // Global Interceptors
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: LoggingInterceptor,
-    },
     {
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,

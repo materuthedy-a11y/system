@@ -841,11 +841,18 @@ export class CustomerService {
    * Generate customer code
    */
   private async _generateCustomerCode(businessId: string): Promise<string> {
-    const count = await this.prisma.customer.count({
-      where: { businessId },
+    const customers = await this.prisma.customer.findMany({
+      where: { businessId, customerCode: { startsWith: 'CUST-' } },
+      select: { customerCode: true },
     });
+    const highestCode = customers.reduce((highest, { customerCode }) => {
+      const match = /^CUST-(\d+)$/.exec(customerCode);
+      if (!match) return highest;
+      const number = Number(match[1]);
+      return Number.isSafeInteger(number) ? Math.max(highest, number) : highest;
+    }, 0);
 
-    return `CUST-${String(count + 1).padStart(5, '0')}`;
+    return `CUST-${String(highestCode + 1).padStart(5, '0')}`;
   }
 
   /**

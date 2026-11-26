@@ -441,6 +441,91 @@ describe('InventoryService location scope and thresholds', () => {
   });
 });
 
+describe('InventoryService valuation report costing methods', () => {
+  it('compares FIFO and weighted-average values using isolated movement layers', async () => {
+    const prisma = createPrismaMock();
+    const product = {
+      id: 'product-a',
+      name: 'Isolated FIFO QA product',
+      sku: 'FIFO-QA-1',
+      buyingPrice: 15,
+      createdAt: new Date('2026-10-01T00:00:00.000Z'),
+      stocks: [
+        {
+          productId: 'product-a',
+          locationId: 'location-a',
+          quantity: 6,
+          location: { id: 'location-a', name: 'QA Warehouse' },
+        },
+      ],
+    };
+    const movements = [
+      {
+        id: 'purchase-a',
+        productId: 'product-a',
+        locationId: 'location-a',
+        type: 'PURCHASE',
+        quantity: 5,
+        unitCost: 10,
+        createdAt: new Date('2026-11-01T00:00:00.000Z'),
+        product: { id: 'product-a', name: product.name, sku: product.sku, buyingPrice: 15 },
+        location: { id: 'location-a', name: 'QA Warehouse' },
+      },
+      {
+        id: 'purchase-b',
+        productId: 'product-a',
+        locationId: 'location-a',
+        type: 'PURCHASE',
+        quantity: 5,
+        unitCost: 20,
+        createdAt: new Date('2026-11-02T00:00:00.000Z'),
+        product: { id: 'product-a', name: product.name, sku: product.sku, buyingPrice: 15 },
+        location: { id: 'location-a', name: 'QA Warehouse' },
+      },
+      {
+        id: 'sale-a',
+        productId: 'product-a',
+        locationId: 'location-a',
+        type: 'SALE',
+        quantity: -4,
+        unitCost: 15,
+        createdAt: new Date('2026-11-03T00:00:00.000Z'),
+        product: { id: 'product-a', name: product.name, sku: product.sku, buyingPrice: 15 },
+        location: { id: 'location-a', name: 'QA Warehouse' },
+      },
+    ];
+    prisma.product.findMany.mockResolvedValue([product]);
+    prisma.inventoryMovement.findMany.mockResolvedValue(movements);
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    const fifo = await service.getStockValuationReport('business-a', '', {
+      page: 1,
+      limit: 20,
+      valuationMethod: 'FIFO',
+    });
+    const weightedAverage = await service.getStockValuationReport('business-a', '', {
+      page: 1,
+      limit: 20,
+      valuationMethod: 'WEIGHTED_AVERAGE',
+    });
+
+    expect(fifo).toEqual(
+      expect.objectContaining({
+        costingMethod: 'FIFO',
+        totalValue: 110,
+        data: [expect.objectContaining({ quantity: 6, averageUnitCost: 18.3333, totalValue: 110 })],
+      }),
+    );
+    expect(weightedAverage).toEqual(
+      expect.objectContaining({
+        costingMethod: 'WEIGHTED_AVERAGE',
+        totalValue: 90,
+        data: [expect.objectContaining({ quantity: 6, averageUnitCost: 15, totalValue: 90 })],
+      }),
+    );
+  });
+});
+
 describe('InventoryService expiry reports', () => {
   const expiryBatches = [
     ['expired-yesterday', '2026-11-19'],

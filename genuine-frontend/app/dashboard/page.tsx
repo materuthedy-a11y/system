@@ -375,7 +375,7 @@ export default function DashboardPage() {
           </section>
         </section>
       </> : !error ? <AuthLoadingOverlay message="Loading your dashboard…" /> : null}
-      {showWelcomePrompt && executive && typeof document !== 'undefined' ? createPortal(<div role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowWelcomePrompt(false); }} className="fixed inset-0 z-[120] grid place-items-center overflow-y-auto bg-[#0b100d]/65 p-4 backdrop-blur-md sm:p-6">
+      {showWelcomePrompt && executive && typeof document !== 'undefined' ? createPortal(<div role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowWelcomePrompt(false); }} className="fixed inset-0 ui-modal-backdrop z-[120] grid place-items-center overflow-y-auto p-4 sm:p-6">
         <section role="dialog" aria-modal="true" aria-labelledby="welcome-prompt-title" aria-describedby="welcome-prompt-description" className="relative my-auto w-full max-w-xl overflow-hidden rounded-[28px] border border-white/70 bg-[#fbfcf9] text-[#202720] shadow-[0_32px_100px_rgba(0,0,0,0.38)] dark:border-white/10 dark:bg-[#18211d] dark:text-[#f3f6f1]">
           <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 h-64 w-64 rounded-full bg-emerald-300/15 blur-3xl dark:bg-emerald-500/10" />
           <div className="relative p-6 sm:p-8">

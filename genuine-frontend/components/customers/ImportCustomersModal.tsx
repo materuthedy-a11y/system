@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Papa from 'papaparse';
 import { Download, FileUp, Loader2, X } from 'lucide-react';
 import { customersAPI, type CustomerInput, type CustomerImportDetail } from '@/lib/api/customers';
@@ -124,7 +125,7 @@ export function ImportCustomersModal({ open, onClose, onDone }: { open: boolean;
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" onClick={onClose}>
+    (typeof document !== 'undefined' ? createPortal(<div className="fixed inset-0 ui-modal-backdrop z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="w-full max-w-2xl rounded-2xl border border-[#e6e9e1] bg-white p-6 shadow-xl dark:border-white/10 dark:bg-[#161a15]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -172,6 +173,6 @@ export function ImportCustomersModal({ open, onClose, onDone }: { open: boolean;
           )}
         </div>
       </div>
-    </div>
+    </div>, document.body) : null)
   );
 }

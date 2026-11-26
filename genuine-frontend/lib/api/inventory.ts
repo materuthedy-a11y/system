@@ -268,7 +268,7 @@ export const inventoryAPI = {
           status: string;
           unitCost: number;
         }
-      >
+      > & { asOfDate: string }
     >(`/inventory/reports/expiry?${params(filters)}`),
   ageing: (filters: InventoryFilters & { productId?: string; asOfDate?: string } = {}) =>
     get<

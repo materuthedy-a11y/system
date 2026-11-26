@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AlertCircle, ArrowLeft, Boxes, Loader2, Save, Tag, Trash2, X } from 'lucide-react';
 import { getApiError } from '@/lib/api';
@@ -140,6 +141,6 @@ export default function ProductCatalogsPage() {
       </section>
     </div>}
 
-    {pendingDelete ? <div role="presentation" className="fixed inset-0 z-[80] grid place-items-center bg-black/45 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setPendingDelete(null); }}><section role="alertdialog" aria-modal="true" aria-labelledby="catalog-delete-title" className="w-full max-w-md rounded-2xl border border-[#e6e9e1] bg-white p-5 shadow-2xl"><h2 id="catalog-delete-title" className="text-lg font-bold text-[#292d27]">Delete {pendingDelete.label}?</h2><p className="mt-2 text-sm leading-6 text-[#73766f]">The server will prevent deletion if products or historical records still use this catalog entry.</p><div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setPendingDelete(null)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dfe5d3] px-4 text-sm font-semibold text-[#545850]"><X size={15} />Keep it</button><button type="button" disabled={busy} onClick={() => void removePending()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#a63832] px-4 text-sm font-bold text-white disabled:opacity-60">{busy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={15} />}Delete</button></div></section></div> : null}
+    {pendingDelete ? (typeof document !== 'undefined' ? createPortal(<div role="presentation" className="fixed inset-0 ui-modal-backdrop z-[80] grid place-items-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setPendingDelete(null); }}><section role="alertdialog" aria-modal="true" aria-labelledby="catalog-delete-title" className="w-full max-w-md rounded-2xl border border-[#e6e9e1] bg-white p-5 shadow-2xl"><h2 id="catalog-delete-title" className="text-lg font-bold text-[#292d27]">Delete {pendingDelete.label}?</h2><p className="mt-2 text-sm leading-6 text-[#73766f]">The server will prevent deletion if products or historical records still use this catalog entry.</p><div className="mt-5 flex justify-end gap-2"><button type="button" disabled={busy} onClick={() => setPendingDelete(null)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#dfe5d3] px-4 text-sm font-semibold text-[#545850]"><X size={15} />Keep it</button><button type="button" disabled={busy} onClick={() => void removePending()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#a63832] px-4 text-sm font-bold text-white disabled:opacity-60">{busy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={15} />}Delete</button></div></section></div>, document.body) : null) : null}
   </div>;
 }

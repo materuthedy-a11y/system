@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
@@ -1661,8 +1662,8 @@ export default function PurchaseOrderDetailPage() {
         </button>
       </section>
       {cancelDialog && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#11140f]/35 p-4 backdrop-blur-[2px]"
+        (typeof document !== 'undefined' ? createPortal(<div
+          className="fixed inset-0 ui-modal-backdrop z-[100] flex items-center justify-center p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !busy) setCancelDialog(false);
           }}
@@ -1739,11 +1740,11 @@ export default function PurchaseOrderDetailPage() {
               </button>
             </div>
           </section>
-        </div>
+        </div>, document.body) : null)
       )}
       {rejectTarget && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#11140f]/35 p-4 backdrop-blur-[2px]"
+        (typeof document !== 'undefined' ? createPortal(<div
+          className="fixed inset-0 ui-modal-backdrop z-[100] flex items-center justify-center p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !busy) setRejectTarget(null);
           }}
@@ -1801,7 +1802,7 @@ export default function PurchaseOrderDetailPage() {
               </button>
             </div>
           </section>
-        </div>
+        </div>, document.body) : null)
       )}
     </div>
   );

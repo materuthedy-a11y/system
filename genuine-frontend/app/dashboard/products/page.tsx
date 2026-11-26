@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -848,9 +849,9 @@ export default function ProductsPage() {
       </section>
 
       {deleting ? (
-        <div
+        (typeof document !== 'undefined' ? createPortal(<div
           role="presentation"
-          className="fixed inset-0 z-[80] grid place-items-center bg-black/45 p-4"
+          className="fixed inset-0 ui-modal-backdrop z-[80] grid place-items-center p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !busyAction) setDeleting(null);
           }}
@@ -888,7 +889,7 @@ export default function ProductsPage() {
               </button>
             </div>
           </section>
-        </div>
+        </div>, document.body) : null)
       ) : null}
       <ImportProductsModal
         open={importOpen}

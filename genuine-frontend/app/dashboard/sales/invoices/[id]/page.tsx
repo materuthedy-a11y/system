@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Printer } from 'lucide-react';
@@ -101,7 +102,7 @@ export default function SalesInvoiceDetailPage() {
       </div>
       <InvoicePrintReceipt invoice={invoice} businessName={businessBrand?.name} businessLogoUrl={businessBrand?.logoUrl} />
       {showPayment ? <form onSubmit={pay} className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-[#dce8a2] bg-[#fbfdf3] p-4 sm:grid-cols-2"><h2 className="sm:col-span-2 font-semibold">Record customer payment</h2>{methodError ? <p className="sm:col-span-2 text-sm text-rose-700">{methodError}</p> : null}<label className="text-xs font-semibold">Amount (up to {money(invoice.balance, invoice.currency)})<Input required type="number" min="0.01" max={invoice.balance} step="0.01" className={`${input} mt-1`} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} /></label><label className="text-xs font-semibold">Payment method<Select required className={`${input} mt-1`} value={paymentMethodId} onChange={(e) => setPaymentMethodId(e.target.value)}><option value="">Choose method</option>{methods.map((method) => <option key={method.id} value={method.id}>{method.name}{method.isDefault ? ' · Default' : ''}</option>)}</Select></label><label className="text-xs font-semibold">Reference {methods.find((method) => method.id === paymentMethodId)?.requiresReference ? '(required)' : '(optional)'}<Input required={!!methods.find((method) => method.id === paymentMethodId)?.requiresReference} className={`${input} mt-1`} value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} /></label><label className="text-xs font-semibold">Notes (optional)<Input className={`${input} mt-1`} value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} /></label><div className="flex gap-2 sm:col-span-2"><button disabled={busy || !methods.length} className="min-h-10 rounded-lg bg-[#20211f] px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Recording…' : 'Submit payment'}</button><button type="button" onClick={() => setShowPayment(false)} className="min-h-10 rounded-lg border border-[#dfe2d9] px-4 text-sm">Close</button></div></form> : null}
-      {showCancel ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4" role="presentation">
+      {showCancel ? (typeof document !== 'undefined' ? createPortal(<div className="fixed inset-0 ui-modal-backdrop z-50 grid place-items-center p-4" role="presentation">
         <form role="dialog" aria-modal="true" aria-labelledby="cancel-invoice-title" onSubmit={cancel} className="w-full max-w-md rounded-2xl border border-[#efd4cf] bg-white p-5 shadow-2xl dark:border-[#533530] dark:bg-[#20231f]">
           <h2 id="cancel-invoice-title" className="text-lg font-semibold text-[#30332e] dark:text-[#f0f1ed]">Cancel invoice</h2>
           <p className="mt-1 text-sm text-[#747a68] dark:text-[#bdc3b4]">Enter a reason. The invoice will only be cancelled after you confirm.</p>
@@ -113,7 +114,7 @@ export default function SalesInvoiceDetailPage() {
             <button disabled={busy || !cancelReason.trim()} className="ui-danger-action min-h-10 rounded-lg border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60">{busy ? 'Cancelling…' : 'Confirm cancellation'}</button>
           </div>
         </form>
-      </div> : null}
+      </div>, document.body) : null) : null}
     </> : null}
   </div>;
 }

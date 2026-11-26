@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Clock3, LogIn, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { authAPI } from '@/lib/api';
@@ -109,7 +110,7 @@ export function SessionTimeoutGuard() {
   const minutes = Math.max(1, Math.ceil(remaining / 60_000));
 
   return (
-    <div role="presentation" className="fixed inset-0 z-[100] grid place-items-center bg-black/55 p-4 backdrop-blur-sm">
+    (typeof document !== 'undefined' ? createPortal(<div role="presentation" className="fixed inset-0 ui-modal-backdrop z-[100] grid place-items-center p-4">
       <section role="alertdialog" aria-modal="true" aria-labelledby="session-timeout-title" aria-describedby="session-timeout-description" className="w-full max-w-md rounded-2xl border border-[#e5e7e0] bg-white p-5 text-[#20211f] shadow-2xl dark:border-[#343b33] dark:bg-[#171a17] dark:text-[#f0f1ed] sm:p-6">
         <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eef4d7] text-[#5c7000] dark:bg-[#33391d] dark:text-[#e1ec8b]">
           {absoluteWarning ? <ShieldCheck size={20} /> : <Clock3 size={20} />}
@@ -132,6 +133,6 @@ export function SessionTimeoutGuard() {
           </button> : null}
         </div>
       </section>
-    </div>
+    </div>, document.body) : null)
   );
 }

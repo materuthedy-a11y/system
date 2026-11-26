@@ -445,7 +445,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </header>
         <main className="w-full min-w-0 p-2 min-[390px]:p-3 sm:p-5 lg:p-10">{children}</main>
       </div>
-      {avatarPreviewOpen && avatarUrl ? <div role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title" aria-describedby="avatar-preview-description" className="fixed inset-0 z-[70] flex items-center justify-center bg-[#10120f]/75 p-3 backdrop-blur-md sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) setAvatarPreviewOpen(false); }}>
+      {avatarPreviewOpen && avatarUrl && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-preview-title" aria-describedby="avatar-preview-description" className="fixed inset-0 ui-modal-backdrop z-[70] flex items-center justify-center p-3 sm:p-6" onClick={(event) => { if (event.target === event.currentTarget) setAvatarPreviewOpen(false); }}>
         <div className="w-full max-w-5xl overflow-hidden rounded-[24px] border border-[#e8eadf] bg-white text-[#20211f] shadow-[0_28px_100px_rgba(0,0,0,0.38)] dark:border-white/10 dark:bg-[#191d1a] dark:text-white sm:rounded-[30px]">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-5">
             <div className="flex min-w-0 items-center gap-3">
@@ -458,13 +458,13 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <Image src={avatarUrl} alt={`Profile photo of ${user.name || `${user.firstName} ${user.lastName}`}`} width={1200} height={1200} unoptimized className="h-full w-full rounded-xl object-contain drop-shadow-[0_18px_36px_rgba(0,0,0,0.22)] sm:rounded-2xl" />
           </div>
         </div>
-      </div> : null}
-      {logoutConfirmOpen ? <div role="presentation" className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogoutConfirmOpen(false); }}>
+      </div>, document.body) : null}
+      {logoutConfirmOpen && typeof document !== 'undefined' ? createPortal(<div role="presentation" className="fixed inset-0 ui-modal-backdrop z-[80] flex items-center justify-center p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setLogoutConfirmOpen(false); }}>
         <section role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" aria-describedby="logout-confirm-description" className="w-full max-w-sm rounded-2xl border border-[#e5e7e0] bg-white p-5 text-[#20211f] shadow-2xl dark:border-[#343b33] dark:bg-[#171a17] dark:text-[#f0f1ed]">
           <div className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e7f4ed] text-[#16734a] dark:bg-[#173426] dark:text-[#77ddb0]"><LogOut size={19} /></span><div><h2 id="logout-confirm-title" className="text-base font-semibold">Sign out?</h2><p id="logout-confirm-description" className="mt-1 text-sm leading-5 text-[#62685d] dark:text-[#afb5ac]">Are you sure you want to sign out of your account?</p></div></div>
           <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setLogoutConfirmOpen(false)} className="min-h-10 rounded-xl border border-[#dfe2da] px-4 text-sm font-semibold text-[#454a42] transition hover:bg-[#f5f6f2] dark:border-[#41473f] dark:text-[#e1e4dc] dark:hover:bg-[#222622]">Cancel</button><button type="button" onClick={() => void handleLogout()} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#a63832] px-4 text-sm font-semibold text-white transition hover:bg-[#8f2d28] disabled:opacity-60 dark:bg-[#8f302b] dark:hover:bg-[#a63832]"><LogOut size={15} />{isSigningOut ? 'Signing out…' : 'Yes, sign out'}</button></div>
         </section>
-      </div> : null}
+      </div>, document.body) : null}
       <RouteTransitionOverlay />
       <SessionTimeoutGuard />
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { KeyRound, Loader2, Pencil, Plus, Power, RefreshCw, Save, Shield, Trash2, Users, X } from 'lucide-react';
 import { getApiError } from '@/lib/api';
 import { ManagedRole, ManagedUser, Permission, settingsAPI } from '@/lib/api/settings';
@@ -95,5 +96,5 @@ export default function AccessManagement({mode}:{mode:Mode}) {
 }
 
 function Busy(){return <div className="grid min-h-32 place-items-center"><Loader2 size={22} className="animate-spin text-[#b8860b]"/></div>}
-function Modal({title,busy,onClose,children}:{title:string;busy:boolean;onClose:()=>void;children:React.ReactNode}){return <div role="presentation" className="fixed inset-0 z-[90] grid place-items-center bg-black/55 p-4 backdrop-blur-sm" onMouseDown={(e)=>{if(e.target===e.currentTarget&&!busy)onClose()}}><section role="dialog" aria-modal="true" aria-label={title} className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e7e9e2] bg-white p-5 text-[#20231f] shadow-2xl dark:border-white/10 dark:bg-[#1d201d] dark:text-white"><div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-bold">{title}</h2><button type="button" disabled={busy} onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-xl border border-[#e0e4dc] dark:border-white/10"><X size={17}/></button></div>{children}</section></div>}
+function Modal({title,busy,onClose,children}:{title:string;busy:boolean;onClose:()=>void;children:React.ReactNode}){return (typeof document !== 'undefined' ? createPortal(<div role="presentation" className="fixed inset-0 ui-modal-backdrop z-[90] grid place-items-center p-4" onMouseDown={(e)=>{if(e.target===e.currentTarget&&!busy)onClose()}}><section role="dialog" aria-modal="true" aria-label={title} className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#e7e9e2] bg-white p-5 text-[#20231f] shadow-2xl dark:border-white/10 dark:bg-[#1d201d] dark:text-white"><div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-lg font-bold">{title}</h2><button type="button" disabled={busy} onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-xl border border-[#e0e4dc] dark:border-white/10"><X size={17}/></button></div>{children}</section></div>, document.body) : null)}
 function ModalActions({busy,onCancel}:{busy:boolean;onCancel:()=>void}){return <div className="mt-3 flex justify-end gap-2 sm:col-span-2"><button type="button" disabled={busy} onClick={onCancel} className="min-h-10 rounded-xl border border-[#d8ddd4] px-4 text-sm font-semibold dark:border-white/10">Cancel</button><button disabled={busy} className={primary}>{busy?<Loader2 size={15} className="animate-spin"/>:<Save size={15}/>}Save</button></div>}

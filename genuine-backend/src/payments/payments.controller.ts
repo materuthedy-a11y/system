@@ -120,6 +120,13 @@ export class PaymentsController {
     return this.payments.lockAccountingPeriod(businessId, userId, id);
   }
 
+  @Post('periods/:id/reopen')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('settings.edit')
+  reopenPeriod(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.payments.reopenAccountingPeriod(businessId, userId, id);
+  }
+
   @Post('periods/:id/close')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('settings.edit')

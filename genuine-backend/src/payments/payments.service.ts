@@ -958,6 +958,21 @@ export class PaymentsService {
     return this.periodTransition(businessId, userId, id, 'LOCK');
   }
 
+  async reopenAccountingPeriod(businessId: string, userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.accountingPeriod.findFirst({ where: { id, businessId } });
+      if (!row) throw new NotFoundException('Accounting period not found');
+      if (row.status !== 'LOCKED')
+        throw new ConflictException('Only locked periods can be reopened');
+      const updated = await tx.accountingPeriod.update({
+        where: { id },
+        data: { status: 'OPEN', lockedBy: null, lockedAt: null },
+      });
+      await this.audit(tx, businessId, userId, 'AccountingPeriod', id, 'REOPEN', row, updated);
+      return { ...updated, periodName: updated.period };
+    });
+  }
+
   async closeAccountingPeriod(
     businessId: string,
     userId: string,

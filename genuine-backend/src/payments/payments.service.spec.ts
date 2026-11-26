@@ -68,3 +68,50 @@ describe('PaymentsService financial report consistency', () => {
     ).toBe(cashFlow.closingBalance);
   });
 });
+
+describe('PaymentsService accounting period reopen', () => {
+  const lockedPeriod = {
+    id: 'period-1',
+    businessId: 'business-1',
+    period: '2026-11',
+    status: 'LOCKED',
+    lockedBy: 'user-1',
+    lockedAt: new Date('2026-11-10T00:00:00.000Z'),
+  };
+
+  function createService(period = lockedPeriod) {
+    const tx = {
+      accountingPeriod: {
+        findFirst: jest.fn().mockResolvedValue(period),
+        update: jest.fn().mockImplementation(async ({ data }) => ({ ...period, ...data })),
+      },
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = { $transaction: jest.fn((callback: (client: any) => unknown) => callback(tx)) };
+    return { service: new PaymentsService(prisma as any, {} as any, {} as any), tx };
+  }
+
+  it('reopens a locked period, clears lock metadata, and records an audit event', async () => {
+    const { service, tx } = createService();
+    const result = await service.reopenAccountingPeriod('business-1', 'user-2', 'period-1');
+
+    expect(result).toMatchObject({ status: 'OPEN', lockedBy: null, lockedAt: null, periodName: '2026-11' });
+    expect(tx.accountingPeriod.update).toHaveBeenCalledWith({
+      where: { id: 'period-1' },
+      data: { status: 'OPEN', lockedBy: null, lockedAt: null },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ action: 'REOPEN', entityType: 'AccountingPeriod', entityId: 'period-1' }),
+    }));
+  });
+
+  it('does not reopen a permanently closed period', async () => {
+    const { service, tx } = createService({ ...lockedPeriod, status: 'CLOSED' });
+
+    await expect(service.reopenAccountingPeriod('business-1', 'user-2', 'period-1')).rejects.toThrow(
+      'Only locked periods can be reopened',
+    );
+    expect(tx.accountingPeriod.update).not.toHaveBeenCalled();
+    expect(tx.auditLog.create).not.toHaveBeenCalled();
+  });
+});

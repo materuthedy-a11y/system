@@ -23,7 +23,8 @@ function createPrismaMock() {
       findFirst: jest.fn(),
       updateMany: jest.fn(),
     },
-    stockTransfer: { count: jest.fn() },
+    stockTransfer: { count: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    stockTransferItem: { update: jest.fn(), findMany: jest.fn() },
     physicalCount: {
       count: jest.fn(),
       findMany: jest.fn(),
@@ -143,6 +144,47 @@ describe('InventoryService location scope and thresholds', () => {
     });
 
     expect(result).toEqual(expect.objectContaining({ minimumStock: 4, reorderLevel: 12 }));
+    expect(prisma.product.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a product from another business when updating reorder thresholds', async () => {
+    const prisma = createPrismaMock();
+    prisma.product.findFirst.mockResolvedValue(null);
+
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    await expect(
+      service.updateReorderPoint('business-b', 'owner-b', 'product-a', {
+        minimumStock: 4,
+        reorderLevel: 12,
+      }),
+    ).rejects.toThrow('Active product not found');
+
+    expect(prisma.product.findFirst).toHaveBeenCalledWith({
+      where: { id: 'product-a', businessId: 'business-b', status: 'ACTIVE' },
+    });
+    expect(prisma.product.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable conflict and makes no changes after a serialization failure', async () => {
+    const prisma = createPrismaMock();
+    prisma.$transaction.mockRejectedValue(
+      Object.assign(new Error('serialization conflict'), { code: 'P2034' }),
+    );
+
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    await expect(
+      service.updateReorderPoint('business-a', 'owner-a', 'product-a', {
+        minimumStock: 4,
+        reorderLevel: 12,
+      }),
+    ).rejects.toThrow('Inventory changed concurrently; refresh and retry');
+
+    expect(prisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
+    );
     expect(prisma.product.update).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });
@@ -748,6 +790,137 @@ describe('InventoryService expiry reports', () => {
       service.approveStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
     ).rejects.toThrow('Expiry date must be after today to add stock');
     expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventoryService stock adjustment approval', () => {
+  it('rejects duplicate approval without a second balance update, movement, or audit event', async () => {
+    const prisma = createPrismaMock();
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    const adjustment = { id: 'adjustment-a', status: 'APPROVED', items: [] };
+    jest.spyOn(service, 'getStockAdjustmentById').mockResolvedValue(adjustment as never);
+    prisma.stockAdjustment.findFirst.mockResolvedValue(adjustment);
+
+    await expect(
+      service.approveStockAdjustment('business-a', 'adjustment-a', 'owner-a'),
+    ).rejects.toThrow('Cannot approve adjustment in APPROVED status');
+
+    expect(prisma.stockAdjustment.updateMany).not.toHaveBeenCalled();
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('InventoryService stock transfer guards', () => {
+  it('rejects sending an insufficient multi-line transfer before any stock, status, movement, or audit writes', async () => {
+    const prisma = createPrismaMock();
+    prisma.user.findFirst.mockResolvedValue({
+      userRoles: [{ role: { name: 'Owner', isSystem: true } }],
+      assignedLocations: [],
+    });
+    const transfer = {
+      id: 'transfer-a',
+      status: 'DRAFT',
+      fromLocationId: 'location-from',
+      toLocationId: 'location-to',
+      items: [
+        {
+          id: 'item-a',
+          productId: 'product-a',
+          quantity: 1,
+          product: { name: 'QA product A', buyingPrice: 100 },
+        },
+        {
+          id: 'item-b',
+          productId: 'product-b',
+          quantity: 1,
+          product: { name: 'QA product B', buyingPrice: 100 },
+        },
+      ],
+    };
+    prisma.stockTransfer.findFirst.mockResolvedValue(transfer);
+    prisma.$queryRaw
+      .mockResolvedValueOnce([{ quantity: 2 }])
+      .mockResolvedValueOnce([{ quantity: 0 }]);
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await expect(
+      service.sendStockTransfer('business-a', 'transfer-a', 'owner-a'),
+    ).rejects.toThrow('Insufficient stock for QA product B');
+
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransfer.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransferItem.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects over-remaining and zero receipts without stock, transfer, movement, or audit writes', async () => {
+    const prisma = createPrismaMock();
+    const transfer = {
+      id: 'transfer-a',
+      status: 'SENT',
+      fromLocationId: 'location-from',
+      toLocationId: 'location-to',
+      items: [
+        {
+          id: 'item-a',
+          productId: 'product-a',
+          quantity: 3,
+          receivedQuantity: 1,
+          product: { name: 'QA product', buyingPrice: 100 },
+        },
+      ],
+    };
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    jest.spyOn(service, 'getStockTransferById').mockResolvedValue(transfer as never);
+    prisma.stockTransfer.findFirst.mockResolvedValue(transfer);
+
+    await expect(
+      service.receiveStockTransfer('business-a', 'transfer-a', 'owner-a', { 'item-a': 3 }),
+    ).rejects.toThrow('Received quantity exceeds remaining quantity for QA product');
+    await expect(
+      service.receiveStockTransfer('business-a', 'transfer-a', 'owner-a', { 'item-a': 0 }),
+    ).rejects.toThrow('At least one positive received quantity is required');
+
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransfer.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransferItem.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate receipt after completion without another stock, movement, or audit write', async () => {
+    const prisma = createPrismaMock();
+    const transfer = {
+      id: 'transfer-a',
+      status: 'COMPLETED',
+      fromLocationId: 'location-from',
+      toLocationId: 'location-to',
+      items: [
+        {
+          id: 'item-a',
+          productId: 'product-a',
+          quantity: 1,
+          receivedQuantity: 1,
+          product: { name: 'QA product', buyingPrice: 100 },
+        },
+      ],
+    };
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+    jest.spyOn(service, 'getStockTransferById').mockResolvedValue(transfer as never);
+    prisma.stockTransfer.findFirst.mockResolvedValue(transfer);
+
+    await expect(
+      service.receiveStockTransfer('business-a', 'transfer-a', 'owner-a', { 'item-a': 1 }),
+    ).rejects.toThrow('Only SENT or PARTIAL transfers can be received');
+
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransfer.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransferItem.update).not.toHaveBeenCalled();
     expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
   });

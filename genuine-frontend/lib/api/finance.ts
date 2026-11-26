@@ -110,6 +110,9 @@ export const financeAPI = {
   async lockPeriod(id: string) {
     return unwrap<AccountingPeriod>(await apiClient.post(`/payments/periods/${encodeURIComponent(id)}/lock`));
   },
+  async reopenPeriod(id: string) {
+    return unwrap<AccountingPeriod>(await apiClient.post(`/payments/periods/${encodeURIComponent(id)}/reopen`));
+  },
   async closePeriod(id: string, closingNotes?: string) {
     return unwrap<AccountingPeriod>(await apiClient.post(`/payments/periods/${encodeURIComponent(id)}/close`, { closingNotes }));
   },

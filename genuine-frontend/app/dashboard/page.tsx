@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { AlertCircle, ArrowRight, Clock3, Moon, RefreshCw, Sun, Sunrise, Sunset, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { useBusinessProfileStore } from '@/store/businessProfileStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import { formatBusinessCalendarDate, formatBusinessDateTime, getBusinessFinancialYear, getBusinessLanguage, getBusinessTimezone, getBusinessWeekStart } from '@/lib/format/businessDate';
 import { dashboardAPI, type DashboardExecutiveData, type DashboardFilter, type DashboardMetric, type DashboardTransaction, type ExpenseBreakdownRow, type LowStockRow } from '@/lib/api/dashboard';
@@ -13,6 +15,7 @@ import { getApiError } from '@/lib/api';
 import { AuthLoadingOverlay } from '@/components/auth/AuthLoadingOverlay';
 import { CashFlowPanel, ExpenseBreakdown, InventoryAlerts, MetricCard, ProfitMarginSphere, RecentActivity, RevenueExpenseChart, TopProducts } from '@/components/dashboard/DashboardWidgets';
 import { notify } from '@/components/ui/AppToaster';
+import { intelligenceAPI } from '@/lib/api/intelligence';
 import { Select } from '@/components/ui/forms/select';
 
 type PeriodKey = 'week' | 'month' | 'quarter' | 'year';
@@ -115,6 +118,9 @@ export default function DashboardPage() {
   const [expenseRows, setExpenseRows] = useState<ExpenseBreakdownRow[]>([]);
   const [lowStockRows, setLowStockRows] = useState<LowStockRow[]>([]);
   const [lowStockTotal, setLowStockTotal] = useState(0);
+  const [activeInsights, setActiveInsights] = useState<number | null>(null);
+  const brand = useBusinessProfileStore((st) => st.brand);
+  const [askLogoFailed, setAskLogoFailed] = useState(false);
   const [inventoryUnavailable, setInventoryUnavailable] = useState(false);
   const [transactions, setTransactions] = useState<DashboardTransaction[]>([]);
   const [unavailableActivitySources, setUnavailableActivitySources] = useState<string[]>([]);
@@ -166,6 +172,11 @@ export default function DashboardPage() {
   const welcomeName = firstName ? `, ${firstName}` : '';
   const hasReceivables = !!executive && executive.summary.outstandingReceivables.value > 0
     && (permissions.includes('sales.view') || permissions.includes('customers.view'));
+  useEffect(() => {
+    if (!permissions.includes('insights.view')) return;
+    intelligenceAPI.summary().then((sum) => setActiveInsights(sum.byStatus?.find((r) => r.status === 'ACTIVE')?._count?._all ?? null)).catch(() => setActiveInsights(null));
+  }, [permissions]);
+
   const hasStockAttention = canViewInventory && lowStockTotal > 0;
   const hasSales = !!executive && executive.summary.totalRevenue.value > 0;
   const currencyAmount = (value: number) => new Intl.NumberFormat(welcomeLanguage === 'sw' ? 'sw-TZ' : 'en-TZ', { maximumFractionDigits: 2 }).format(value);
@@ -355,6 +366,24 @@ export default function DashboardPage() {
         </section>
 
         <section className="grid min-w-0 gap-5 xl:grid-cols-2">
+          <Link href="/dashboard/uliza" className="group flex min-w-0 items-center gap-4 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-teal-50/60 p-5 shadow-sm transition hover:border-emerald-300 hover:shadow-md dark:border-emerald-900/50 dark:from-emerald-950/30 dark:to-teal-950/20 sm:p-6">
+            <span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-emerald-800 text-sm font-bold text-white shadow-sm transition group-hover:scale-105 dark:bg-emerald-700">
+              {brand?.logoUrl && !askLogoFailed ? (
+                <Image src={brand.logoUrl} alt={brand.name || 'Business'} width={48} height={48} unoptimized onError={() => setAskLogoFailed(true)} className="h-full w-full object-cover" />
+              ) : (
+                (brand?.name || 'B').trim().charAt(0).toUpperCase()
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-[#1d241d] dark:text-white">Ask your business anything</span>
+              <span className="mt-0.5 block text-xs leading-5 text-[#687064] dark:text-white/55">
+                {activeInsights !== null && activeInsights > 0
+                  ? `${activeInsights} active insight${activeInsights === 1 ? '' : 's'} — Ask can explain them`
+                  : 'Sales, stock, cash flow, risks — answered from your live data'}
+              </span>
+            </span>
+            <ArrowRight size={18} className="shrink-0 text-emerald-700 transition group-hover:translate-x-1 dark:text-emerald-300" />
+          </Link>
           <RecentActivity transactions={transactions} unavailableSources={unavailableActivitySources} currency={executive.currency} />
           <section className="rounded-2xl border border-violet-200/80 bg-violet-50/80 p-5 shadow-sm shadow-violet-950/[0.03] sm:p-6 dark:border-[#343b33] dark:bg-[#191d19] dark:shadow-black/20" aria-label="Dashboard data definitions">
             <div className="flex flex-wrap items-start justify-between gap-4">

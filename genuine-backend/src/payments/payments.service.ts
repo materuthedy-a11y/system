@@ -15,14 +15,12 @@ import { NotificationEventType } from '../notifications/dto';
 import {
   CloseAccountingPeriodDto,
   CreateAccountingPeriodDto,
-  CreateExpenseDto,
   CreatePaymentDto,
   FinancialReportQueryDto,
   PaymentDirection,
   PaymentListQueryDto,
   PaymentReferenceType,
   ReconcilePaymentDto,
-  RejectExpenseDto,
   VoidPaymentDto,
 } from './dto';
 
@@ -256,8 +254,10 @@ export class PaymentsService {
           _sum: { totalAmount: true },
         }),
       ]);
+      const returnedTotal = roundMoney(returns._sum.totalAmount || 0);
+      const refunded = await this.invoiceRefundTotal(tx, businessId, id);
       const balance = roundMoney(
-        invoice.totalAmount - (paid._sum.amount || 0) - (returns._sum.totalAmount || 0),
+        invoice.totalAmount - (paid._sum.amount || 0) - returnedTotal + refunded,
       );
       if (balance <= 0) throw new BadRequestException('Invoice has no amount due');
       return {
@@ -322,8 +322,10 @@ export class PaymentsService {
       });
       const totalPaid = roundMoney(paid._sum.amount || 0);
       const invoice = ref.invoice;
+      const returnedTotal = roundMoney(returned._sum.totalAmount || 0);
+      const refunded = await this.invoiceRefundTotal(tx, businessId, ref.invoiceId);
       const balance = roundMoney(
-        invoice.totalAmount - totalPaid - (returned._sum.totalAmount || 0),
+        invoice.totalAmount - totalPaid - returnedTotal + refunded,
       );
       await tx.salesInvoice.update({
         where: { id: ref.invoiceId },
@@ -542,10 +544,42 @@ export class PaymentsService {
     };
   }
 
+  private async lockPayment(
+    tx: Prisma.TransactionClient,
+    businessId: string,
+    id: string,
+  ): Promise<void> {
+    await tx.$queryRaw`SELECT "id" FROM "Payment" WHERE "id" = ${id} AND "businessId" = ${businessId} FOR UPDATE`;
+  }
+
+  private async paymentLocationId(
+    payment: {
+      invoice?: { locationId: string } | null;
+      po?: { locationId: string } | null;
+      expense?: { locationId: string | null } | null;
+    },
+  ): Promise<string | null> {
+    return payment.invoice?.locationId || payment.po?.locationId || payment.expense?.locationId || null;
+  }
+
+  private paymentLocationInclude() {
+    return {
+      invoice: { select: { locationId: true } },
+      po: { select: { locationId: true } },
+      expense: { select: { locationId: true } },
+    } satisfies Prisma.PaymentInclude;
+  }
+
   async reconcilePayment(businessId: string, userId: string, id: string, dto: ReconcilePaymentDto) {
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findFirst({ where: { id, businessId } });
+      await this.lockPayment(tx, businessId, id);
+      const payment = await tx.payment.findFirst({
+        where: { id, businessId },
+        include: this.paymentLocationInclude(),
+      });
       if (!payment) throw new NotFoundException('Payment not found');
+      const locationId = await this.paymentLocationId(payment);
+      if (locationId) await assertLocationAccess(this.prisma, businessId, userId, locationId);
       if (payment.status === 'VOIDED')
         throw new ConflictException('Voided payments cannot be reconciled');
       if (payment.isReconciled) throw new ConflictException('Payment is already reconciled');
@@ -569,8 +603,14 @@ export class PaymentsService {
 
   async voidPayment(businessId: string, userId: string, id: string, dto: VoidPaymentDto) {
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findFirst({ where: { id, businessId } });
+      await this.lockPayment(tx, businessId, id);
+      const payment = await tx.payment.findFirst({
+        where: { id, businessId },
+        include: this.paymentLocationInclude(),
+      });
       if (!payment) throw new NotFoundException('Payment not found');
+      const locationId = await this.paymentLocationId(payment);
+      if (locationId) await assertLocationAccess(this.prisma, businessId, userId, locationId);
       if (payment.status === 'VOIDED') throw new ConflictException('Payment is already voided');
       if (payment.isReconciled)
         throw new ConflictException(
@@ -627,6 +667,28 @@ export class PaymentsService {
     });
   }
 
+  private async invoiceRefundTotal(
+    tx: Prisma.TransactionClient,
+    businessId: string,
+    invoiceId: string,
+  ): Promise<number> {
+    const returns = await tx.salesReturn.findMany({
+      where: { invoiceId, businessId, status: { in: ['RECEIVED', 'COMPLETED'] } },
+      select: { id: true },
+    });
+    if (!returns.length) return 0;
+    const refunds = await tx.payment.aggregate({
+      where: {
+        businessId,
+        referenceType: 'SalesReturn',
+        referenceId: { in: returns.map((ret) => ret.id) },
+        status: { in: ACTIVE_PAYMENT_STATUSES },
+      },
+      _sum: { amount: true },
+    });
+    return roundMoney(refunds._sum.amount || 0);
+  }
+
   private async recomputeInvoice(
     tx: Prisma.TransactionClient,
     businessId: string,
@@ -645,7 +707,9 @@ export class PaymentsService {
       }),
     ]);
     const paid = roundMoney(payments._sum.amount || 0);
-    const balance = roundMoney(invoice.totalAmount - paid - (returns._sum.totalAmount || 0));
+    const returned = roundMoney(returns._sum.totalAmount || 0);
+    const refunded = await this.invoiceRefundTotal(tx, businessId, invoiceId);
+    const balance = roundMoney(invoice.totalAmount - paid - returned + refunded);
     await tx.salesInvoice.update({
       where: { id: invoiceId },
       data: {
@@ -656,169 +720,6 @@ export class PaymentsService {
     });
   }
 
-  async createExpense(businessId: string, userId: string, dto: CreateExpenseDto) {
-    if (dto.isPaid)
-      throw new BadRequestException(
-        'Expenses must be approved and paid through the expense workflow',
-      );
-    const expenseDate = dto.expenseDate ? new Date(dto.expenseDate) : new Date();
-    if (!Number.isFinite(expenseDate.getTime()))
-      throw new BadRequestException('Invalid expenseDate');
-    const amount = roundMoney(dto.items.reduce((sum, item) => sum + Number(item.amount), 0));
-    if (!Number.isFinite(amount) || amount <= 0)
-      throw new BadRequestException('Expense total must be positive');
-    const id = await this.prisma
-      .$transaction(async (tx) => {
-        const location = await tx.location.findFirst({
-          where: { id: dto.locationId, businessId, isActive: true },
-        });
-        if (!location) throw new NotFoundException('Active location not found');
-        const method = await tx.paymentMethod.findFirst({
-          where: { id: dto.paymentMethodId, businessId, isActive: true },
-        });
-        if (!method) throw new NotFoundException('Active payment method not found');
-        if (
-          method.requiresReference &&
-          ![dto.referenceNumber, dto.reference].some((value) => value?.trim())
-        ) {
-          throw new BadRequestException(
-            'This payment method requires a transaction or reference number',
-          );
-        }
-        const categoryIds = [...new Set(dto.items.map((item) => item.expenseCategoryId))];
-        const categories = await tx.expenseCategory.findMany({
-          where: { businessId, isActive: true, id: { in: categoryIds } },
-        });
-        if (categories.length !== categoryIds.length)
-          throw new NotFoundException(
-            'One or more active expense categories were not found in this business',
-          );
-        await this.assertPeriodOpen(tx, businessId, expenseDate);
-        const expenseNumber =
-          dto.expenseNumber?.trim() || (await this.nextExpenseNumber(tx, businessId, expenseDate));
-        const rows = await tx.expense.create({
-          data: {
-            businessId,
-            expenseNumber,
-            expenseDate,
-            categoryId: dto.items[0].expenseCategoryId,
-            amount,
-            description:
-              dto.notes ||
-              dto.items
-                .map((item) => item.description)
-                .filter(Boolean)
-                .join('; ') ||
-              'Business expense',
-            paymentMethodId: method.id,
-            locationId: location.id,
-            status: 'DRAFT',
-            isPaid: false,
-            createdBy: userId,
-            attachmentUrl: dto.referenceNumber,
-            items: {
-              create: dto.items.map((item) => ({
-                categoryId: item.expenseCategoryId,
-                amount: roundMoney(Number(item.amount)),
-                description: item.description,
-                notes: item.notes,
-              })),
-            },
-          },
-          select: { id: true },
-        });
-        await this.audit(tx, businessId, userId, 'Expense', rows.id, 'CREATE', null, {
-          expenseNumber,
-          amount,
-          items: dto.items,
-        });
-        return rows.id;
-      })
-      .catch((error) =>
-        this.mapWriteError(
-          error,
-          'Expense could not be created because its number is already in use',
-        ),
-      );
-    return this.getExpenseById(businessId, id);
-  }
-
-  async getExpenseById(businessId: string, id: string) {
-    const row = await this.prisma.expense.findFirst({
-      where: { id, businessId },
-      include: {
-        location: true,
-        category: true,
-        paymentMethod: true,
-        items: { include: { category: true } },
-      },
-    });
-    if (!row) throw new NotFoundException('Expense not found');
-    return {
-      ...row,
-      totalAmount: row.amount,
-      locationName: row.location?.name,
-      paymentMethodName: row.paymentMethod?.name,
-      items: row.items.map((item) => ({ ...item, categoryName: item.category.name })),
-    };
-  }
-
-  async listExpenses(businessId: string, page = 1, limit = 20) {
-    const skip = (page - 1) * limit;
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.expense.findMany({
-        where: { businessId },
-        include: { location: true, category: true, items: { include: { category: true } } },
-        orderBy: [{ expenseDate: 'desc' }, { id: 'desc' }],
-        skip,
-        take: limit,
-      }),
-      this.prisma.expense.count({ where: { businessId } }),
-    ]);
-    return { data, total, page, limit };
-  }
-
-  async approveExpense(businessId: string, userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT "id" FROM "Expense" WHERE "id" = ${id} AND "businessId" = ${businessId} FOR UPDATE`;
-      const row = await tx.expense.findFirst({ where: { id, businessId } });
-      if (!row) throw new NotFoundException('Expense not found');
-      if (row.status !== 'DRAFT')
-        throw new ConflictException('Only draft expenses can be approved');
-      await this.assertPeriodOpen(tx, businessId, row.expenseDate);
-      const updated = await tx.expense.update({
-        where: { id },
-        data: {
-          status: 'APPROVED',
-          approvedBy: userId,
-          approvedAt: new Date(),
-          rejectionReason: null,
-        },
-      });
-      await this.audit(tx, businessId, userId, 'Expense', id, 'APPROVE', row, updated);
-      return updated;
-    });
-  }
-
-  async rejectExpense(businessId: string, userId: string, id: string, dto: RejectExpenseDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const row = await tx.expense.findFirst({ where: { id, businessId } });
-      if (!row) throw new NotFoundException('Expense not found');
-      if (row.status !== 'DRAFT')
-        throw new ConflictException('Only draft expenses can be rejected');
-      const updated = await tx.expense.update({
-        where: { id },
-        data: {
-          status: 'REJECTED',
-          rejectionReason: dto.reason,
-          approvedBy: userId,
-          approvedAt: new Date(),
-        },
-      });
-      await this.audit(tx, businessId, userId, 'Expense', id, 'REJECT', row, updated);
-      return updated;
-    });
-  }
 
   async payExpense(
     businessId: string,
@@ -832,6 +733,8 @@ export class PaymentsService {
           await tx.$queryRaw`SELECT "id" FROM "Expense" WHERE "id" = ${id} AND "businessId" = ${businessId} FOR UPDATE`;
           const expense = await tx.expense.findFirst({ where: { id, businessId } });
           if (!expense) throw new NotFoundException('Expense not found');
+          if (expense.locationId)
+            await assertLocationAccess(this.prisma, businessId, userId, expense.locationId);
           if (!['APPROVED', 'PAID'].includes(expense.status))
             throw new ConflictException('Only approved expenses can be paid');
           await this.assertPeriodOpen(tx, businessId, new Date());
@@ -1736,19 +1639,6 @@ export class PaymentsService {
     return `${prefix}${String(sequence).padStart(5, '0')}`;
   }
 
-  private async nextExpenseNumber(tx: Prisma.TransactionClient, businessId: string, date: Date) {
-    const prefix = `EXP-${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}-`;
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`expense-number:${businessId}:${prefix}`}, 0)) IS NULL AS locked`;
-    const last = await tx.expense.findFirst({
-      where: { businessId, expenseNumber: { startsWith: prefix } },
-      orderBy: { expenseNumber: 'desc' },
-      select: { expenseNumber: true },
-    });
-    const sequence = last ? Number(last.expenseNumber.slice(prefix.length)) + 1 : 1;
-    if (sequence > 99999)
-      throw new ConflictException('Expense number sequence exhausted for this month');
-    return `${prefix}${String(sequence).padStart(5, '0')}`;
-  }
 
   private async retrySerializationConflict<T>(
     operation: () => Promise<T>,

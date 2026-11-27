@@ -68,7 +68,7 @@ export class PaymentsController {
 
   @Post(':id/reconcile')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('payments.create')
+  @RequirePermission('payments.reconcile')
   reconcile(
     @Business() businessId: string,
     @UserId() userId: string,
@@ -80,7 +80,7 @@ export class PaymentsController {
 
   @Post(':id/void')
   @HttpCode(HttpStatus.OK)
-  @RequirePermission('payments.create')
+  @RequirePermission('payments.void')
   void(
     @Business() businessId: string,
     @UserId() userId: string,

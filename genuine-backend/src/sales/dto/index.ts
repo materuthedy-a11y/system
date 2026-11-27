@@ -3,4 +3,5 @@ export * from './create-sales-invoice.dto';
 export * from './create-sales-return.dto';
 export * from './sales-filter.dto';
 export * from './sales-response.dto';
+export * from './settle-sales-return.dto';
 export * from './update-sales-invoice.dto';

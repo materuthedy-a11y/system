@@ -683,6 +683,8 @@ export class InventoryService {
         if (existing.status !== 'PENDING' && existing.status !== 'DRAFT') {
           throw new ConflictException(`Cannot approve adjustment in ${existing.status} status`);
         }
+        if (existing.createdBy === userId)
+          throw new ForbiddenException('You cannot approve a stock adjustment you created');
         const approvedAt = new Date();
         const claimed = await tx.stockAdjustment.updateMany({
           where: { id, businessId, status: existing.status },

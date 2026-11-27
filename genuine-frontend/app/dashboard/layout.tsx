@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, CalendarDays, Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShieldCheck, ShoppingCart, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X, type LucideIcon } from 'lucide-react';
+import { Activity, CalendarDays, Check, ChevronDown, CircleDollarSign, Eye, FileBarChart2, ImagePlus, LayoutDashboard, LifeBuoy, Loader2, LogOut, MapPin, Menu, Package, Receipt, Settings2, ShieldCheck, ShoppingCart, Sparkles, Store, Trash2, Truck, UserRound, UsersRound, Warehouse, X, type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { authAPI, getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
@@ -437,6 +437,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     ...(has('settings.view', 'settings.edit') ? [{ label: 'Accounting periods', href: '/dashboard/finance?tab=periods', icon: CalendarDays, active: pathname.startsWith('/dashboard/finance') && searchParams.get('tab') === 'periods' }] : []),
     ...(has('expenses.view', 'expenses.create') ? [{ label: 'Expenses', href: has('expenses.view') ? '/dashboard/expenses' : '/dashboard/expenses/new', icon: Receipt, active: pathname.startsWith('/dashboard/expenses') }] : []),
     ...(has('reports.view') ? [{ label: 'Reports & Analytics', href: '/dashboard/reports', icon: FileBarChart2, active: pathname.startsWith('/dashboard/reports') }] : []),
+    ...(has('insights.view') ? [{ label: 'Intelligence', href: '/dashboard/intelligence', icon: Sparkles, active: pathname.startsWith('/dashboard/intelligence') }] : []),
     ...(has('audit.view') ? [{ label: 'Audit log', href: '/dashboard/audit', icon: ShieldCheck, active: pathname.startsWith('/dashboard/audit') }] : []),
     ...(has('settings.view', 'settings.edit') ? [{ label: 'Settings', href: '/dashboard/settings', icon: Settings2, active: pathname.startsWith('/dashboard/settings') && !pathname.startsWith('/dashboard/settings/users') && !pathname.startsWith('/dashboard/settings/roles') }] : []),
     ...(has('users.view', 'users.create', 'users.edit', 'users.delete', 'roles.manage') ? [{ label: 'Team access', href: has('users.view', 'users.create', 'users.edit', 'users.delete') ? '/dashboard/settings/users' : '/dashboard/settings/roles', icon: UsersRound, active: pathname.startsWith('/dashboard/settings/users') || pathname.startsWith('/dashboard/settings/roles') }] : []),
@@ -448,7 +449,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     { label: 'Workspace', items: navItems.filter(({ label }) => label === 'Overview') },
     { label: 'Operations', items: navItems.filter(({ label }) => ['Sales', 'Products', 'Inventory', 'Purchases', 'Customers', 'Suppliers'].includes(label)) },
     { label: 'Finance', items: navItems.filter(({ label }) => ['Payments & Finance', 'Accounting periods', 'Expenses'].includes(label)) },
-    { label: 'Insights', items: navItems.filter(({ label }) => label === 'Reports & Analytics') },
+    { label: 'Insights', items: navItems.filter(({ label }) => ['Reports & Analytics', 'Intelligence'].includes(label)) },
     { label: 'Account', items: navItems.filter(({ label }) => ['Settings', 'Team access', 'Audit log', 'My activity', 'Password & security', 'Help & feedback'].includes(label)) },
   ];
   const currentNavItem = navItems.find(({ active }) => active);

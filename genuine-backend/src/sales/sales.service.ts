@@ -27,6 +27,7 @@ import {
   SalesPaymentResponseDto,
   SalesRejectDto,
   SalesReturnFilterDto,
+  SettleSalesReturnDto,
   SalesReturnResponseDto,
   UpdateSalesInvoiceDto,
 } from './dto';
@@ -48,7 +49,7 @@ const invoiceInclude = {
   business: { select: { currency: true } },
   items: { include: { product: true } },
   payments: { select: { amount: true, status: true } },
-  returns: { select: { status: true, totalAmount: true } },
+  returns: { select: { id: true, status: true, totalAmount: true } },
 } satisfies Prisma.SalesInvoiceInclude;
 type InvoiceDetails = Prisma.SalesInvoiceGetPayload<{ include: typeof invoiceInclude }>;
 
@@ -195,6 +196,8 @@ export class SalesService {
         );
         if (discountPercentage > 0)
           await this.assertDiscountLimit(tx, businessId, userId, discountPercentage);
+        if (lines.some((line) => line.priceOverridden))
+          await this.assertPermission(tx, businessId, userId, 'sales.price_override');
         await tx.$queryRaw`SELECT "id" FROM "Customer" WHERE "id" = ${customer.id} AND "businessId" = ${businessId} FOR UPDATE`;
         if (!['COD', 'PREPAID'].includes(terms)) {
           const outstanding = await this.customerOutstanding(
@@ -292,7 +295,27 @@ export class SalesService {
       include: invoiceInclude,
     });
     if (!invoice) throw new NotFoundException('Sales invoice not found');
-    return this.mapInvoice(invoice);
+    return this.mapInvoice(invoice, await this.invoiceRefundTotal(businessId, invoice));
+  }
+
+  private async invoiceRefundTotal(
+    businessId: string,
+    invoice: { returns: Array<{ id: string; status: string }> },
+  ): Promise<number> {
+    const returnIds = invoice.returns
+      .filter((ret) => ['RECEIVED', 'COMPLETED'].includes(ret.status))
+      .map((ret) => ret.id);
+    if (!returnIds.length) return 0;
+    const refunds = await this.prisma.payment.aggregate({
+      where: {
+        businessId,
+        referenceType: 'SalesReturn',
+        referenceId: { in: returnIds },
+        status: { in: ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'] },
+      },
+      _sum: { amount: true },
+    });
+    return money(refunds._sum.amount || 0);
   }
 
   async getAllSalesInvoices(businessId: string, userId: string, filter: SalesInvoiceFilterDto) {
@@ -366,7 +389,42 @@ export class SalesService {
       }),
       this.prisma.salesInvoice.count({ where }),
     ]);
-    return { data: rows.map((row) => this.mapInvoice(row)), total, page, limit };
+    const refundTotals = new Map<string, number>();
+    {
+      const returnIds = rows.flatMap((row) =>
+        row.returns.filter((ret) => ['RECEIVED', 'COMPLETED'].includes(ret.status)).map((r) => r.id),
+      );
+      if (returnIds.length) {
+        const refunds = await this.prisma.payment.groupBy({
+          by: ['referenceId'],
+          where: {
+            businessId,
+            referenceType: 'SalesReturn',
+            referenceId: { in: returnIds },
+            status: { in: ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'] },
+          },
+          _sum: { amount: true },
+        });
+        const refundByReturn = new Map(
+          refunds.map((row) => [row.referenceId, money(row._sum.amount || 0)]),
+        );
+        for (const row of rows)
+          refundTotals.set(
+            row.id,
+            money(
+              row.returns
+                .filter((ret) => ['RECEIVED', 'COMPLETED'].includes(ret.status))
+                .reduce((sum, ret) => sum + (refundByReturn.get(ret.id) || 0), 0),
+            ),
+          );
+      }
+    }
+    return {
+      data: rows.map((row) => this.mapInvoice(row, refundTotals.get(row.id) || 0)),
+      total,
+      page,
+      limit,
+    };
   }
 
   async updateSalesInvoice(
@@ -385,10 +443,12 @@ export class SalesService {
       if (!before) throw new NotFoundException('Sales invoice not found');
       if (before.status !== 'DRAFT')
         throw new BadRequestException('Only DRAFT invoices can be updated');
+      await assertLocationAccess(this.prisma, businessId, userId, before.locationId);
       if (dto.taxAmount !== undefined || dto.taxPercentage !== undefined)
         await this.assertPermission(tx, businessId, userId, 'settings.edit');
       const customerId = dto.customerId || before.customerId;
       const locationId = dto.locationId || before.locationId;
+      await assertLocationAccess(this.prisma, businessId, userId, locationId);
       const customer = await tx.customer.findFirst({
         where: { id: customerId, businessId, isActive: true, status: 'ACTIVE' },
       });
@@ -420,6 +480,7 @@ export class SalesService {
             productId: i.productId,
             quantity: i.quantity,
             unitPrice: i.unitPrice,
+            priceOverridden: false,
             discount: i.discount,
             discountPercentage: i.discountPercentage,
             total: i.total,
@@ -462,6 +523,8 @@ export class SalesService {
       );
       if (discountPercentage > 1e-8)
         await this.assertDiscountLimit(tx, businessId, userId, discountPercentage);
+      if (dto.items && lines.some((line) => line.priceOverridden))
+        await this.assertPermission(tx, businessId, userId, 'sales.price_override');
       const effectiveTaxPercentage =
         dto.taxPercentage ??
         (taxableAmountBefore > 0
@@ -554,6 +617,7 @@ export class SalesService {
       if (!invoice) throw new NotFoundException('Sales invoice not found');
       if (invoice.status !== 'DRAFT')
         throw new BadRequestException('Only DRAFT invoices can be issued');
+      await assertLocationAccess(this.prisma, businessId, userId, invoice.locationId);
       await assertAccountingPeriodOpen(tx, businessId, new Date());
       if (!invoice.items.length)
         throw new BadRequestException('Invoice must have at least one item');
@@ -784,6 +848,7 @@ export class SalesService {
         await this.lockInvoice(tx, businessId, invoiceId);
         const invoice = await tx.salesInvoice.findFirst({ where: { id: invoiceId, businessId } });
         if (!invoice) throw new NotFoundException('Sales invoice not found');
+        await assertLocationAccess(this.prisma, businessId, userId, invoice.locationId);
         await assertAccountingPeriodOpen(tx, businessId, paymentDate);
         if (['DRAFT', 'CANCELLED'].includes(invoice.status))
           throw new BadRequestException('Payments require an issued invoice');
@@ -813,7 +878,12 @@ export class SalesService {
             return existing.id;
           }
         }
-        const state = await this.invoicePaymentState(tx, invoiceId, invoice.totalAmount);
+        const state = await this.invoicePaymentState(
+          tx,
+          businessId,
+          invoiceId,
+          invoice.totalAmount,
+        );
         if (state.balance <= 0) throw new BadRequestException('Invoice has no amount due');
         const amount = money(dto.amount);
         if (amount > state.balance + 1e-8)
@@ -838,7 +908,12 @@ export class SalesService {
             createdBy: userId,
           },
         });
-        const after = await this.invoicePaymentState(tx, invoiceId, invoice.totalAmount);
+        const after = await this.invoicePaymentState(
+          tx,
+          businessId,
+          invoiceId,
+          invoice.totalAmount,
+        );
         await tx.salesInvoice.update({
           where: { id: invoiceId },
           data: {
@@ -910,11 +985,17 @@ export class SalesService {
         include: { items: { include: { product: true } } },
       });
       if (!invoice) throw new NotFoundException('Sales invoice not found');
+      await assertLocationAccess(this.prisma, businessId, userId, invoice.locationId);
       if (invoice.status === 'CANCELLED')
         throw new BadRequestException('Invoice is already cancelled');
       if (invoice.status !== 'DRAFT') {
         await assertAccountingPeriodOpen(tx, businessId, new Date());
-        const paymentState = await this.invoicePaymentState(tx, invoiceId, invoice.totalAmount);
+        const paymentState = await this.invoicePaymentState(
+          tx,
+          businessId,
+          invoiceId,
+          invoice.totalAmount,
+        );
         if (paymentState.totalPaid > 0)
           throw new BadRequestException('Reverse/refund invoice payments before cancellation');
         const returns = await tx.salesReturn.count({
@@ -1055,7 +1136,10 @@ export class SalesService {
               `Return quantity exceeds sold quantity for ${original.product.name}`,
             );
         }
-        if (dto.authorizeNow) await this.assertPermission(tx, businessId, userId, 'sales.approve');
+        if (dto.authorizeNow)
+          throw new BadRequestException(
+            'Returns cannot be self-authorized at creation; create a DRAFT return and have a different approver authorize it',
+          );
         const returnNumber = dto.returnNumber || (await this.nextReturnNumber(tx, businessId));
         const factor =
           invoice.subtotal > 0
@@ -1093,10 +1177,9 @@ export class SalesService {
             returnDate: now,
             reason: [...new Set(dto.items.map((line) => line.reason))].join(','),
             totalAmount: money(lines.reduce((sum, line) => sum + line.total, 0)),
-            status: dto.authorizeNow ? 'AUTHORIZED' : 'DRAFT',
+            status: 'DRAFT',
             createdBy: userId,
             notes: dto.notes,
-            ...(dto.authorizeNow && { authorizedBy: userId, authorizedAt: now }),
           },
         });
         await tx.salesReturnItem.createMany({
@@ -1117,10 +1200,6 @@ export class SalesService {
           invoiceId: invoice.id,
           amount: created.totalAmount,
         });
-        if (dto.authorizeNow)
-          await this.audit(tx, businessId, userId, 'SalesReturn', created.id, 'AUTHORIZE', null, {
-            authorizedBy: userId,
-          });
         return created.id;
       });
     } catch (error) {
@@ -1213,6 +1292,8 @@ export class SalesService {
       if (!ret) throw new NotFoundException('Sales return not found');
       if (ret.status !== 'DRAFT')
         throw new BadRequestException('Only DRAFT returns can be authorized');
+      if (ret.createdBy === userId)
+        throw new ForbiddenException('You cannot authorize a return you created');
       const updated = await tx.salesReturn.update({
         where: { id: returnId },
         data: { status: 'AUTHORIZED', authorizedBy: userId, authorizedAt: new Date() },
@@ -1393,8 +1474,100 @@ export class SalesService {
         where: { id: returnId },
         data: { status: 'RECEIVED', receivedBy: userId, receivedAt: new Date() },
       });
-      await this.refreshPaymentState(tx, ret.invoiceId, ret.invoice.totalAmount);
+      await this.refreshPaymentState(tx, businessId, ret.invoiceId, ret.invoice.totalAmount);
       await this.audit(tx, businessId, userId, 'SalesReturn', returnId, 'RECEIVE', ret, updated);
+    });
+    return this.getSalesReturnById(businessId, returnId);
+  }
+
+  async settleSalesReturn(
+    businessId: string,
+    returnId: string,
+    userId: string,
+    dto: SettleSalesReturnDto,
+  ): Promise<SalesReturnResponseDto> {
+    await this.getSalesReturnById(businessId, returnId, userId);
+    await this.prisma.$transaction(async (tx) => {
+      const key = await tx.salesReturn.findFirst({
+        where: { id: returnId, businessId },
+        select: { invoiceId: true },
+      });
+      if (!key) throw new NotFoundException('Sales return not found');
+      await this.lockInvoice(tx, businessId, key.invoiceId);
+      await this.lockReturn(tx, businessId, returnId);
+      const ret = await tx.salesReturn.findFirst({
+        where: { id: returnId, businessId },
+        include: { invoice: true },
+      });
+      if (!ret) throw new NotFoundException('Sales return not found');
+      if (!['RECEIVED', 'COMPLETED'].includes(ret.status))
+        throw new BadRequestException('Only received returns can be settled');
+      if (ret.invoice.status === 'CANCELLED')
+        throw new BadRequestException('Cannot settle a return for a cancelled invoice');
+      if (dto.resolution === 'CREDIT') {
+        await this.assertPermission(tx, businessId, userId, 'sales.approve');
+        await this.audit(tx, businessId, userId, 'SalesReturn', returnId, 'SETTLE_CREDIT', ret, {
+          resolution: 'CREDIT',
+          notes: dto.notes,
+        });
+        return;
+      }
+      await this.assertPermission(tx, businessId, userId, 'payments.create');
+      const paymentDate = dto.paymentDate ? new Date(dto.paymentDate) : new Date();
+      if (!Number.isFinite(paymentDate.getTime()))
+        throw new BadRequestException('Invalid paymentDate');
+      await assertAccountingPeriodOpen(tx, businessId, paymentDate);
+      if (!dto.paymentMethodId)
+        throw new BadRequestException('paymentMethodId is required for refunds');
+      const method = await tx.paymentMethod.findFirst({
+        where: { id: dto.paymentMethodId, businessId, isActive: true },
+      });
+      if (!method) throw new BadRequestException('Active payment method not found');
+      if (method.requiresReference && !dto.reference?.trim())
+        throw new BadRequestException(
+          'This payment method requires a transaction or reference number',
+        );
+      const state = await this.invoicePaymentState(
+        tx,
+        businessId,
+        ret.invoiceId,
+        ret.invoice.totalAmount,
+      );
+      const creditOwed = money(-state.balance);
+      if (creditOwed <= 0)
+        throw new BadRequestException('This return has no refundable credit balance');
+      const amount = money(dto.amount ?? creditOwed);
+      if (amount <= 0 || amount > creditOwed + 1e-8)
+        throw new BadRequestException(
+          `Refund cannot exceed the outstanding credit (${creditOwed})`,
+        );
+      const paymentNumber = await this.nextSalesPaymentNumber(tx, businessId, paymentDate);
+      const payment = await tx.payment.create({
+        data: {
+          id: uuid(),
+          businessId,
+          paymentNumber,
+          paymentDate,
+          direction: 'OUTFLOW',
+          referenceType: 'SalesReturn',
+          referenceId: returnId,
+          customerId: ret.invoice.customerId,
+          amount,
+          paymentMethodId: method.id,
+          reference: dto.reference,
+          notes: dto.notes,
+          status: 'RECORDED',
+          createdBy: userId,
+          processedAt: new Date(),
+        },
+      });
+      await this.refreshPaymentState(tx, businessId, ret.invoiceId, ret.invoice.totalAmount);
+      await this.audit(tx, businessId, userId, 'SalesReturn', returnId, 'SETTLE_REFUND', ret, {
+        paymentId: payment.id,
+        amount,
+        creditOwed,
+      });
+      await this.audit(tx, businessId, userId, 'Payment', payment.id, 'CREATE', null, payment);
     });
     return this.getSalesReturnById(businessId, returnId);
   }
@@ -1437,7 +1610,7 @@ export class SalesService {
     return this.getSalesReturnById(businessId, returnId);
   }
 
-  private mapInvoice(invoice: InvoiceDetails): SalesInvoiceResponseDto {
+  private mapInvoice(invoice: InvoiceDetails, refunds = 0): SalesInvoiceResponseDto {
     const totalPaid = money(
       invoice.payments
         .filter((p) => ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'].includes(p.status))
@@ -1448,7 +1621,7 @@ export class SalesService {
         .filter((r) => ['RECEIVED', 'COMPLETED'].includes(r.status))
         .reduce((sum, r) => sum + r.totalAmount, 0),
     );
-    const balance = money(invoice.totalAmount - totalPaid - returned);
+    const balance = money(invoice.totalAmount - totalPaid - returned + refunds);
     let status = invoice.status;
     if (!['DRAFT', 'CANCELLED'].includes(status)) {
       status = balance <= 0 ? 'PAID' : totalPaid > 0 || returned > 0 ? 'PARTIALLY_PAID' : 'ISSUED';
@@ -1496,6 +1669,7 @@ export class SalesService {
       totalAmount: invoice.totalAmount,
       totalPaid,
       returnCredits: returned,
+      refundsIssued: refunds,
       balance,
       paymentTerms: invoice.paymentTerms,
       attachments: this.parseAttachments(invoice.attachments),
@@ -1592,6 +1766,7 @@ export class SalesService {
         productId: item.productId,
         quantity: baseQuantity,
         unitPrice: baseUnitPrice,
+        priceOverridden: Math.abs(baseUnitPrice - product.sellingPrice) > 0.0001,
         discount,
         discountPercentage: item.discountPercentage || 0,
         total: money(gross - discount),
@@ -1780,30 +1955,47 @@ export class SalesService {
 
   private async invoicePaymentState(
     tx: Prisma.TransactionClient,
+    businessId: string,
     invoiceId: string,
     total: number,
   ) {
-    const [payments, returns] = await Promise.all([
-      tx.payment.findMany({
-        where: { invoiceId, status: { in: ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'] } },
-        select: { amount: true },
-      }),
-      tx.salesReturn.findMany({
-        where: { invoiceId, status: { in: ['RECEIVED', 'COMPLETED'] } },
-        select: { totalAmount: true },
-      }),
-    ]);
+    const returns = await tx.salesReturn.findMany({
+      where: { invoiceId, businessId, status: { in: ['RECEIVED', 'COMPLETED'] } },
+      select: { id: true, totalAmount: true },
+    });
+    const returnIds = returns.map((ret) => ret.id);
+    const refunds = returnIds.length
+      ? await tx.payment.aggregate({
+          where: {
+            businessId,
+            referenceType: 'SalesReturn',
+            referenceId: { in: returnIds },
+            status: { in: ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'] },
+          },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null } };
+    const payments = await tx.payment.findMany({
+      where: {
+        invoiceId,
+        businessId,
+        status: { in: ['RECORDED', 'VERIFIED', 'RECONCILED', 'COMPLETED'] },
+      },
+      select: { amount: true },
+    });
     const totalPaid = money(payments.reduce((sum, payment) => sum + payment.amount, 0));
     const credit = money(returns.reduce((sum, ret) => sum + ret.totalAmount, 0));
-    return { totalPaid, balance: money(total - totalPaid - credit) };
+    const refunded = money(refunds._sum.amount || 0);
+    return { totalPaid, refunded, balance: money(total - totalPaid - credit + refunded) };
   }
 
   private async refreshPaymentState(
     tx: Prisma.TransactionClient,
+    businessId: string,
     invoiceId: string,
     total: number,
   ): Promise<void> {
-    const state = await this.invoicePaymentState(tx, invoiceId, total);
+    const state = await this.invoicePaymentState(tx, businessId, invoiceId, total);
     const invoice = await tx.salesInvoice.findUnique({
       where: { id: invoiceId },
       select: { status: true },

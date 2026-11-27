@@ -27,6 +27,7 @@ import {
   SalesPaymentResponseDto,
   SalesRejectDto,
   SalesReturnFilterDto,
+  SettleSalesReturnDto,
   SalesReturnResponseDto,
   UpdateSalesInvoiceDto,
 } from './dto';
@@ -181,6 +182,18 @@ export class SalesController {
   @RequirePermission('sales.approve')
   receiveReturn(@Business() businessId: string, @Param('id') id: string, @UserId() userId: string) {
     return this.salesService.receiveSalesReturn(businessId, id, userId);
+  }
+
+  @Post('returns/:id/settle')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('sales.approve', 'payments.create')
+  settleReturn(
+    @Business() businessId: string,
+    @Param('id') id: string,
+    @UserId() userId: string,
+    @Body() dto: SettleSalesReturnDto,
+  ) {
+    return this.salesService.settleSalesReturn(businessId, id, userId, dto);
   }
 
   @Post('returns/:id/reject')

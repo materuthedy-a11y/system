@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -947,6 +948,10 @@ export class PurchaseService {
 
     if (po.status !== 'DRAFT') {
       throw new BadRequestException('Only DRAFT purchase orders can be approved');
+    }
+
+    if (po.createdBy === userId) {
+      throw new ForbiddenException('You cannot approve a purchase order you created');
     }
 
     const approved = await this.prisma.purchaseOrder.updateMany({

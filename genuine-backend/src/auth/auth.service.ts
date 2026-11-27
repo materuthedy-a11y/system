@@ -862,6 +862,7 @@ export class AuthService {
       { key: 'sales.create', category: 'Sales', action: 'create' },
       { key: 'sales.edit', category: 'Sales', action: 'edit' },
       { key: 'sales.discount', category: 'Sales', action: 'discount' },
+      { key: 'sales.price_override', category: 'Sales', action: 'price_override' },
       { key: 'sales.approve', category: 'Sales', action: 'approve' },
       { key: 'sales.cancel', category: 'Sales', action: 'cancel' },
       { key: 'inventory.view', category: 'Inventory', action: 'view' },
@@ -869,6 +870,8 @@ export class AuthService {
       { key: 'inventory.transfer', category: 'Inventory', action: 'transfer' },
       { key: 'payments.view', category: 'Payments', action: 'view' },
       { key: 'payments.create', category: 'Payments', action: 'create' },
+      { key: 'payments.reconcile', category: 'Payments', action: 'reconcile' },
+      { key: 'payments.void', category: 'Payments', action: 'void' },
       { key: 'expenses.view', category: 'Expenses', action: 'view' },
       { key: 'expenses.create', category: 'Expenses', action: 'create' },
       { key: 'expenses.edit', category: 'Expenses', action: 'edit' },
@@ -886,6 +889,8 @@ export class AuthService {
       { key: 'settings.edit', category: 'Settings', action: 'edit' },
       { key: 'audit.view', category: 'Audit', action: 'view' },
       { key: 'audit.export', category: 'Audit', action: 'export' },
+      { key: 'insights.view', category: 'Insights', action: 'view' },
+      { key: 'insights.manage', category: 'Insights', action: 'manage' },
     ];
 
     const existingPermissions = await client.permission.findMany({
@@ -1013,6 +1018,7 @@ export class AuthService {
           'sales.create',
           'sales.edit',
           'sales.discount',
+          'sales.price_override',
           'sales.approve',
           'sales.cancel',
           'inventory.view',
@@ -1020,6 +1026,8 @@ export class AuthService {
           'inventory.transfer',
           'payments.view',
           'payments.create',
+          'payments.reconcile',
+          'payments.void',
           'expenses.view',
           'expenses.create',
           'expenses.edit',
@@ -1027,6 +1035,8 @@ export class AuthService {
           'expenses.pay',
           'reports.view',
           'reports.export',
+          'insights.view',
+          'insights.manage',
         ],
       },
       {
@@ -1121,6 +1131,7 @@ export class AuthService {
       'sales.create': ['products.view', 'customers.view'],
       'sales.edit': ['sales.view'],
       'sales.discount': ['sales.view'],
+      'sales.price_override': ['sales.create'],
       'sales.approve': ['sales.view'],
       'sales.cancel': ['sales.view'],
       'inventory.adjust': ['inventory.view'],
@@ -1131,6 +1142,9 @@ export class AuthService {
       'expenses.pay': ['expenses.view'],
       'reports.export': ['reports.view'],
       'audit.export': ['audit.view'],
+      'payments.reconcile': ['payments.view'],
+      'payments.void': ['payments.view'],
+      'insights.manage': ['insights.view'],
     };
     const normalizeGrants = (keys: string[]) => {
       const normalized = new Set(keys);

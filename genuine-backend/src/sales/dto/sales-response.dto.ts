@@ -39,6 +39,7 @@ export class SalesInvoiceResponseDto {
   totalAmount: number;
   totalPaid: number;
   returnCredits: number;
+  refundsIssued?: number;
   balance: number;
   paymentTerms: string;
   attachments?: string[];

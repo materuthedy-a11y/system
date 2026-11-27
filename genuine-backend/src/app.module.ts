@@ -33,6 +33,7 @@ import { SalesModule } from './sales/sales.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { IntelligenceModule } from './intelligence/intelligence.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { AuditModule } from './audit/audit.module';
@@ -61,6 +62,7 @@ import { AppController } from './app.controller';
     InventoryModule,
     PaymentsModule,
     AnalyticsModule,
+    IntelligenceModule,
     NotificationsModule,
     SupportModule,
     AuditModule,

@@ -80,6 +80,7 @@ model Business {
   feedbackMessages      FeedbackMessage[]
   emailConfig           EmailConfig?
   smsConfig             SMSConfig?
+  insights              Insight[]
 
   @@index([name])
   @@index([createdAt])
@@ -1481,4 +1482,44 @@ model SMSConfig {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+model Insight {
+  id             String    @id @default(cuid())
+  businessId     String
+  type           String
+  category       String
+  severity       String    @default("INFO")
+  status         String    @default("ACTIVE")
+  dedupeKey      String
+  title          String
+  summary        String
+  detail         String?   @db.Text
+  evidence       Json?
+  impact         Json?
+  recommendation String?   @db.Text
+  entityType     String?
+  entityId       String?
+  productId      String?
+  customerId     String?
+  supplierId     String?
+  locationId     String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  detectedAt     DateTime  @default(now())
+  lastSeenAt     DateTime  @default(now())
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  dismissedBy    String?
+  dismissedAt    DateTime?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, dedupeKey])
+  @@index([businessId, status, severity])
+  @@index([businessId, type])
+  @@index([businessId, locationId])
 }

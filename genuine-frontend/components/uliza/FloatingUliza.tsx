@@ -61,9 +61,9 @@ export function FloatingUliza() {
         onClick={() => setOpen((o) => !o)}
         aria-label={open ? 'Close Ask' : 'Open Ask assistant'}
         aria-expanded={open}
-        className="fixed bottom-5 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-emerald-800 text-white shadow-lg shadow-emerald-900/25 transition hover:scale-105 hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:bottom-6 sm:right-6"
+        className="fixed bottom-4 right-4 z-50 grid h-12 w-12 place-items-center rounded-full bg-emerald-800 text-white shadow-lg shadow-emerald-900/25 transition hover:scale-105 hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 sm:bottom-5 sm:right-5"
       >
-        {open ? <X size={22} /> : <AskAvatar logoUrl={brand?.logoUrl} name={brand?.name} size={24} />}
+        {open ? <X size={18} /> : <AskAvatar logoUrl={brand?.logoUrl} name={brand?.name} size={20} />}
         {!open && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-60" />
@@ -77,7 +77,7 @@ export function FloatingUliza() {
         <div
           role="dialog"
           aria-label="Ask assistant"
-          className="fixed bottom-24 right-4 z-50 flex h-[min(640px,75vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#e1e6dd] bg-white shadow-2xl dark:border-white/10 dark:bg-[#191c19] sm:bottom-24 sm:right-6"
+          className="fixed bottom-20 right-4 z-50 flex h-[min(640px,75vh)] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-[#e1e6dd] bg-white shadow-2xl dark:border-white/10 dark:bg-[#191c19] sm:bottom-20 sm:right-5"
         >
           <header className="flex items-center justify-between gap-2 border-b border-[#e6e9e2] px-4 py-3 dark:border-white/10">
             <div className="flex items-center gap-2.5">
@@ -170,13 +170,13 @@ function AskAvatar({ logoUrl, name, size, logoFailed, onError }: { logoUrl?: str
   const px = Math.round(size * 2.4);
   if (logoUrl && !logoFailed) {
     return (
-      <span className="relative block overflow-hidden rounded-xl bg-emerald-800" style={{ width: px, height: px }}>
+      <span className="relative block overflow-hidden rounded-full bg-emerald-800" style={{ width: px, height: px }}>
         <Image src={logoUrl} alt={name || 'Business'} width={px} height={px} unoptimized onError={onError} className="h-full w-full object-cover" />
       </span>
     );
   }
   return (
-    <span className="grid place-items-center rounded-xl bg-emerald-800 font-bold text-white dark:bg-emerald-700" style={{ width: Math.round(size * 2.4), height: Math.round(size * 2.4), fontSize: Math.max(12, Math.round(size * 0.9)) }}>
+    <span className="grid place-items-center rounded-full bg-emerald-800 font-bold text-white dark:bg-emerald-700" style={{ width: Math.round(size * 2.4), height: Math.round(size * 2.4), fontSize: Math.max(12, Math.round(size * 0.9)) }}>
       {letter}
     </span>
   );

@@ -306,6 +306,17 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number) {
+    if (typeof canvas.toBlob === 'function') {
+      return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, quality));
+    }
+    try {
+      return await (await fetch(canvas.toDataURL(mimeType, quality))).blob();
+    } catch {
+      return null;
+    }
+  }
+
   async function encodeAvatarSource(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
     const maxAvatarBytes = 5_000_000;
     const canvas = document.createElement('canvas');
@@ -319,10 +330,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       canvas.height = height;
       context.drawImage(source, 0, 0, width, height);
       for (let quality = 0.95; quality >= 0.82; quality -= 0.03) {
-        blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
+        blob = await canvasToBlob(canvas, 'image/webp', quality);
         if (!blob || blob.type !== 'image/webp') {
-          const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
-          blob = jpeg?.type === 'image/jpeg' ? jpeg : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+          const jpeg = await canvasToBlob(canvas, 'image/jpeg', quality);
+          blob = jpeg?.type === 'image/jpeg' ? jpeg : await canvasToBlob(canvas, 'image/png');
         }
         if (blob && blob.size <= maxAvatarBytes) return blob;
       }
@@ -335,7 +346,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
   async function handleAvatarChange(file?: File) {
     if (!file || !user) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    const supportedMime = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+    const supportedExtension = /\.(jpe?g|png|webp)$/i.test(file.name);
+    if (!supportedMime && !supportedExtension) {
       notify.error('Choose a JPG, PNG or WebP image.');
       return;
     }
@@ -352,16 +365,12 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         image.onload = () => resolve();
         image.onerror = () => reject(new Error('This image could not be opened.'));
       });
-      if (file.size > 5_000_000) {
-        setAvatarCropSource({ url: temporaryUrl, width: image.naturalWidth, height: image.naturalHeight });
-        setAvatarCropZoom(1);
-        setAvatarCropOffset({ x: 0, y: 0 });
-        setAccountMenuOpen(false);
-        keepTemporaryUrl = true;
-        return;
-      }
-      const blob = await encodeAvatarSource(image, image.naturalWidth, image.naturalHeight);
-      await saveAvatarBlob(blob);
+      setAvatarCropSource({ url: temporaryUrl, width: image.naturalWidth, height: image.naturalHeight });
+      setAvatarCropZoom(1);
+      setAvatarCropOffset({ x: 0, y: 0 });
+      setAccountMenuOpen(false);
+      keepTemporaryUrl = true;
+      return;
     } catch (error) {
       notify.error(getApiError(error, error instanceof Error ? error.message : 'Could not update your profile photo.'));
     } finally {
@@ -390,10 +399,10 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       const context = canvas.getContext('2d');
       if (!context) throw new Error('Your browser could not prepare this crop.');
       context.drawImage(image, (outputSize - drawWidth) / 2 + avatarCropOffset.x * (outputSize / viewportSize), (outputSize - drawHeight) / 2 + avatarCropOffset.y * (outputSize / viewportSize), drawWidth, drawHeight);
-      let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.94));
+      let blob = await canvasToBlob(canvas, 'image/webp', 0.94);
       if (!blob || blob.type !== 'image/webp') {
-        const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
-        blob = jpeg?.type === 'image/jpeg' ? jpeg : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+        const jpeg = await canvasToBlob(canvas, 'image/jpeg', 0.94);
+        blob = jpeg?.type === 'image/jpeg' ? jpeg : await canvasToBlob(canvas, 'image/png');
       }
       if (!blob) throw new Error('Could not create the cropped photo.');
       const finalBlob = blob.size <= 5_000_000 ? blob : await encodeAvatarSource(canvas, outputSize, outputSize);

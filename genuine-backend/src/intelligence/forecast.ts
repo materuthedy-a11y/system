@@ -118,10 +118,7 @@ function backtestMAE(
   return mean(errors);
 }
 
-export function forecastDemand(
-  series: DailyPoint[],
-  horizonDays: number,
-): ForecastResult {
+export function forecastDemand(series: DailyPoint[], horizonDays: number): ForecastResult {
   const windowDays = series.length;
   const total = series.reduce((s, p) => s + p.qty, 0);
   const daysWithData = series.filter((p) => p.qty > 0).length;

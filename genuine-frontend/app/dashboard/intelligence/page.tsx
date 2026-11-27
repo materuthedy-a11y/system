@@ -812,7 +812,7 @@ export default function IntelligencePage() {
                 <option value="">All urgency</option>
                 <option value="CRITICAL">Critical (≤3 days)</option>
                 <option value="SOON">Soon (4–14 days)</option>
-                <option value="OK">Reorder level only</option>
+                <option value="OK">Healthy (14+ days)</option>
               </select>
               <select
                 value={reorderFilters.confidence}

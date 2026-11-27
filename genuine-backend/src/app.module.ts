@@ -34,6 +34,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
+import { CopilotModule } from './copilot/copilot.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SupportModule } from './support/support.module';
 import { AuditModule } from './audit/audit.module';
@@ -63,6 +64,7 @@ import { AppController } from './app.controller';
     PaymentsModule,
     AnalyticsModule,
     IntelligenceModule,
+    CopilotModule,
     NotificationsModule,
     SupportModule,
     AuditModule,

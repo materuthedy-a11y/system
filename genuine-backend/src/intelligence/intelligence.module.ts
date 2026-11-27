@@ -9,6 +9,6 @@ import { PredictionsService } from './predictions.service';
   imports: [PurchasesModule],
   controllers: [InsightsController, PredictionsController],
   providers: [InsightsService, PredictionsService],
-  exports: [InsightsService],
+  exports: [InsightsService, PredictionsService],
 })
 export class IntelligenceModule {}

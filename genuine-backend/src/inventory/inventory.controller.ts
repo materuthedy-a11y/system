@@ -229,6 +229,14 @@ export class InventoryController {
     return this.inventory.getPhysicalCountById(businessId, id, userId);
   }
 
+  @Post('counts/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('inventory.adjust')
+  @ApiOperation({ summary: 'Cancel a draft physical count without changing stock' })
+  cancelCount(@Business() businessId: string, @UserId() userId: string, @Param('id') id: string) {
+    return this.inventory.cancelDraftPhysicalCount(businessId, id, userId);
+  }
+
   @Post('counts/:id/complete')
   @HttpCode(HttpStatus.OK)
   @RequirePermission('inventory.adjust')

@@ -20,4 +20,12 @@ describe('InventoryController draft lifecycle routes', () => {
     expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.POST);
     expect(Reflect.getMetadata(PERMISSION_KEY, handler)).toEqual(['inventory.transfer']);
   });
+
+  it('exposes draft count cancellation only under inventory.adjust', () => {
+    const handler = InventoryController.prototype.cancelCount;
+
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('counts/:id/cancel');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.POST);
+    expect(Reflect.getMetadata(PERMISSION_KEY, handler)).toEqual(['inventory.adjust']);
+  });
 });

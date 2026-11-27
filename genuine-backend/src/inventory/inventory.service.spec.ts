@@ -39,6 +39,7 @@ function createPrismaMock() {
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     business: { findUnique: jest.fn() },
     businessSettings: { findUnique: jest.fn() },
@@ -1297,6 +1298,66 @@ describe('InventoryService physical count lifecycle', () => {
     return { prisma, service, notifications };
   }
 
+  it('cancels only a draft count and audits without changing stock or movements', async () => {
+    const draft = makeCount('DRAFT');
+    const cancelled = { ...draft, status: 'CANCELLED' };
+    const { prisma, service } = setup(draft);
+    prisma.physicalCount.findFirst.mockResolvedValueOnce(draft).mockResolvedValueOnce(cancelled);
+    prisma.physicalCount.updateMany.mockResolvedValue({ count: 1 });
+    prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.cancelDraftPhysicalCount('business-a', 'count-a', 'owner-a'),
+    ).resolves.toEqual(cancelled);
+
+    expect(prisma.physicalCount.updateMany).toHaveBeenCalledWith({
+      where: { id: 'count-a', businessId: 'business-a', status: 'DRAFT' },
+      data: { status: 'CANCELLED' },
+    });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        businessId: 'business-a',
+        userId: 'owner-a',
+        action: 'CANCEL',
+        entityType: 'PhysicalCount',
+        entityId: 'count-a',
+      }),
+    });
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects cancelling a processed count or a draft count with stock movements', async () => {
+    const { prisma: processedPrisma, service: processedService } = setup(makeCount('COMPLETED'));
+    await expect(
+      processedService.cancelDraftPhysicalCount('business-a', 'count-a', 'owner-a'),
+    ).rejects.toThrow('Only DRAFT physical counts can be cancelled');
+    expect(processedPrisma.physicalCount.updateMany).not.toHaveBeenCalled();
+    expect(processedPrisma.auditLog.create).not.toHaveBeenCalled();
+
+    const { prisma: movedPrisma, service: movedService } = setup(makeCount('DRAFT'));
+    movedPrisma.inventoryMovement.findFirst.mockResolvedValue({ id: 'movement-a' });
+    await expect(
+      movedService.cancelDraftPhysicalCount('business-a', 'count-a', 'owner-a'),
+    ).rejects.toThrow('Cannot cancel a draft physical count with stock movements');
+    expect(movedPrisma.physicalCount.updateMany).not.toHaveBeenCalled();
+    expect(movedPrisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a concurrent draft count cancellation without writing an audit event', async () => {
+    const { prisma, service } = setup(makeCount('DRAFT'));
+    prisma.inventoryMovement.findFirst.mockResolvedValue(null);
+    prisma.physicalCount.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.cancelDraftPhysicalCount('business-a', 'count-a', 'owner-a'),
+    ).rejects.toThrow('Physical count has already been processed');
+
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.stockBalance.update).not.toHaveBeenCalled();
+    expect(prisma.inventoryMovement.create).not.toHaveBeenCalled();
+  });
+
   it('persists draft variance summary when the count snapshot is created', async () => {
     const prisma = createPrismaMock();
     const product = {
@@ -1552,9 +1613,13 @@ describe('InventoryService physical count lifecycle', () => {
       await expect(
         service.cancelDraftStockTransfer('business-a', 'transfer-a', 'staff-a'),
       ).rejects.toThrow('Stock transfer not found');
+      await expect(
+        service.cancelDraftPhysicalCount('business-a', 'count-a', 'staff-a'),
+      ).rejects.toThrow('Physical count not found');
 
       expect(prisma.stockAdjustment.deleteMany).not.toHaveBeenCalled();
       expect(prisma.stockTransfer.updateMany).not.toHaveBeenCalled();
+      expect(prisma.physicalCount.updateMany).not.toHaveBeenCalled();
       expect(prisma.auditLog.create).not.toHaveBeenCalled();
       expect(prisma.stockAdjustment.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1575,6 +1640,15 @@ describe('InventoryService physical count lifecycle', () => {
             businessId: 'business-a',
             fromLocationId: { in: ['location-allowed'] },
             toLocationId: { in: ['location-allowed'] },
+          },
+        }),
+      );
+      expect(prisma.physicalCount.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'count-a',
+            businessId: 'business-a',
+            locationId: { in: ['location-allowed'] },
           },
         }),
       );

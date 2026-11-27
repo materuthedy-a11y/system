@@ -14,7 +14,7 @@ type Kind = 'adjustments' | 'transfers' | 'counts';
 const config = {
   adjustments: { title: 'Stock adjustments', description: 'Review proposed stock corrections. Approving an adjustment posts its quantity change to stock; rejecting it leaves balances unchanged.', action: '/dashboard/inventory/adjustments/new', actionLabel: 'New adjustment', statuses: ['PENDING','DRAFT','APPROVED','REJECTED'] },
   transfers: { title: 'Stock transfers', description: 'Move products between active locations. Sending removes stock from the source; receiving adds only the quantities recorded at the destination.', action: '/dashboard/inventory/transfers/new', actionLabel: 'New transfer', statuses: ['DRAFT','SENT','PARTIAL','COMPLETED','CANCELLED'] },
-  counts: { title: 'Physical counts', description: 'Capture a system snapshot, complete the physical count, then post variances. Posting is blocked if stock changed after the snapshot.', action: '/dashboard/inventory/counts/new', actionLabel: 'New physical count', statuses: ['DRAFT','COMPLETED','POSTED'] },
+  counts: { title: 'Physical counts', description: 'Capture a system snapshot, complete the physical count, then post variances. Posting is blocked if stock changed after the snapshot.', action: '/dashboard/inventory/counts/new', actionLabel: 'New physical count', statuses: ['DRAFT','COMPLETED','POSTED','CANCELLED'] },
 } as const;
 
 export function InventoryQueue({ kind }: { kind: Kind }) {

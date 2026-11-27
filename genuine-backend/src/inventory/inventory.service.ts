@@ -1216,6 +1216,41 @@ export class InventoryService {
     return result;
   }
 
+  async cancelDraftPhysicalCount(businessId: string, id: string, userId: string) {
+    await this.getPhysicalCountById(businessId, id, userId);
+    return this.serializableTransaction(async (tx) => {
+      const count = await tx.physicalCount.findFirst({
+        where: { id, businessId },
+        include: { location: true, items: { include: { product: true } } },
+      });
+      if (!count) throw new NotFoundException('Physical count not found');
+      if (count.status !== 'DRAFT')
+        throw new ConflictException('Only DRAFT physical counts can be cancelled');
+
+      const movement = await tx.inventoryMovement.findFirst({
+        where: { businessId, referenceId: id, referenceType: 'PhysicalCount' },
+        select: { id: true },
+      });
+      if (movement)
+        throw new ConflictException('Cannot cancel a draft physical count with stock movements');
+
+      const claimed = await tx.physicalCount.updateMany({
+        where: { id, businessId, status: 'DRAFT' },
+        data: { status: 'CANCELLED' },
+      });
+      if (claimed.count !== 1)
+        throw new ConflictException('Physical count has already been processed');
+
+      const updated = await tx.physicalCount.findFirst({
+        where: { id, businessId },
+        include: { location: true, items: { include: { product: true } } },
+      });
+      if (!updated) throw new NotFoundException('Physical count not found');
+      await this.audit(tx, businessId, userId, 'CANCEL', 'PhysicalCount', id, count, updated);
+      return updated;
+    });
+  }
+
   async completePhysicalCount(businessId: string, id: string, userId: string) {
     await this.getPhysicalCountById(businessId, id, userId);
     return this.prisma.$transaction(async (tx) => {

@@ -67,6 +67,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   const [locationMenuPosition, setLocationMenuPosition] = useState({ left: 12, top: 12 });
   const locationButtonRef = useRef<HTMLButtonElement>(null);
   const locationMenuRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLElement | null>(null);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const avatarButton = useRef<HTMLButtonElement>(null);
   const avatarPreviewCloseButton = useRef<HTMLButtonElement>(null);
@@ -80,6 +83,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     setAvatarUrl(nextUrl);
   }, []);
   const compactSidebar = isDesktop && sidebarCollapsed;
+  const closeMobileMenu = useCallback(() => {
+    setMobileMenuOpen(false);
+    if (!isDesktop) mobileMenuTriggerRef.current?.focus();
+  }, [isDesktop]);
+  const setMobileNavRef = useCallback((element: HTMLElement | null) => {
+    mobileNavRef.current = element;
+    if (element) element.inert = !isDesktop && !mobileMenuOpen;
+  }, [isDesktop, mobileMenuOpen]);
 
   // Refresh profile on every dashboard mount so role/permission changes made
   // elsewhere (ownership transfer, role edits) take effect without re-login.
@@ -174,6 +185,36 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     media.addEventListener('change', updateViewport);
     return () => media.removeEventListener('change', updateViewport);
   }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen || isDesktop) return;
+    const panel = mobileNavRef.current;
+    if (!panel) return;
+    const getFocusable = () => [...panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((element) => element.getClientRects().length > 0);
+    mobileMenuCloseRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileMenu();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusable();
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+      } else if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [closeMobileMenu, isDesktop, mobileMenuOpen]);
 
   function toggleSidebar() {
     setSidebarCollapsed((collapsed) => {
@@ -470,13 +511,14 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen min-w-0 bg-[#f5f6f2] lg:flex">
-      {mobileMenuOpen ? <button aria-label="Close navigation" onClick={() => setMobileMenuOpen(false)} className="fixed inset-0 z-30 bg-black/40 lg:hidden" /> : null}
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-[270px] shrink-0 flex-col overflow-hidden border-r border-amber-200/80 bg-amber-50 px-5 py-6 text-[#20231f] shadow-2xl shadow-black/10 transition-all duration-200 dark:border-white/[0.06] dark:bg-[#20211f] dark:text-white dark:shadow-black/20 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:shadow-none lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[84px] lg:px-3' : 'lg:w-[270px]'} ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <a href="#dashboard-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:text-sm focus:font-semibold focus:text-[#20231f] focus:shadow-xl dark:focus:bg-[#20211f] dark:focus:text-white">Skip to main content</a>
+      {mobileMenuOpen ? <button type="button" tabIndex={-1} aria-label="Close navigation" onClick={closeMobileMenu} className="fixed inset-0 z-30 bg-black/40 lg:hidden" /> : null}
+      <aside ref={setMobileNavRef} aria-hidden={!isDesktop && !mobileMenuOpen} role={!isDesktop && mobileMenuOpen ? 'dialog' : undefined} aria-modal={!isDesktop && mobileMenuOpen ? true : undefined} aria-label={!isDesktop && mobileMenuOpen ? 'Main navigation' : undefined} className={`fixed inset-y-0 left-0 z-40 flex w-[270px] shrink-0 flex-col overflow-hidden border-r border-amber-200/80 bg-amber-50 px-5 py-6 text-[#20231f] shadow-2xl shadow-black/10 transition-all duration-200 dark:border-white/[0.06] dark:bg-[#20211f] dark:text-white dark:shadow-black/20 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:shadow-none lg:translate-x-0 ${sidebarCollapsed ? 'lg:w-[84px] lg:px-3' : 'lg:w-[270px]'} ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className={`flex shrink-0 items-center ${compactSidebar ? 'justify-center lg:px-0' : 'justify-between px-2'}`}>
           <Link href="/dashboard" className="flex min-w-0 items-center" aria-label="Mizania dashboard" title="Mizania dashboard">
             {compactSidebar ? <><Image src="/MIZANIA_BRAND_PACKAGE/logos/svg/symbol.svg" alt="Mizania" width={64} height={64} priority className="h-10 w-10 dark:hidden" /><Image src="/MIZANIA_BRAND_PACKAGE/logos/svg/symbol-monochrome-white.svg" alt="Mizania" width={64} height={64} priority className="hidden h-10 w-10 dark:block" /></> : <><Image src="/MIZANIA_BRAND_PACKAGE/logos/svg/wordmark-dark.svg" alt="Mizania — Rekodi, fuatilia, endelea" width={780} height={160} priority className="hidden h-auto w-[180px] dark:block" /><span className="flex min-w-0 items-center gap-2 dark:hidden"><Image src="/MIZANIA_BRAND_PACKAGE/logos/svg/symbol.svg" alt="" width={52} height={52} priority className="h-9 w-9 shrink-0" /><span className="min-w-0"><span className="block truncate text-[15px] font-extrabold tracking-tight text-[#17231e]">Mizania</span><span className="mt-0.5 block truncate text-[6px] font-bold tracking-[0.14em] text-emerald-700">REKODI · FUATILIA · ENDELEA</span></span></span></>}
           </Link>
-          <button type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu" className="rounded-lg p-2 text-[#4f584e] hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/10 lg:hidden"><X size={18} /></button>
+          <button ref={mobileMenuCloseRef} type="button" onClick={closeMobileMenu} aria-label="Close menu" className="rounded-lg p-2 text-[#4f584e] hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/10 lg:hidden"><X size={18} /></button>
         </div>
         <div className="mt-9 shrink-0">
           <button ref={locationButtonRef} type="button" aria-haspopup="dialog" aria-expanded={locationMenuOpen} onClick={toggleLocationMenu} title={compactSidebar ? `${user.businessName || 'Workspace'} · ${activeLocation?.name || 'Choose location'}` : undefined} className={`w-full rounded-xl border border-blue-100 bg-white/75 text-left shadow-sm shadow-blue-950/[0.03] transition hover:border-blue-300 hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-blue-400/50 dark:hover:bg-white/[0.07] dark:focus-visible:outline-blue-400 ${compactSidebar ? 'flex justify-center p-2.5' : 'p-2.5'}`}>
@@ -514,7 +556,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
                       <Icon size={17} strokeWidth={1.8} />{!compactSidebar ? <>{label}<span className="ml-auto rounded-md border border-slate-200 bg-white/70 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#62685f] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/65">Soon</span></> : null}
                     </button>
                   ) : (
-                    <Link key={label} href={href} onClick={() => setMobileMenuOpen(false)} aria-current={active ? 'page' : undefined} aria-label={compactSidebar ? label : undefined} title={compactSidebar ? label : undefined} className={`relative flex min-h-10 items-center rounded-xl py-2.5 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 ${compactSidebar ? 'justify-center px-0' : 'gap-3 px-3'} ${active ? "bg-blue-200 font-semibold text-blue-950 shadow-sm shadow-blue-900/[0.08] before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-blue-700 before:content-[''] dark:bg-[#263b69] dark:text-[#e1ebff] dark:shadow-white/[0.05] dark:before:bg-[#7da9ff]" : 'text-[#3f4940] hover:bg-black/[0.03] hover:text-[#20231f] dark:text-white/75 dark:hover:bg-white/[0.07] dark:hover:text-white'}`}>
+                    <Link key={label} href={href} onClick={closeMobileMenu} aria-current={active ? 'page' : undefined} aria-label={compactSidebar ? label : undefined} title={compactSidebar ? label : undefined} className={`relative flex min-h-10 items-center rounded-xl py-2.5 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-blue-600 dark:focus-visible:outline-blue-400 ${compactSidebar ? 'justify-center px-0' : 'gap-3 px-3'} ${active ? "bg-blue-200 font-semibold text-blue-950 shadow-sm shadow-blue-900/[0.08] before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-blue-700 before:content-[''] dark:bg-[#263b69] dark:text-[#e1ebff] dark:shadow-white/[0.05] dark:before:bg-[#7da9ff]" : 'text-[#3f4940] hover:bg-black/[0.03] hover:text-[#20231f] dark:text-white/75 dark:hover:bg-white/[0.07] dark:hover:text-white'}`}>
                       <Icon size={17} strokeWidth={1.8} />{!compactSidebar ? label : null}
                     </Link>
                   )
@@ -528,7 +570,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
       <div className="mx-auto min-w-0 w-full max-w-[1500px] flex-1">
         <header className="sticky top-3 z-20 mx-2 mt-2 flex h-[60px] min-w-0 items-center justify-between gap-1.5 rounded-xl border border-white/70 bg-white/75 px-2.5 shadow-[0_8px_28px_rgba(24,31,44,0.12)] backdrop-blur-xl min-[390px]:mx-3 min-[390px]:mt-3 min-[390px]:h-[64px] min-[390px]:px-3 sm:mx-7 sm:gap-2 sm:px-5 lg:mx-10 dark:border-white/10 dark:bg-[#20211f]/70 dark:shadow-[0_8px_28px_rgba(0,0,0,0.28)]">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <button type="button" onClick={() => isDesktop ? toggleSidebar() : setMobileMenuOpen(true)} aria-label={isDesktop ? sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar' : 'Open navigation'} title={isDesktop ? sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar' : 'Open navigation'} className="inline-flex h-10 w-10 shrink-0 items-center justify-center bg-transparent text-[#4f544c] transition hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff7600] dark:bg-transparent dark:text-white/80 dark:hover:bg-transparent"><Menu size={19} /></button>
+            <button ref={mobileMenuTriggerRef} type="button" onClick={() => isDesktop ? toggleSidebar() : setMobileMenuOpen(true)} aria-label={isDesktop ? sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar' : 'Open navigation'} title={isDesktop ? sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar' : 'Open navigation'} aria-haspopup={!isDesktop ? 'dialog' : undefined} aria-expanded={!isDesktop ? mobileMenuOpen : undefined} className="inline-flex h-10 w-10 shrink-0 items-center justify-center bg-transparent text-[#4f544c] transition hover:bg-transparent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ff7600] dark:bg-transparent dark:text-white/80 dark:hover:bg-transparent"><Menu size={19} /></button>
             <div className="min-w-0"><p className="truncate text-xs font-medium text-[#687368] dark:text-white/55">{pathname.startsWith('/dashboard/notifications') ? 'Workspace' : currentNavGroup}</p><p className="mt-0.5 truncate text-sm font-semibold text-[#20231f] dark:text-white">{currentNavLabel}</p></div>
           </div>
           <div className="flex shrink-0 items-center gap-1 min-[390px]:gap-1.5 sm:gap-5">
@@ -552,7 +594,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             <button type="button" onClick={() => { setAccountMenuOpen(false); setLogoutConfirmOpen(true); }} disabled={isSigningOut} aria-label={isSigningOut ? 'Signing out' : 'Sign out'} className="flex items-center gap-2 rounded-full border border-[#e8e9e5] bg-[#fcfcfb] px-2.5 py-2 text-xs font-semibold text-[#545850] transition hover:border-[#cbd0c6] hover:bg-[#f8f9f6] disabled:opacity-60 sm:px-3 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/80 dark:hover:border-white/20 dark:hover:bg-white/[0.08]"><LogOut size={15} /><span className="hidden md:inline">{isSigningOut ? 'Signing out' : 'Sign out'}</span></button>
           </div>
         </header>
-        <main className="w-full min-w-0 p-2 min-[390px]:p-3 sm:p-5 lg:p-10">{children}</main>
+        <main id="dashboard-main" tabIndex={-1} className="w-full min-w-0 p-2 min-[390px]:p-3 sm:p-5 lg:p-10">{children}</main>
       </div>
       {avatarCropSource && typeof document !== 'undefined' ? createPortal(<div role="dialog" aria-modal="true" aria-labelledby="avatar-crop-title" aria-describedby="avatar-crop-description" className="ui-modal-backdrop fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={(event) => {
         if (event.target === event.currentTarget && !avatarBusy) {

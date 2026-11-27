@@ -1,7 +1,7 @@
 import { apiClient, unwrap } from '@/lib/api';
 
 export type InventoryStatus =
-  'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PARTIAL' | 'COMPLETED' | 'POSTED';
+  'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SENT' | 'PARTIAL' | 'COMPLETED' | 'POSTED' | 'CANCELLED';
 export type InventoryPage<T> = { data: T[]; total: number; page: number; limit: number };
 export type InventoryFilters = {
   locationId?: string;
@@ -242,6 +242,8 @@ export const inventoryAPI = {
   }) => post<PhysicalCount>('/inventory/counts', input),
   completeCount: (id: string) =>
     post<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}/complete`),
+  cancelCount: (id: string) =>
+    post<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}/cancel`),
   postCount: (id: string) =>
     post<PhysicalCount>(`/inventory/counts/${encodeURIComponent(id)}/post`),
   valuation: (filters: InventoryFilters & { productId?: string; valuationMethod?: string } = {}) =>

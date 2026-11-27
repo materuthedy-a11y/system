@@ -5,6 +5,20 @@ import { LlmMessage, LlmProvider } from './llm.provider';
 
 const ctx = { businessId: 'biz-1', userId: 'user-1' };
 
+const prismaMock = {
+  copilotConversation: {
+    create: jest.fn(async ({ data }: any) => ({ id: 'conv-1', title: data.title })),
+    findFirst: jest.fn(async () => null),
+    update: jest.fn(async () => ({})),
+  },
+  copilotMessage: {
+    createMany: jest.fn(async () => ({})),
+    findMany: jest.fn(async () => []),
+  },
+} as any;
+
+
+
 function makeService(overrides: { llmConfigured?: boolean } = {}) {
   const tools = {
     execute: jest.fn(async (name: string) => {
@@ -31,7 +45,7 @@ function makeService(overrides: { llmConfigured?: boolean } = {}) {
     chat: jest.fn(),
     toolSchemas: jest.fn(() => []),
   } as unknown as LlmProvider;
-  return { service: new CopilotService(tools, llm), tools, llm };
+  return { service: new CopilotService(tools, llm, prismaMock), tools, llm };
 }
 
 describe('CopilotService (Uliza)', () => {
@@ -98,7 +112,7 @@ describe('CopilotService (Uliza)', () => {
       chat: jest.fn(async () => null),
       toolSchemas: jest.fn(() => []),
     } as unknown as LlmProvider;
-    const service = new CopilotService(tools, llm);
+    const service = new CopilotService(tools, llm, prismaMock);
     const res = await service.chat(ctx.businessId, ctx.userId, 'How were sales?');
     expect(res.provider).toBe('rules-engine');
     expect(tools.execute).toHaveBeenCalled();
@@ -112,7 +126,7 @@ describe('CopilotService (Uliza)', () => {
       chat: jest.fn(async () => ({ role: 'assistant', content: 'I can see the uploaded image.' })),
       toolSchemas: jest.fn(() => []),
     } as unknown as LlmProvider;
-    const service = new CopilotService(tools, llm);
+    const service = new CopilotService(tools, llm, prismaMock);
 
     await service.chat(
       ctx.businessId,
@@ -140,7 +154,7 @@ describe('CopilotService (Uliza)', () => {
       chat: jest.fn(async () => ({ role: 'assistant', content: 'The file lists three products.' })),
       toolSchemas: jest.fn(() => []),
     } as unknown as LlmProvider;
-    const service = new CopilotService(tools, llm);
+    const service = new CopilotService(tools, llm, prismaMock);
 
     await service.chat(
       ctx.businessId,
@@ -186,7 +200,7 @@ describe('CopilotService (Uliza)', () => {
       chat: jest.fn(),
       toolSchemas: jest.fn(() => []),
     } as unknown as LlmProvider;
-    const service = new CopilotService(tools, llm);
+    const service = new CopilotService(tools, llm, prismaMock);
     const res = await service.chat(ctx.businessId, ctx.userId, 'sales?');
     expect(res.answer).toContain("couldn't retrieve");
   });

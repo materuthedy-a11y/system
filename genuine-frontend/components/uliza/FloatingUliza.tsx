@@ -22,6 +22,7 @@ export function FloatingUliza() {
   const [loading, setLoading] = useState(false);
   const [provider, setProvider] = useState('rules-engine');
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [convId, setConvId] = useState<string | undefined>();
   const brand = useBusinessProfileStore((s) => s.brand);
   const [logoFailed, setLogoFailed] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -42,9 +43,10 @@ export function FloatingUliza() {
     setMessages((m) => [...m, { role: 'user', content: message }]);
     setLoading(true);
     try {
-      const res = await copilotAPI.chat(message, history, files);
+      const res = await copilotAPI.chat(message, history, files, convId);
       const { answer, ...metadata } = res;
       setMessages((m) => [...m, { role: 'assistant', content: answer, ...metadata }]);
+      if (res.conversationId) setConvId(res.conversationId);
       if (res.followUps?.length) setSuggestions(res.followUps);
     } catch (e) {
       notify.error(getApiError(e, 'Ask could not answer — please try again'));
@@ -89,10 +91,19 @@ export function FloatingUliza() {
                 </p>
               </div>
             </div>
-            <Link href="/dashboard/uliza" onClick={() => setOpen(false)}
-              className="rounded-lg px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-white/10">
-              Full page
-            </Link>
+            <div className="flex items-center gap-1">
+              {messages.length > 0 && (
+                <button type="button" title="New chat" aria-label="Start a new chat"
+                  onClick={() => { setMessages([]); setInput(''); setFiles([]); setConvId(undefined); }}
+                  className="rounded-lg px-2 py-1 text-[11px] font-semibold text-[#687064] hover:bg-[#f1f4ee] dark:text-white/55 dark:hover:bg-white/10">
+                  New
+                </button>
+              )}
+              <Link href="/dashboard/uliza" onClick={() => setOpen(false)}
+                className="rounded-lg px-2 py-1 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-white/10">
+                Full page
+              </Link>
+            </div>
           </header>
 
           <div className="flex-1 space-y-3 overflow-y-auto p-3">

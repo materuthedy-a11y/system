@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { CopilotTools } from './tools';
 import { LlmContentPart, LlmProvider, LlmMessage } from './llm.provider';
+import { PrismaService } from '../database/prisma.service';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -24,6 +25,7 @@ export interface ChatResult {
   followUps?: string[];
   dataPeriod?: string;
   facts?: Array<{ label: string; value: string }>;
+  conversationId?: string;
 }
 
 const SYSTEM_PROMPT = `You are Uliza, the business assistant inside Mizania Business Suite.
@@ -79,25 +81,39 @@ export class CopilotService {
   constructor(
     private readonly tools: CopilotTools,
     private readonly llm: LlmProvider,
+    private readonly prisma: PrismaService,
   ) {}
 
   get providerName() {
     return this.llm.providerName;
   }
 
-  /** Entry point. History is client-supplied, capped, and treated as untrusted context. */
+  /** Entry point. History is loaded server-side from the owned conversation when conversationId is given. */
   async chat(
     businessId: string,
     userId: string,
     message: string,
     history: ChatMessage[] = [],
     attachments: CopilotAttachment[] = [],
+    conversationId?: string,
   ): Promise<ChatResult> {
     const clean = String(message || '')
       .trim()
       .slice(0, 2000);
     if (!clean) throw new BadRequestException('Message is required');
     const ctx = { businessId, userId };
+
+    const conversation = await this.resolveConversation(businessId, userId, conversationId, clean);
+    if (conversation) {
+      const stored = await this.prisma.copilotMessage.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: 'desc' },
+        take: this.maxHistory,
+        select: { role: true, content: true },
+      });
+      history = stored.reverse() as ChatMessage[];
+    }
+
     const safeHistory = history
       .slice(-this.maxHistory)
       .filter(
@@ -111,17 +127,128 @@ export class CopilotService {
       );
     }
 
+    let result: ChatResult;
     if (this.llm.configured) {
       const llmResult = await this.chatViaLlm(clean, safeHistory, ctx, attachments);
-      if (llmResult) return llmResult;
-      if (attachments.length) {
-        throw new ServiceUnavailableException(
-          'Ask could not analyze the attached file. Check that the configured private AI provider supports document and image input.',
-        );
+      if (llmResult) {
+        result = llmResult;
+      } else {
+        if (attachments.length) {
+          throw new ServiceUnavailableException(
+            'Ask could not analyze the attached file. Check that the configured private AI provider supports document and image input.',
+          );
+        }
+        this.logger.warn('LLM unavailable — falling back to rules engine');
+        result = await this.chatViaRules(clean, ctx);
       }
-      this.logger.warn('LLM unavailable — falling back to rules engine');
+    } else {
+      result = await this.chatViaRules(clean, ctx);
     }
-    return this.chatViaRules(clean, ctx);
+    return this.persistExchange(conversation, clean, result);
+  }
+
+  private async resolveConversation(
+    businessId: string,
+    userId: string,
+    conversationId: string | undefined,
+    firstMessage: string,
+  ) {
+    if (conversationId) {
+      const existing = await this.prisma.copilotConversation.findFirst({
+        where: { id: conversationId, businessId, userId },
+      });
+      if (!existing) throw new BadRequestException('Conversation not found');
+      return existing;
+    }
+    return this.prisma.copilotConversation.create({
+      data: {
+        businessId,
+        userId,
+        title: firstMessage.slice(0, 80) || 'New chat',
+      },
+    });
+  }
+
+  private async persistExchange(
+    conversation: { id: string; title: string },
+    userMessage: string,
+    result: ChatResult,
+  ): Promise<ChatResult> {
+    try {
+      await this.prisma.copilotMessage.createMany({
+        data: [
+          { conversationId: conversation.id, role: 'user', content: userMessage.slice(0, 2000) },
+          {
+            conversationId: conversation.id,
+            role: 'assistant',
+            content: result.answer.slice(0, 8000),
+            toolCalls: result.toolCalls.slice(0, 20),
+          },
+        ],
+      });
+      if (conversation.title === 'New chat') {
+        await this.prisma.copilotConversation.update({
+          where: { id: conversation.id },
+          data: { title: userMessage.slice(0, 80) },
+        });
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to persist chat history: ${(e as Error).message}`);
+    }
+    return { ...result, conversationId: conversation.id };
+  }
+
+  async listConversations(businessId: string, userId: string) {
+    const rows = await this.prisma.copilotConversation.findMany({
+      where: { businessId, userId },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { messages: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      messageCount: r._count.messages,
+    }));
+  }
+
+  async getConversation(businessId: string, userId: string, id: string) {
+    const conv = await this.prisma.copilotConversation.findFirst({
+      where: { id, businessId, userId },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' }, take: 200 },
+      },
+    });
+    if (!conv) throw new BadRequestException('Conversation not found');
+    return {
+      id: conv.id,
+      title: conv.title,
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt,
+      messages: conv.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    };
+  }
+
+  async deleteConversation(businessId: string, userId: string, id: string) {
+    const conv = await this.prisma.copilotConversation.findFirst({
+      where: { id, businessId, userId },
+      select: { id: true },
+    });
+    if (!conv) throw new BadRequestException('Conversation not found');
+    await this.prisma.copilotConversation.delete({ where: { id: conv.id } });
+    return { deleted: true };
   }
 
   private async chatViaLlm(

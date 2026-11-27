@@ -21,6 +21,7 @@ describe('CopilotController uploads', () => {
       'Summarize this',
       [],
       [{ name: 'report.csv', text: 'amount\n120' }],
+      undefined,
     );
   });
 
@@ -38,6 +39,7 @@ describe('CopilotController uploads', () => {
       'Describe this',
       [],
       [{ name: 'photo.png', imageDataUrl: `data:image/png;base64,${image.toString('base64')}` }],
+      undefined,
     );
   });
 

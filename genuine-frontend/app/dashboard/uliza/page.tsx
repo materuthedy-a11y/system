@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useBusinessProfileStore } from '@/store/businessProfileStore';
-import { Loader2, Send } from 'lucide-react';
-import { copilotAPI, type ChatMessage, type ChatResult } from '@/lib/api/copilot';
+import { History, Loader2, MessageSquarePlus, Send, Trash2, X } from 'lucide-react';
+import { copilotAPI, type ChatMessage, type ChatResult, type ConversationSummary } from '@/lib/api/copilot';
 import { getApiError } from '@/lib/api';
 import { notify } from '@/components/ui/AppToaster';
 import { AssistantResponse } from '@/components/uliza/ChatMessageContent';
@@ -22,11 +22,18 @@ export default function UlizaPage() {
   const brand = useBusinessProfileStore((s) => s.brand);
   const [logoFailed, setLogoFailed] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | undefined>();
+  const [showHistory, setShowHistory] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const refreshConversations = () =>
+    void copilotAPI.conversations().then(setConversations).catch(() => undefined);
 
   useEffect(() => {
     void copilotAPI.status().then((s) => setProvider(s.provider)).catch(() => undefined);
     void copilotAPI.suggestions().then((s) => setSuggestions(s.suggestions)).catch(() => undefined);
+    refreshConversations();
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
@@ -39,14 +46,45 @@ export default function UlizaPage() {
     setMessages((m) => [...m, { role: 'user', content: message }]);
     setLoading(true);
     try {
-      const res = await copilotAPI.chat(message, history, files);
+      const res = await copilotAPI.chat(message, history, files, activeConvId);
       const { answer, ...metadata } = res;
       setMessages((m) => [...m, { role: 'assistant', content: answer, ...metadata }]);
+      if (res.conversationId) setActiveConvId(res.conversationId);
+      refreshConversations();
       if (res.followUps?.length) setSuggestions(res.followUps);
     } catch (e) {
       notify.error(getApiError(e, 'Ask could not answer — please try again'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const newChat = () => {
+    setMessages([]);
+    setInput('');
+    setFiles([]);
+    setActiveConvId(undefined);
+    setShowHistory(false);
+  };
+
+  const openConversation = async (id: string) => {
+    try {
+      const conv = await copilotAPI.conversation(id);
+      setMessages(conv.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      setActiveConvId(conv.id);
+      setShowHistory(false);
+    } catch {
+      notify.error('Could not load that conversation');
+    }
+  };
+
+  const removeConversation = async (id: string) => {
+    try {
+      await copilotAPI.deleteConversation(id);
+      if (activeConvId === id) newChat();
+      refreshConversations();
+    } catch {
+      notify.error('Could not delete that conversation');
     }
   };
 
@@ -62,12 +100,51 @@ export default function UlizaPage() {
             </p>
           </div>
         </div>
-        <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 sm:inline-flex">
-          Data-grounded answers only
-        </span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={newChat} title="New chat"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-[#d9dfd5] text-[#4c554c] transition hover:bg-[#f1f4ee] dark:border-white/10 dark:text-white/70 dark:hover:bg-white/5">
+            <MessageSquarePlus size={16} />
+          </button>
+          <button type="button" onClick={() => setShowHistory((v) => !v)} title="Chat history"
+            className={`grid h-9 w-9 place-items-center rounded-xl border transition ${showHistory ? 'border-emerald-700 bg-emerald-800 text-white dark:bg-emerald-700' : 'border-[#d9dfd5] text-[#4c554c] hover:bg-[#f1f4ee] dark:border-white/10 dark:text-white/70 dark:hover:bg-white/5'}`}>
+            <History size={16} />
+          </button>
+        </div>
       </header>
 
-      <section className={`${surface} flex min-h-[420px] flex-1 flex-col overflow-hidden`} aria-label="Chat">
+      <div className="flex flex-1 gap-4">
+      {showHistory && (
+        <aside className={`${surface} flex w-full max-w-xs shrink-0 flex-col overflow-hidden`} aria-label="Chat history">
+          <div className="flex items-center justify-between border-b border-[#e6e9e2] px-4 py-3 dark:border-white/10">
+            <span className="text-sm font-semibold text-[#303a30] dark:text-white">Chats</span>
+            <button type="button" onClick={() => setShowHistory(false)} aria-label="Close history"
+              className="grid h-7 w-7 place-items-center rounded-lg text-[#687064] hover:bg-[#f1f4ee] dark:text-white/55 dark:hover:bg-white/5">
+              <X size={15} />
+            </button>
+          </div>
+          <div className="flex-1 space-y-1 overflow-y-auto p-2">
+            {conversations.length === 0 && (
+              <p className="px-3 py-6 text-center text-xs text-[#687064] dark:text-white/45">
+                No saved chats yet — send a message and it will appear here.
+              </p>
+            )}
+            {conversations.map((c) => (
+              <div key={c.id}
+                className={`group flex items-center gap-1 rounded-xl px-2 py-2 text-sm transition ${c.id === activeConvId ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100' : 'text-[#4c554c] hover:bg-[#f1f4ee] dark:text-white/70 dark:hover:bg-white/5'}`}>
+                <button type="button" onClick={() => void openConversation(c.id)} className="min-w-0 flex-1 truncate text-left">
+                  {c.title}
+                </button>
+                <button type="button" onClick={() => void removeConversation(c.id)} aria-label={`Delete ${c.title}`}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[#687064] opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:text-white/45 dark:hover:bg-red-950/40">
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )}
+
+      <section className={`${surface} flex min-w-0 flex-1 flex-col overflow-hidden`} aria-label="Chat">
         <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
           {messages.length === 0 && (
             <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
@@ -139,6 +216,7 @@ export default function UlizaPage() {
           </div>
         </form>
       </section>
+      </div>
     </main>
   );
 }

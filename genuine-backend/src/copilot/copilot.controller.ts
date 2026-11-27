@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   UploadedFiles,
   UseGuards,
@@ -49,6 +51,7 @@ interface HistoryMessage {
 class ChatDto {
   @IsString() @MaxLength(2000) message!: string;
   @IsOptional() history?: unknown;
+  @IsOptional() @IsString() conversationId?: string;
 }
 
 @ApiTags('Uliza')
@@ -81,6 +84,29 @@ export class CopilotController {
     };
   }
 
+  @Get('conversations')
+  listConversations(@Business() businessId: string, @UserId() userId: string) {
+    return this.copilot.listConversations(businessId, userId);
+  }
+
+  @Get('conversations/:id')
+  getConversation(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.copilot.getConversation(businessId, userId, id);
+  }
+
+  @Delete('conversations/:id')
+  deleteConversation(
+    @Business() businessId: string,
+    @UserId() userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.copilot.deleteConversation(businessId, userId, id);
+  }
+
   @Post('chat')
   @UseInterceptors(
     FilesInterceptor('files', MAX_FILES, {
@@ -108,7 +134,14 @@ export class CopilotController {
   ) {
     const history = this.parseHistory(dto.history);
     const attachments = await this.extractAttachments(files);
-    return this.copilot.chat(businessId, userId, dto.message, history, attachments);
+    return this.copilot.chat(
+      businessId,
+      userId,
+      dto.message,
+      history,
+      attachments,
+      dto.conversationId,
+    );
   }
 
   private parseHistory(value: unknown): HistoryMessage[] {

@@ -49,7 +49,7 @@ export function InventoryQueue({ kind }: { kind: Kind }) {
         const recordStatus = row.status;
         const countRecord = row as PhysicalCount;
         const countVarianceLines = kind === 'counts' ? countRecord.items.filter((item) => Math.abs(item.variance || 0) > 1e-8).length : 0;
-        const countVarianceAmount = kind === 'counts' ? countRecord.items.reduce((sum, item) => sum + Math.abs(item.variance || 0) * (item.product.buyingPrice || 0), 0) : 0;
+        const countVarianceAmount = kind === 'counts' ? countRecord.totalVarianceAmount : 0;
         const subtitle = kind === 'adjustments' ? `${(row as StockAdjustment).items.length} lines · ${(row as StockAdjustment).reason}` : kind === 'transfers' ? `${(row as StockTransfer).fromLocation.name} → ${(row as StockTransfer).toLocation.name} · ${(row as StockTransfer).items.length} items` : `${countRecord.location.name} · ${countRecord.items.length} items · ${countVarianceLines} variances`;
         const date = kind === 'adjustments' ? (row as StockAdjustment).adjustmentDate : kind === 'transfers' ? (row as StockTransfer).transferDate : row.createdAt;
         const netAdjustment = kind === 'adjustments' ? (row as StockAdjustment).items.reduce((sum, item) => sum + (item.difference || 0), 0) : null;

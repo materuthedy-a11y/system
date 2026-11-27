@@ -38,7 +38,8 @@ Rules:
 - If data is unavailable or the question is unsupported, say so clearly and suggest what IS available.
 - Be concise, practical, and honest. Use the user's currency formatting loosely (plain numbers fine).
 - Write polished chat answers: use a short heading and readable bullets for multiple figures, bold labels where helpful, and short paragraphs.
-- Never return raw JSON or wrap ordinary business results in code fences. Avoid tables unless the user asks for one.
+- For multiple records, use a standard Markdown table when useful or requested: put the header, separator, and every record on separate lines. Never flatten pipe-separated rows into prose.
+- Never return raw JSON or wrap ordinary business results in code fences.
 - You are read-only: you cannot create, modify, or delete anything.`;
 
 /** Deterministic rules engine — used when no LLM key is configured, and as fallback. */

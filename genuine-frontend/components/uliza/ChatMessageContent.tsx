@@ -6,7 +6,23 @@ type MessageBlock =
   | { type: 'heading'; text: string }
   | { type: 'paragraph'; text: string }
   | { type: 'list'; items: string[] }
+  | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'code'; text: string };
+
+function pipeCells(line: string): string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return null;
+  const cells = trimmed
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+  return cells.length >= 2 ? cells : null;
+}
+
+function isTableSeparator(cells: string[]): boolean {
+  return cells.length >= 2 && cells.every((cell) => /^:?-{2,}:?$/.test(cell));
+}
 
 function parseBlocks(content: string): MessageBlock[] {
   const lines = content.replace(/\r/g, '').split('\n');
@@ -55,6 +71,36 @@ function parseBlocks(content: string): MessageBlock[] {
       continue;
     }
 
+    const firstRow = pipeCells(lines[index]);
+    if (firstRow) {
+      const tableStart = index;
+      const tableRows: string[][] = [];
+      while (index < lines.length) {
+        const cells = pipeCells(lines[index]);
+        if (!cells) break;
+        if (!isTableSeparator(cells)) tableRows.push(cells);
+        index += 1;
+      }
+      if (tableRows.length >= 2) {
+        const columnCount = Math.max(...tableRows.map((row) => row.length));
+        const padRow = (row: string[]) =>
+          Array.from({ length: columnCount }, (_, column) => row[column] || '');
+        blocks.push({
+          type: 'table',
+          headers: padRow(tableRows[0]),
+          rows: tableRows.slice(1).map(padRow),
+        });
+      } else {
+        const remainingText = lines
+          .slice(tableStart, index)
+          .filter((line) => !isTableSeparator(pipeCells(line) || []))
+          .join(' ')
+          .trim();
+        if (remainingText) blocks.push({ type: 'paragraph', text: remainingText });
+      }
+      continue;
+    }
+
     const paragraph: string[] = [];
     while (
       index < lines.length &&
@@ -62,7 +108,8 @@ function parseBlocks(content: string): MessageBlock[] {
       !/^#{1,3}\s+/.test(lines[index].trim()) &&
       !/^\*\*.+\*\*$/.test(lines[index].trim()) &&
       !/^\s*[-*]\s+/.test(lines[index]) &&
-      !lines[index].trim().startsWith('```')
+      !lines[index].trim().startsWith('```') &&
+      !pipeCells(lines[index])
     ) {
       paragraph.push(lines[index].trim());
       index += 1;
@@ -84,9 +131,20 @@ function inlineContent(text: string): ReactNode[] {
     if (match.index > start) nodes.push(text.slice(start, match.index));
     const token = match[0];
     if (token.startsWith('**') || token.startsWith('__')) {
-      nodes.push(<strong key={key++} className="font-semibold text-[#20231f] dark:text-white">{token.slice(2, -2)}</strong>);
+      nodes.push(
+        <strong key={key++} className="font-semibold text-[#20231f] dark:text-white">
+          {token.slice(2, -2)}
+        </strong>
+      );
     } else if (token.startsWith('`')) {
-      nodes.push(<code key={key++} className="rounded bg-black/[0.05] px-1 py-0.5 font-mono text-[0.9em] dark:bg-white/10">{token.slice(1, -1)}</code>);
+      nodes.push(
+        <code
+          key={key++}
+          className="rounded bg-black/[0.05] px-1 py-0.5 font-mono text-[0.9em] dark:bg-white/10"
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
     } else {
       nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
     }
@@ -102,24 +160,95 @@ export function ChatMessageContent({ content }: { content: string }) {
     <div className="space-y-2 break-words [overflow-wrap:anywhere]">
       {parseBlocks(content).map((block, index) => {
         if (block.type === 'heading') {
-          return <h3 key={index} className="text-sm font-bold leading-snug text-[#20231f] dark:text-white">{inlineContent(block.text)}</h3>;
+          return (
+            <h3
+              key={index}
+              className="text-sm font-bold leading-snug text-[#20231f] dark:text-white"
+            >
+              {inlineContent(block.text)}
+            </h3>
+          );
         }
         if (block.type === 'list') {
           return (
             <ul key={index} className="space-y-1.5 pl-1">
               {block.items.map((item, itemIndex) => (
                 <li key={itemIndex} className="flex items-start gap-2">
-                  <span aria-hidden="true" className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-700 dark:bg-emerald-400" />
+                  <span
+                    aria-hidden="true"
+                    className="mt-[0.55em] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-700 dark:bg-emerald-400"
+                  />
                   <span>{inlineContent(item)}</span>
                 </li>
               ))}
             </ul>
           );
         }
-        if (block.type === 'code') {
-          return <pre key={index} className="overflow-x-auto rounded-lg bg-[#20231f] p-3 text-xs leading-relaxed text-white"><code>{block.text}</code></pre>;
+        if (block.type === 'table') {
+          return (
+            <div
+              key={index}
+              className="overflow-hidden rounded-xl border border-[#e6e9e2] dark:border-white/10"
+            >
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[520px] text-left text-xs">
+                  <thead className="bg-[#f3f6f1] text-[10px] uppercase tracking-wide text-[#526052] dark:bg-white/[0.06] dark:text-white/65">
+                    <tr>
+                      {block.headers.map((header, column) => (
+                        <th key={column} scope="col" className="px-3 py-2.5 font-bold">
+                          {inlineContent(header || 'Details')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e6e9e2] dark:divide-white/10">
+                    {block.rows.map((row, rowIndex) => (
+                      <tr
+                        key={rowIndex}
+                        className="odd:bg-white even:bg-[#f8faf7] dark:odd:bg-transparent dark:even:bg-white/[0.03]"
+                      >
+                        {row.map((cell, column) => (
+                          <td key={column} className="px-3 py-2.5 align-top">
+                            {inlineContent(cell)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="divide-y divide-[#e6e9e2] sm:hidden dark:divide-white/10">
+                {block.rows.map((row, rowIndex) => (
+                  <dl key={rowIndex} className="grid gap-2 bg-white p-3 dark:bg-transparent">
+                    {row.map((cell, column) => (
+                      <div key={column} className="flex items-start justify-between gap-3">
+                        <dt className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#687064] dark:text-white/55">
+                          {block.headers[column] || 'Details'}
+                        </dt>
+                        <dd className="min-w-0 text-right font-medium">{inlineContent(cell)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ))}
+              </div>
+            </div>
+          );
         }
-        return <p key={index} className="leading-relaxed">{inlineContent(block.text)}</p>;
+        if (block.type === 'code') {
+          return (
+            <pre
+              key={index}
+              className="overflow-x-auto rounded-lg bg-[#20231f] p-3 text-xs leading-relaxed text-white"
+            >
+              <code>{block.text}</code>
+            </pre>
+          );
+        }
+        return (
+          <p key={index} className="leading-relaxed">
+            {inlineContent(block.text)}
+          </p>
+        );
       })}
     </div>
   );
@@ -160,11 +289,21 @@ export function AssistantResponse({
   return (
     <div className="space-y-3">
       {visibleFacts.length > 0 && (
-        <div className={`grid gap-2 ${visibleFacts.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`} aria-label="Key figures">
+        <div
+          className={`grid gap-2 ${visibleFacts.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}
+          aria-label="Key figures"
+        >
           {visibleFacts.map((fact) => (
-            <div key={fact.label} className="min-w-0 rounded-xl border border-emerald-100 bg-white/80 px-3 py-2 dark:border-emerald-900/40 dark:bg-white/[0.04]">
-              <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-[#687064] dark:text-white/55">{fact.label}</p>
-              <p className="mt-1 break-words text-base font-bold tabular-nums text-emerald-900 dark:text-emerald-200">{fact.value}</p>
+            <div
+              key={fact.label}
+              className="min-w-0 rounded-xl border border-emerald-100 bg-white/80 px-3 py-2 dark:border-emerald-900/40 dark:bg-white/[0.04]"
+            >
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-[#687064] dark:text-white/55">
+                {fact.label}
+              </p>
+              <p className="mt-1 break-words text-base font-bold tabular-nums text-emerald-900 dark:text-emerald-200">
+                {fact.value}
+              </p>
             </div>
           ))}
         </div>
@@ -191,7 +330,9 @@ export function AssistantResponse({
 
       {followUps.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#687064] dark:text-white/55">Continue with</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#687064] dark:text-white/55">
+            Continue with
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {followUps.slice(0, 3).map((question) => (
               <button

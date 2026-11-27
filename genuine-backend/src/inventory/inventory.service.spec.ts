@@ -86,6 +86,19 @@ describe('InventoryService location scope and thresholds', () => {
     );
   });
 
+  it('rejects empty reorder threshold updates without database writes', async () => {
+    const prisma = createPrismaMock();
+    const service = new InventoryService(prisma as PrismaService, {} as never);
+
+    await expect(
+      service.updateReorderPoint('business-a', 'owner-a', 'product-a', {}),
+    ).rejects.toThrow('Provide minimumStock or reorderLevel');
+
+    expect(prisma.product.findFirst).not.toHaveBeenCalled();
+    expect(prisma.product.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('updates reorder thresholds and records the exact before/after audit values', async () => {
     const prisma = createPrismaMock();
     prisma.product.findFirst.mockResolvedValue({
